@@ -1,6 +1,35 @@
 <!DOCTYPE html>
 <html lang="bn">
 <head>
+<!-- ========================================== -->
+<!-- SEO FIX: GOOGLEBOT DETECTION & SSR LOADER -->
+<!-- ========================================== -->
+<script>
+if (/googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot/i.test(navigator.userAgent)) {
+    const p = new URLSearchParams(window.location.search);
+    const route = p.get('route');
+    const id = p.get('id');
+    
+    // শুধুমাত্র প্রোডাক্ট পেজের জন্য SSR HTML লোড করবে (গুগলবটের জন্য এটাই যথেষ্ট)
+    if (route === 'product' && id) {
+        // নিচের লিংকে আপনার আসল GAS Web App URL বসানো
+        fetch('https://script.google.com/macros/s/AKfycbzX8yIaE_j1nRuLp-dP6dkyEwNRXb7KaAct9CS92JvI--SaD1KxoWl8rUGKYU89x0c/exec?route=product&id=' + id)
+            .then(r => r.text())
+            .then(html => {
+                document.open();
+                document.write(html);
+                document.close();
+            });
+    }
+}
+</script>
+<!-- ========================================== -->
+<!-- এই কোডগুলো <head> ট্যাগের নিচেই সবার প্রথমে বসাবেন -->
+<link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+<link rel="preconnect" href="https://script.google.com" crossorigin>
 <meta name="google-site-verification" content="yHp-0_G2el853pU5DenVxHAp743vJTPdicmY2CnbHqA" />
 <!-- Meta Pixel Code -->
 <script>
@@ -29,7 +58,7 @@ gtag('config', 'G-N74T65FH7X');
 
 <!-- ========== SEO META TAGS (Updated) ========== -->
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SafaBoxbd | সাশ্রয়ী মূল্যে ট্রেন্ডি ভ্যারাইটি পণ্যের অনলাইন শপ</title>
 <link rel="icon" type="image/png" sizes="128x128" href="https://res.cloudinary.com/dkowkawiq/image/upload/q_auto,w_128,h_128,c_fill,g_auto/v1784559589/20260720_202236_kyexpx.png">
 <meta name="description" content="আমরা ইনসাফ ভিত্তিক ব্যবসা পরিচালনায় সদা সচেষ্ট। সাশ্রয়ী মূল্যে মানসম্মত ট্রেন্ডি ভ্যারাইটি পণ্য পেতে এখনই ভিজিট করুন আমাদের ওয়েব অ্যাপ।">
@@ -1330,17 +1359,10 @@ font-weight: bold;
     </template>
 <!-- Part 1 End. Paste Part 2 below the line <script> (inside script tag, after I18N object) -->
 <script>
-        // ============================================================
-        // UNIVERSAL VERSION SYNC LOGIC (NEW ARCHITECTURE)
-        // ============================================================
-        
-        // 1. Server Version from Backend (Injected via Code.gs)
-        const serverVersion = "<?= serverVersion ?>";
-    // ============================================================
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxLYBY47zdC7iEqBq4c5wvH-vqVq3TTuMBCM3aZptxUWFUz_9MA-jxf1E3v-HrHR6Nb/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzX8yIaE_j1nRuLp-dP6dkyEwNRXb7KaAct9CS92JvI--SaD1KxoWl8rUGKYU89x0c/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -1501,7 +1523,18 @@ function incrementTrackAttempt() {
     return false; // false মানে এখনও ব্লক হয়নি
 }
 let lastPointsCartHash = '';   // শেষবার কোন কার্ট চেক করা হয়েছে তার হ্যাশ
-
+// ==========================================
+// নতুন যোগ করা হয়েছে: XSS প্রতিরোধের স্যানিটাইজ ফাংশন
+// ==========================================
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
         // ============================================================
         // TRANSLATION SNIPPET (UPDATED WITH NEW KEYS)
         // ============================================================
@@ -1805,118 +1838,193 @@ function instantScrollFix() {
         sidebar.classList.add('translate-x-full');
     }
 }
-<!-- পরের ভাগ (Part 3) এই লাইনের ঠিক নিচে পেস্ট করুন -->
-<!-- Part 2: JavaScript Logic (Data Loading, Orders, Auth, Cart & Translation Fixes) -->
-        // ============================================================
-        // SMART DATA LOADING & VERSION CONTROL (UPDATED)
-        // ============================================================
-        function loadInitialData() {
-            const cachedDataStr = localStorage.getItem('cached_app_data');
-            const localVersion = localStorage.getItem('local_data_version');
+// ==========================================
+// নতুন যোগ করা হয়েছে: হালকা প্রোডাক্ট ডিটেইলস ক্যাশ জেনারেটর
+// ==========================================
+function generateProductDetailsCache(productsArray) {
+    const detailsCache = {};
+    productsArray.forEach(p => {
+        detailsCache[p.id] = {
+            image2: p.image2 || '',
+            image3: p.image3 || '',
+            image4: p.image4 || '',
+            image5: p.image5 || '',
+            videourl: p.videourl || '',
+            description: p.description || ''
+        };
+    });
+    try {
+        // এটি আলাদা একটি ছোট লোকাল স্টোরেজ আইটেম হিসেবে সেভ হবে
+        localStorage.setItem('product_details_cache', JSON.stringify(detailsCache));
+    } catch (e) {
+        console.warn("Details cache save failed", e);
+    }
+}
+function loadInitialData() {
+    const cachedDataStr = localStorage.getItem('cached_app_data');
+    const localVersion = localStorage.getItem('local_data_version');
 
-            // ১. পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার করা
-            if (cachedDataStr) {
-                try {
-                    const data = JSON.parse(cachedDataStr);
-                    appData.settings = data.settings;
-                    appData.categories = data.categories;
-                    appData.products = data.products;
-                    appData.banners = data.banners;
-                    appData.locations = data.locations;
-                    appData.socialMedia = data.socialMedia;
-                    appData.policies = data.policies;
-                    appData.popups = data.popups;
-appData.coupons = data.coupons || [];
-                    appData.reviews = data.reviews;
+    // ==========================================
+    // নতুন যোগ করা হয়েছে: ১৫ সেকেন্ডের টাইমআউট ভেরিয়েবল
+    // ==========================================
+    let initTimeoutId;
 
-                    updateDOMWithSettings(appData.settings);
+    // ১. পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার করা
+    if (cachedDataStr) {
+        try {
+            const data = JSON.parse(cachedDataStr);
+            appData.settings = data.settings;
+            appData.categories = data.categories;
+            appData.products = data.products;
+            const _hf1 = ['image2','image3','image4','image5','videourl','description'];
+            appData.products = appData.products.map(p => { const l = {...p}; _hf1.forEach(f => delete l[f]); return l; });
+            appData.banners = data.banners;
+            appData.locations = data.locations;
+            appData.socialMedia = data.socialMedia;
+            appData.policies = data.policies;
+            appData.popups = data.popups;
+            appData.coupons = data.coupons || [];
+            appData.reviews = data.reviews;
+                    // হালকা ক্যাশ আপডেট করা হচ্ছে
+                    if (data.products) generateProductDetailsCache(data.products);
+            updateDOMWithSettings(appData.settings);
 
+            document.getElementById('skeletonLoader').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            document.getElementById('app').classList.add('flex');
+            
+            loadRoute(window.location.hash || '#home');
+            updateCartBadge();
+            updateOrderSummary();
+            updateUIText();
+            syncCartWithLivePrices();
+            initFilterOptions();
+            initPopupSystem();
+        } catch (e) {
+            console.error("Cache parse error", e);
+            localStorage.removeItem('cached_app_data');
+        }
+    }
+
+    // ==========================================
+    // নতুন যোগ করা হয়েছে: টাইমআউট শুরু করা (শুধুমাত্র ক্যাশ না থাকলে)
+    // ==========================================
+    if (!cachedDataStr) {
+        initTimeoutId = setTimeout(function() {
+            const skeleton = document.getElementById('skeletonLoader');
+            const app = document.getElementById('app');
+            
+            // চেক করুন স্কেলেটন এখনও দেখা চলছে কিনা
+            if (skeleton && !skeleton.classList.contains('hidden')) {
+                // স্কেলেটন লুকিয়ে দিন
+                skeleton.classList.add('hidden');
+                // মূল অ্যাপ দেখান
+                app.classList.remove('hidden');
+                app.classList.add('flex');
+                
+                // ইউজারকে এরর মেসেজ দেখান
+                document.getElementById('content').innerHTML = `
+                    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
+                        <i class="fas fa-wifi text-6xl text-gray-300 mb-4"></i>
+                        <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সংযোগ স্থাপন করা যায়নি</h2>
+                        <p class="text-gray-500 text-sm mb-6 max-w-xs">দয়া করে আপনার ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                        <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
+                            <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
+                        </button>
+                    </div>
+                `;
+            }
+        }, 10000);
+    }
+    // ==========================================
+
+    // ২. একটি মাত্র রিকোয়েস্টে ডাটা + ভার্সন দুটোই আনা হচ্ছে
+    const timestamp = new Date().getTime();
+    fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
+        .then(response => response.json())
+        .then(res => {
+            // ==========================================
+            // নতুন যোগ করা হয়েছে: ডাটা চলে এলে টাইমআউট বাতিল করা
+            // ==========================================
+            clearTimeout(initTimeoutId);
+            // ==========================================
+
+            if (res.success) {
+                const serverVersion = res.serverVersion;
+
+                if (localVersion && localVersion === serverVersion && cachedDataStr) {
+                    return;
+                }
+
+                localStorage.setItem('cached_app_data', JSON.stringify(res.data));
+                                        // নতুন ডাটা থেকে হালকা ক্যাশ তৈরি করা হচ্ছে
+                        if (res.data.products) generateProductDetailsCache(res.data.products);
+                localStorage.setItem('local_data_version', serverVersion);
+
+                appData.settings = res.data.settings;
+                appData.categories = res.data.categories;
+                appData.products = res.data.products;
+                const _hf2 = ['image2','image3','image4','image5','videourl','description'];
+                appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
+                appData.banners = res.data.banners;
+                appData.locations = res.data.locations;
+                appData.socialMedia = res.data.socialMedia;
+                appData.policies = res.data.policies;
+                appData.popups = res.data.popups;
+                appData.coupons = res.data.coupons || [];
+                appData.reviews = res.data.reviews;
+
+                updateDOMWithSettings(appData.settings);
+
+                if (!cachedDataStr) {
                     document.getElementById('skeletonLoader').classList.add('hidden');
                     document.getElementById('app').classList.remove('hidden');
                     document.getElementById('app').classList.add('flex');
+                }
+
+                appData.computedPages = null;
+                loadRoute(window.location.hash || '#home');
+                updateCartBadge();
+                updateOrderSummary();
+                updateUIText();
+                syncCartWithLivePrices();
+                initFilterOptions();
+                initPopupSystem();
+            }
+        })
+        .catch(err => {
+            // ==========================================
+            // নতুন যোগ করা হয়েছে: সাথে সাথে এরর আসলে টাইমআউট বাতিল করা
+            // ==========================================
+            clearTimeout(initTimeoutId);
+            // ==========================================
+            
+            console.error(err);
+            
+            // যদি ক্যাশ ডাটা না থাকে, তাহলেই শুধু এরর দেখাবে (যাতে ১৫ সেকেন্ড অপেক্ষা করতে না হয়)
+            if (!cachedDataStr) {
+                const skeleton = document.getElementById('skeletonLoader');
+                const app = document.getElementById('app');
+                
+                if (skeleton && !skeleton.classList.contains('hidden')) {
+                    skeleton.classList.add('hidden');
+                    app.classList.remove('hidden');
+                    app.classList.add('flex');
                     
-                    loadRoute(window.location.hash || '#home');
-                    updateCartBadge();
-                    updateOrderSummary();
-                    updateUIText();
-                    syncCartWithLivePrices();
-                    initFilterOptions();
-                    initPopupSystem();
-                } catch (e) {
-                    console.error("Cache parse error", e);
-                    localStorage.removeItem('cached_app_data');
+                    document.getElementById('content').innerHTML = `
+                        <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
+                            <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
+                            <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সমস্যা হচ্ছে</h2>
+                            <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                            <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
+                                <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
+                            </button>
+                        </div>
+                    `;
                 }
             }
-
-            // ২. ব্যাকগ্রাউন্ডে সার্ভারের আসল ভার্সন চেক করা
-            google.script.run
-                .withSuccessHandler(serverVersion => {
-                    // যদি ভার্সন না মেলে অথবা আগে থেকে ক্যাশ না থাকে, তবে নতুন ডাটা আনবে
-                    if (!localVersion || localVersion !== serverVersion || !cachedDataStr) {
-                        console.log("%c[Server Fetch] New version detected! Fetching fresh data...", "color: blue; font-weight: bold;");
-                        
-// রিকোয়েস্টের সাথে বর্তমান সময় জুড়ে দেওয়া হলো (Cache-Busting)
-const timestamp = new Date().getTime();
-fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { 
-    cache: "no-store" 
-})
-                            .then(response => response.json())
-                            .then(res => {
-                                if (res.success) {
-                                    // নতুন ডাটা এবং ভার্সন লোকাল স্টোরেজে সেভ করা
-                                    localStorage.setItem('cached_app_data', JSON.stringify(res.data));
-                                    localStorage.setItem('local_data_version', serverVersion);
-
-                                    // অ্যাপের ডাটা আপডেট করা
-                                    appData.settings = res.data.settings;
-                                    appData.categories = res.data.categories;
-                                    appData.products = res.data.products;
-                                    appData.banners = res.data.banners;
-                                    appData.locations = res.data.locations;
-                                    appData.socialMedia = res.data.socialMedia;
-                                    appData.policies = res.data.policies;
-                                    appData.popups = res.data.popups;
-appData.coupons = res.data.coupons || [];
-                                    appData.reviews = res.data.reviews;
-
-                                    updateDOMWithSettings(appData.settings);
-
-                                    // যদি আগে ক্যাশ না থাকে (নতুন ইউজার), তবে এখানেই সব দৃশ্যমান করবে
-                                    if (!cachedDataStr) {
-                                        document.getElementById('skeletonLoader').classList.add('hidden');
-                                        document.getElementById('app').classList.remove('hidden');
-                                        document.getElementById('app').classList.add('flex');
-                                        
-                                        loadRoute(window.location.hash || '#home');
-                                        updateCartBadge();
-                                        updateOrderSummary();
-                                        updateUIText();
-                                        syncCartWithLivePrices();
-                                        initFilterOptions();
-                                        initPopupSystem();
-                                                        } else {
-                        // ব্যাকগ্রাউন্ডে ডাটা আপডেট হলে পেজ রিলোড না করেই UI আপডেট করে দেওয়া
-                        appData.computedPages = null; // পুরোনো পেজিনেশন ক্যাশ রিসেট
-                        loadRoute(window.location.hash || '#home');
-                        updateCartBadge();
-                        updateOrderSummary();
-                        updateUIText();
-                        syncCartWithLivePrices();
-                        initFilterOptions();
-                        initPopupSystem(); // পপআপ ও রিসেট হবে
-                    }
-                                }
-                            })
-                            .catch(err => {
-                                console.error(err);
-                                if (!cachedDataStr) Swal.fire('Connection Error', 'Could not load data.', 'error');
-                            });
-                    }
-                })
-                .withFailureHandler(err => console.error("Failed to fetch version", err))
-                .getServerVersion();
-        }
-
+        });
+}
 
         // ==========================================
         // NEW HELPER: UPDATE DOM ELEMENTS DYNAMICALLY
@@ -2043,7 +2151,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000); // ১০০০ মিলিসেকেন্ড = ১ সেকেন্ড
 
             instantScrollFix(); 
-            loadInitialData();
+// ==========================================
+// SEO FIX: INITIAL ROUTE CHECK FOR CLEAN URL
+// ==========================================
+let initialRoute = 'home';
+let initialQuery = '';
+
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.has('route')) {
+    initialRoute = urlParams.get('route') || 'home';
+    // id বা name প্যারামিটার থাকলে সেগুলো আলাদা করে রাখা
+    if (urlParams.has('id')) initialQuery = 'id=' + urlParams.get('id');
+    if (urlParams.has('name')) initialQuery = (initialQuery ? initialQuery + '&' : '') + 'name=' + urlParams.get('name');
+}
+
+loadInitialData();
+loadRoute(initialRoute + (initialQuery ? '?' + initialQuery : ''));
+// ==========================================
             setupEventListeners();
                 if (appData.user && appData.user.userid) silentPointsRefresh();
             document.addEventListener('click', function(event) {
@@ -2101,68 +2225,57 @@ function setupEventListeners() {
     }
 }
 
+// ==========================================
+// UPDATED ROUTING SYSTEM FOR CLEAN URL (SEO)
+// ==========================================
 function navigateTo(route) {
-    // ==========================================
-    // ১. স্টোরেজ সেভ করার আগেই চেক করা (পুরাতন লজিক ঠিক আছে)
-    // ==========================================
-    if (route === '#home' && window.location.hash !== '#home') {
-        appData.forceHomeReset = true;
-        try {
-            sessionStorage.setItem('homePageNum', 1);
-        } catch (e) {
-            console.warn("SessionStorage access failed:", e);
-        }
-    }
+    // ১. পুরনো হ্যাশ (#) সরিয়ে দেওয়া
+    const cleanRoute = route.startsWith('#') ? route.substring(1) : route;
+    const [path, query] = cleanRoute.split('?');
     
-    // ==========================================
-    // ২. নেভিগেশন রিলোড লজিক (এখানেই ফিক্স করা হয়েছে)
-    // ==========================================
-    const currentHash = window.location.hash || '#home';
-    const targetHash = route || '#home';
+    // ২. নতুন Clean URL তৈরি করা (যেমন: ?route=product&id=101)
+    const newUrl = '?route=' + path + (query ? '&' + query : '');
+    
+    // ৩. হোম পেজ রিসেট লজিক
+    if (path === 'home' && window.location.search !== '?route=home') {
+        appData.forceHomeReset = true;
+        try { sessionStorage.setItem('homePageNum', 1); } catch (e) {}
+    }
 
-    if (currentHash === targetHash) {
+    // ৪. চেক করা URL আগে থেকেই একই আছে কিনা
+    const currentSearch = window.location.search;
+    if (currentSearch === newUrl) {
         // Trigger Flash Effect
         const app = document.getElementById('app');
         if(app) {
             app.classList.remove('flash-active');
-            void app.offsetWidth; // trigger reflow
+            void app.offsetWidth; 
             app.classList.add('flash-active');
         }
         
-        // ==========================================
-        // ফিক্স: যদি ইউজার আগে থেকেই Home-এ থাকে (যেমন পেজ ২ বা ৩)
-        // এবং আবার Home বাটনে ক্লিক করে, তবে পেজ ১-এ নিয়ে আসুন।
-        // ==========================================
-        if (targetHash === '#home') {
-            appData.allProductsCurrentPage = 1; // পেজ নাম্বার ১ সেট করা
-            appData.forceHomeReset = true;      // রিসেট ফ্ল্যাগ অন করা
-            try {
-                sessionStorage.setItem('homePageNum', 1); // স্টোরেজ রিসেট করা
-            } catch (e) {
-                console.warn("SessionStorage write failed:", e);
-            }
-            window.scrollTo(0, 0); // স্ক্রল উপরে নিয়ে আসা
+        if (path === 'home') {
+            appData.allProductsCurrentPage = 1;
+            appData.forceHomeReset = true;
+            try { sessionStorage.setItem('homePageNum', 1); } catch (e) {}
+            window.scrollTo(0, 0);
         }
-        // ==========================================
-
-        // রুট আবার লোড করা
-        loadRoute(targetHash);
-        return; // এখানেই স্টপ করবে, হ্যাশ চেঞ্জ করবে না
+        loadRoute(cleanRoute);
+        return; 
     }
-    // ==========================================
 
-    // নরমাল নেভিগেশন (অন্য পেজে যাওয়া)
-    window.location.hash = route;
+    // ৫. URL আপডেট করা (পেজ রিলোড ছাড়াই শুধু ঠিকানা পরিবর্তন করবে)
+    window.history.pushState({}, '', newUrl);
+    loadRoute(cleanRoute);
 }
 
-function loadRoute(hash) {
+function loadRoute(routeStr) {
     // ==========================================
-    // FIX: SMART SCROLL RESET (SKIP FOR CHECKOUT RETURN)
+    // FIX: SMART SCROLL RESET
     // ==========================================
     let skipScrollToTop = false;
-    if (hash.includes('checkout')) {
+    if (routeStr.includes('checkout')) {
         try {
-            const savedScroll = sessionStorage.getItem('scrollPos_' + hash);
+            const savedScroll = sessionStorage.getItem('scrollPos_?' + routeStr);
             if (savedScroll && parseInt(savedScroll, 10) > 0) {
                 skipScrollToTop = true;
             }
@@ -2174,74 +2287,53 @@ function loadRoute(hash) {
     }
     // ==========================================
     instantScrollFix();
-            const [route, queryString] = hash.replace('#', '').split('?');
-            const params = new URLSearchParams(queryString);
-            const content = document.getElementById('content');
-            
-            // ==========================================================
-            // FIX FOR SLOW NAVIGATION: UPDATE UI FIRST
-            // ==========================================================
-            // বাটনের কালার পরিবর্তন দ্রুত দেখানোর জন্য 
-            // DOM ক্লিয়ার আগেই updateNavActive কল করা হচ্ছে।
-            // এতে ব্যবহারকারী তাৎক্ষণেই ফিডব্যাক পাবেন।
-            updateNavActive(route);
-            // ==========================================================
+    
+    // নতুন ক্লিন রাউট পার্স করা (যেমন: product?id=101)
+    const [route, queryString] = routeStr.split('?');
+    const params = new URLSearchParams(queryString);
+    const content = document.getElementById('content');
+    
+    // UI আপডেট ফাস্ট করা
+    updateNavActive(route);
+    content.innerHTML = '';
+    stopSlider();
 
-            content.innerHTML = '';
-            stopSlider();
-
-            // ==========================================
-            // OPTIMIZED: ONLY CHECK SESSIONSTORAGE IF HOME
-            // ==========================================
-            // স্পিড বাড়াতে আমরা শুধুমাত্র হোম পেজে লোড করার সময় SessionStorage চেক করব।
-            if (route === 'home' || route === '') {
-                try {
-                    const storedPage = sessionStorage.getItem('homePageNum');
-                    if (storedPage && parseInt(storedPage) > 1) {
-                        appData.allProductsCurrentPage = parseInt(storedPage);
-                    }
-                } catch (e) {
-                    console.warn("SessionStorage read failed:", e);
-                }
-                
-                // Check Force Reset
-                if (appData.forceHomeReset) {
-                    appData.allProductsCurrentPage = 1;
-                    appData.forceHomeReset = false;
-                    try {
-                        sessionStorage.setItem('homePageNum', 1);
-                    } catch (e) {
-                        console.warn("SessionStorage write failed:", e);
-                    }
-                }
+    // HOME PAGE PAGINATION LOGIC
+    if (route === 'home' || route === '') {
+        try {
+            const storedPage = sessionStorage.getItem('homePageNum');
+            if (storedPage && parseInt(storedPage) > 1) {
+                appData.allProductsCurrentPage = parseInt(storedPage);
             }
-            // ==========================================
-            
-            appData.currentSelectedVariant = null; // Reset variant selection on nav
-
-            switch (route) {
-                case '': loadHomePage(); break;
-                case 'home': loadHomePage(); break;
-                case 'categories': loadCategoriesPage(); break;
-                case 'category': loadCategoryProducts(params.get('name')); break;
-                case 'product': loadProductDetails(params.get('id')); break;
-                case 'cart': loadCartPage(); break;
-                case 'checkout': loadCheckoutPage(); break;
-                case 'account': loadAccountPage(); break;
-                case 'my-orders': loadMyOrdersPage(); break; 
-                case 'login': loadTemplate('loginTemplate'); break;
-                case 'register': loadTemplate('registerTemplate'); break;
-                case 'forgot-password': loadTemplate('forgotPasswordTemplate'); break;
-                case 'messages': loadMessagesPage(); break;
-                default: loadHomePage();
-            }
-            
-            // ==========================================================
-            // REMOVED: Redundant updateUIText call from end of loadRoute
-            // This was causing slowness on Home page because updateUIText
-            // iterates over DOM elements. Specific page loaders handle it.
-            // ==========================================================
+        } catch (e) {}
+        
+        if (appData.forceHomeReset) {
+            appData.allProductsCurrentPage = 1;
+            appData.forceHomeReset = false;
+            try { sessionStorage.setItem('homePageNum', 1); } catch (e) {}
         }
+    }
+    
+    appData.currentSelectedVariant = null; 
+
+    // বাকি সব সুইচ কেস একদম আগের মতোই থাকবে, কোনো পরিবর্তন নেই
+    switch (route) {
+        case '': loadHomePage(); break;
+        case 'home': loadHomePage(); break;
+        case 'categories': loadCategoriesPage(); break;
+        case 'category': loadCategoryProducts(params.get('name')); break;
+        case 'product': loadProductDetails(params.get('id')); break;
+        case 'cart': loadCartPage(); break;
+        case 'checkout': loadCheckoutPage(); break;
+        case 'account': loadAccountPage(); break;
+        case 'my-orders': loadMyOrdersPage(); break; 
+        case 'login': loadTemplate('loginTemplate'); break;
+        case 'register': loadTemplate('registerTemplate'); break;
+        case 'forgot-password': loadTemplate('forgotPasswordTemplate'); break;
+        case 'messages': loadMessagesPage(); break;
+        default: loadHomePage();
+    }
+}
 
         function updateNavActive(route) {
             document.querySelectorAll('nav button').forEach(btn => {
@@ -2564,7 +2656,7 @@ function createOrderCard(order) {
                         <div class="flex justify-between items-start">
                             <span onclick="event.stopPropagation(); navigateTo('#product?id=${item.id}')" 
                                   class="font-medium text-sm text-gray-800 leading-tight block cursor-pointer hover:text-primary hover:underline transition-colors">
-                                  ${itemName}${variantText}
+                   ${escapeHTML(itemName)}${escapeHTML(variantText)}
                             </span>
                             <span class="font-bold text-sm text-gray-900 whitespace-nowrap">৳${totalPrice.toFixed(2)}</span>
                         </div>
@@ -4949,7 +5041,22 @@ function loadProductDetails(id) {
     // OPTIMIZED LOGIC: LOCAL DATA FINDING (NO SERVER CALL)
     // ==========================================
     // সার্ভারে না গিয়ে appData থেকেই প্রোডাক্ট খুঁজে বের করা হচ্ছে
-    const p = appData.products.find(product => product.id == id);
+    let p = appData.products.find(product => product.id == id);
+    
+    // ==========================================
+    // আপডেটেড: হালকা ডিকশনারি থেকে শুধু দরকারি ডাটা মার্জ করা হচ্ছে
+    // ==========================================
+    try {
+        const _detailsStr = localStorage.getItem('product_details_cache');
+        if (_detailsStr && p) {
+            // এখানে পুরো সাইটের ডাটা নয়, শুধু ছবি ও ডেসক্রিপশনের ছোট ডিকশনারি পার্স হচ্ছে
+            const detailsObj = JSON.parse(_detailsStr);
+            const specificDetails = detailsObj[id]; 
+            if (specificDetails) {
+                p = {...p, ...specificDetails};
+            }
+        }
+    } catch(e) {}
 
     if (!p) {
         // যদি ডাটা না পাওয়া যায় (খুবই বিরল ক্ষেত্রে)
@@ -5754,7 +5861,7 @@ function updateCheckoutSummary() {
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0 flex-1">
                             <p onclick="event.stopPropagation(); navigateTo('${productLink}')" 
-                               class="text-xs font-medium text-gray-800 leading-tight line-clamp-2 cursor-pointer hover:text-primary hover:underline transition-colors duration-200">${i.name}</p>
+                               class="text-xs font-medium text-gray-800 leading-tight line-clamp-2 cursor-pointer hover:text-primary hover:underline transition-colors duration-200">${escapeHTML(i.name)}</p>
                             <div class="flex items-center mt-0.5">
                                 ${variantText}
                                 <span class="text-[10px] text-gray-400">x${qty}</span>
@@ -6351,7 +6458,7 @@ function confirmLogout() {
         }
 
 // ==========================================
-// UPDATED FEATURE: Product Inquiry via WhatsApp (Format Matched)
+// UPDATED FEATURE: Product Inquiry via WhatsApp (Link Instead of Image)
 // ==========================================
 function openProductInquiry() {
     const pName = document.getElementById('productName').textContent;
@@ -6360,7 +6467,13 @@ function openProductInquiry() {
     const pDiscountPriceText = document.getElementById('productPrice').textContent; 
     
     const pStatus = document.getElementById('stockStatus').innerText;
-    const pImage = document.querySelector('#galleryContainer img')?.src || '';
+    
+    // ==========================================
+    // আপডেট: ইমেজের বদলে প্রোডাক্টের ওয়েবসাইট লিংক নেওয়া হচ্ছে
+    // ==========================================
+    const productLink = window.location.origin + window.location.pathname + window.location.hash;
+    // ==========================================
+
     const selectedVariant = appData.currentSelectedVariant;
 
     // ==========================================
@@ -6371,7 +6484,7 @@ function openProductInquiry() {
     let hasDiscount = false;
     let pSaveAmount = '';
 
-    // যদি রেগুলার প্রাইস এলিমেন্টটি দৃশ্যমান হয় (মানে ডিসকাউন্ট আছে)
+    // যদি রেগুলার প্রাইস এলিমেন্টটি দৃশ্যমান হয় (মানে ডিসকাউন্ট আছে)
     if (originalPriceEl && originalPriceEl.style.display !== 'none' && originalPriceEl.textContent.trim() !== '') {
         pRegularPriceText = originalPriceEl.textContent;
         hasDiscount = true;
@@ -6390,7 +6503,7 @@ function openProductInquiry() {
     // ==========================================
     // LABELS SETTING (BANGLA & ENGLISH)
     // ==========================================
-    let introText, nameText, regText, discText, saveText, statusText;
+    let introText, nameText, regText, discText, saveText, statusText, linkText;
 
     if (appData.language === 'bn') {
         introText = 'আমি এই পণ্যটি কিনতে চাই / পণ্যটি সম্পর্কে জিজ্ঞাসা করতে চাই';
@@ -6399,6 +6512,7 @@ function openProductInquiry() {
         discText = 'ডিসকাউন্ট মূল্য';
         saveText = 'আপনার সেভ হলো';
         statusText = 'স্ট্যাটাস';
+        linkText = 'পণ্যের লিংক';
     } else {
         introText = 'I WANT TO BUY THIS PRODUCT / ASK ABOUT THIS';
         nameText = 'Product Name';
@@ -6406,6 +6520,7 @@ function openProductInquiry() {
         discText = 'Discount Price';
         saveText = 'You Save';
         statusText = 'Status';
+        linkText = 'Product Link';
     }
     // ==========================================
 
@@ -6414,7 +6529,7 @@ function openProductInquiry() {
     msg += `*${nameText}* 👇\n${pName} ${selectedVariant ? `[${selectedVariant}]` : ''}\n`;
     msg += `━━━━━━━━━━━━━\n`;
     
-    // ১. সবসময় রেগুলার প্রাইস দেখাবে
+    // ১. সবসময় রেগুলার প্রাইস দেখাবে
     msg += `*${regText}:* ${pRegularPriceText}\n`;
     
     // ২. যদি ডিসকাউন্ট থাকে, তবে ডিসকাউন্ট প্রাইস এবং সেভিংস দেখাবে
@@ -6427,10 +6542,14 @@ function openProductInquiry() {
     
     msg += `*${statusText}:* ${pStatus} 📦\n`;
     
-    if(pImage) {
+    // ==========================================
+    // আপডেট: ইমেজের বদলে ক্লিকযোগ্য ওয়েবসাইট লিংক পাঠানো হচ্ছে
+    // ==========================================
+    if(productLink && productLink.includes('#product')) {
          msg += `━━━━━━━━━━━━━\n`;
-         msg += `🖼️ *Product Image:* \n${pImage}\n`;
+         msg += `🔗 *${linkText}:* \n${productLink}\n`;
     }
+    // ==========================================
     
     msg += `━━━━━━━━━━━━━\n`;
 
@@ -6476,7 +6595,7 @@ function searchProducts(query) {
                          loading="lazy" alt="${p.name}">
                 </div>
                 <div class="ml-3 flex-1 min-w-0">
-                    <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors">${p.name}</h4>
+                    <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors">${escapeHTML(p.name)}</h4>
                     <div class="flex items-center justify-between mt-1">
                         <span class="text-xs font-bold text-primary">৳ ${p.discountprice || p.price}</span>
                         <span class="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">${toCategoryTitleCase(p.category.split(' > ')[0])}</span>
@@ -6976,11 +7095,10 @@ function searchProducts(query) {
                     return `
                         <div class="bg-white border rounded-lg p-3 shadow-sm">
                             <div class="flex justify-between items-start mb-1">
-                                <h5 class="font-bold text-sm text-gray-800">${r.customername}</h5>
+                                <h5 class="font-bold text-sm text-gray-800">${escapeHTML(r.customername)}</h5>
                                 <div class="flex">${starsHtml}</div>
                             </div>
-                            <p class="text-xs text-gray-600 mt-2 leading-relaxed">${r.comment}</p>
-                            <p class="text-[10px] text-gray-400 mt-1 text-right">${dateDisplay}</p>
+                            <p class="text-xs text-gray-600 mt-2 leading-relaxed">${escapeHTML(r.comment)}</p>                            <p class="text-[10px] text-gray-400 mt-1 text-right">${dateDisplay}</p>
                         </div>
                     `;
                 }).join('');
