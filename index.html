@@ -2166,7 +2166,7 @@ if (urlParams.has('route')) {
 }
 
 loadInitialData();
-loadRoute(getCurrentRouteKey());
+loadRoute(initialRoute + (initialQuery ? '?' + initialQuery : ''));
 // ==========================================
             setupEventListeners();
                 if (appData.user && appData.user.userid) silentPointsRefresh();
@@ -2187,7 +2187,7 @@ loadRoute(getCurrentRouteKey());
 
         // ================= ROUTING =================
 function setupEventListeners() {
-    window.addEventListener('hashchange', () => loadRoute(getCurrentRouteKey()));
+    window.addEventListener('hashchange', () => loadRoute(window.location.hash));
     const searchInput = document.getElementById('searchInput');
     
     if(searchInput) {
@@ -3518,25 +3518,11 @@ function renderPaginationControls(currentPage, totalProducts) {
     html += `<button onclick="loadAllProductsSection(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1 border rounded font-medium transition-colors ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed border-gray-200' : 'hover:bg-gray-50 text-gray-700'}"><i class="fas fa-chevron-right"></i></button>`;
     container.innerHTML = html;
 }
-// হেল্পার: বর্তমান রাউটের একটি ইউনিক স্ট্রিং তৈরি করা (Hash এবং Query Param উভয়ই সাপোর্ট করে)
-function getCurrentRouteKey() {
-    const hash = window.location.hash;
-    const params = new URLSearchParams(window.location.search);
-    const route = params.get('route');
-    if (route) {
-        const name = params.get('name') || params.get('id') || '';
-        return route + (name ? '?' + name : '');
-    } else if (hash) {
-        return hash.replace('#', '');
-    }
-    return 'home';
-}
-
 window.addEventListener('scroll', () => {
-    const routeKey = getCurrentRouteKey();
+    const currentHash = window.location.hash;
 
     // ১. হোম পেজের স্ক্রল সেভ করা
-    if (routeKey === 'home' || routeKey === '') {
+    if (currentHash === '' || currentHash === '#home') {
         const scrollY = window.scrollY;
         appData.homeScrollPos = scrollY;
         try {
@@ -3547,7 +3533,7 @@ window.addEventListener('scroll', () => {
     // ==========================================
     // ২. ক্যাটাগরি পেজের স্ক্রল সেভ করা
     // ==========================================
-    else if (routeKey.includes('category')) {
+    else if (currentHash.includes('category')) {
         const scrollY = window.scrollY;
         try {
             sessionStorage.setItem('scrollPos_' + currentHash, scrollY);
@@ -3558,10 +3544,10 @@ window.addEventListener('scroll', () => {
     // ==========================================
     // ৩. চেকআউট পেজের স্ক্রল সেভ করা (নতুন)
     // ==========================================
-    else if (routeKey.includes('checkout')) {
+    else if (currentHash.includes('checkout')) {
         const scrollY = window.scrollY;
         try {
-            sessionStorage.setItem('scrollPos_' + routeKey, scrollY);
+            sessionStorage.setItem('scrollPos_' + currentHash, scrollY);
         } catch (e) {
             console.warn("SessionStorage error (Checkout):", e);
         }
@@ -4923,7 +4909,7 @@ function loadCategoryProducts(rawName) {
     
     let targetScrollY = 0;
     try {
-        const savedScroll = sessionStorage.getItem('scrollPos_' + getCurrentRouteKey());
+        const savedScroll = sessionStorage.getItem('scrollPos_' + window.location.hash);
         if (savedScroll) {
             targetScrollY = parseInt(savedScroll, 10);
         }
@@ -5707,9 +5693,10 @@ function loadCheckoutPage() {
     // ==========================================
     // FIX: CHECKOUT SCROLL RESTORATION
     // ==========================================
+    const currentHash = window.location.hash;
     let targetScrollY = 0;
     try {
-        const savedScroll = sessionStorage.getItem('scrollPos_' + getCurrentRouteKey());
+        const savedScroll = sessionStorage.getItem('scrollPos_' + currentHash);
         if (savedScroll) {
             targetScrollY = parseInt(savedScroll, 10);
         }
@@ -7198,9 +7185,8 @@ function searchProducts(query) {
                 .withFailureHandler(handleAppError)
                 .submitReview(reviewData.userId, reviewData.productId, reviewData.customerName, reviewData.rating, reviewData.comment);
         }
-<!-- পরের ভাগ (Part 4) এই লাইনের ঠিক নিচে পেস্ট করুন -->
 // ==========================================
-// MIX BOX - ULTIMATE BACK BUTTON HANDLER (UNIVERSAL SCROLL FIX)
+// MIX BOX - ULTIMATE BACK BUTTON HANDLER (UPDATED FOR CLEAN URLs)
 // ==========================================
 
 let backPressCount = 0;
@@ -7216,11 +7202,14 @@ function maintainHistoryTrap() {
 
 // ২. ডিপ লিংক এবং রুট গার্ড
 window.addEventListener('load', () => {
-    const currentHash = window.location.hash;
-    if (currentHash && currentHash !== '#home') {
+    // নতুন ক্লিন URL থেকে Route বের করা
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentRoute = urlParams.get('route') || 'home';
+    
+    if (currentRoute !== 'home') {
         const currentUrl = window.location.href;
-        window.history.replaceState({ appState: 'base' }, '', '#home');
-        window.history.pushState({ appState: 'trap' }, '', '#home');
+        window.history.replaceState({ appState: 'base' }, '', '?route=home');
+        window.history.pushState({ appState: 'trap' }, '', '?route=home');
         window.history.pushState({ appState: 'base' }, '', currentUrl);
         window.history.pushState({ appState: 'trap' }, '', currentUrl);
     } else {
@@ -7266,7 +7255,7 @@ function closeAllModals() {
     });
 }
 
-// ৫. মূল নেভিগেশন ও এক্সিট কন্ট্রোল (UNIVERSAL FIX FOR ALL PAGES)
+// ৫. মূল নেভিগেশন ও এক্সিট কন্ট্রোল (FIXED FOR CLEAN URLS)
 window.onpopstate = function(event) {
     if (event.state && event.state.appState === 'base') {
         
@@ -7278,10 +7267,6 @@ window.onpopstate = function(event) {
             // ==========================================
             // FIX: UNIVERSAL SCROLL RESTORATION
             // ==========================================
-            // এখান থেকে if (hash === '#home') কন্ডিশনটি সরিয়ে দেওয়া হয়েছে।
-            // appData.homeScrollPos গ্লোবালভাবে আপডেট হয়, তাই এটি প্রোডাক্ট পেজের
-            // সঠিক পজিশনও মনে রাখে। এখন যেকোনো পেজেই মডাল বন্ধ করলে
-            // স্ক্রল জাম্প করবে না।
             const targetY = appData.homeScrollPos || 0;
             window.requestAnimationFrame(() => {
                 window.scrollTo(0, targetY);
@@ -7290,11 +7275,11 @@ window.onpopstate = function(event) {
             return;
         }
 
-        // খ) বর্তমান রাউট চেক করা (Hash এবং Search Parameter উভয়ই)
-        const currentRoute = getCurrentRouteKey();
+        // খ) হোম পেজ এক্সিট লজিক (নতুন ক্লিন URL থেকে Route চেক)
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentRoute = urlParams.get('route') || 'home';
 
-        // গ) হোম পেজ এক্সিট লজিক 
-        if (currentRoute === 'home' || currentRoute === '') {
+        if (currentRoute === 'home') {
             
             if (appData.lastRoute && appData.lastRoute !== 'home') {
                 window.location.reload();
@@ -7306,7 +7291,7 @@ window.onpopstate = function(event) {
                 return;
             }
 
-            // স্ক্রল পজিশন লোড করা (SessionStorage Priority)
+            // স্ক্রল পজিশন লোড করা
             let savedScrollY = appData.homeScrollPos || 0;
             try {
                 const stored = sessionStorage.getItem('homeScrollPos');
@@ -7316,7 +7301,7 @@ window.onpopstate = function(event) {
             backPressCount = 1;
             window.history.pushState({ appState: 'trap' }, '', window.location.href); 
 
-            // এখানে ডাবল চেক দিয়ে স্ক্রল করা হচ্ছে
+            // স্ক্রল করা
             window.requestAnimationFrame(() => {
                 window.scrollTo(0, savedScrollY);
             });
@@ -7363,7 +7348,8 @@ window.onpopstate = function(event) {
         } else {
             // গ) রুট গার্ড
             if (window.history.length <= 2) {
-                window.location.href = '?route=home';
+                window.history.replaceState({ appState: 'base' }, '', '?route=home');
+                loadRoute('home');
             } else {
                 window.history.back();
             }
@@ -7377,34 +7363,25 @@ window.onpopstate = function(event) {
 // ==========================================
 
 function forceUnfreezeScroll() {
-    // ১. বডি চেক করা
     const body = document.body;
     const app = document.getElementById('app');
     
-    // বডির স্টাইল চেক করা (Inline এবং Computed দুটোই)
     const isBodyLocked = body.style.overflow === 'hidden' || window.getComputedStyle(body).overflow === 'hidden';
-    
-    // ২. সুইটঅ্যালার্ট (SweetAlert) চেক করা
-    // যদি Swal লাইব্রেরি লোড না হয়, তবে এরর আটকাতে typeof চেক করা হয়েছে
     const isSwalOpen = typeof Swal !== 'undefined' && Swal.isVisible();
 
-    // ৩. কাস্টম মডাল চেক করা (যেগুলো স্ক্রল ব্লক করে)
     const modalIds = ['cartOverlay', 'popup-overlay', 'filterModal', 'searchBar', 'skeletonLoader'];
     let isAnyCustomModalOpen = false;
     
     modalIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-            // Computed Style চেক করা (শুধুমাত্র Class নয়) -> আরও নির্ভুল রেজাল্টের জন্য
             const style = window.getComputedStyle(el);
             const isDisplayNone = style.display === 'none';
             const isVisibilityHidden = style.visibility === 'hidden';
             
-            // এলিমেন্টটি যদি ভিজিবল থাকে এবং hidden ক্লাস না থাকে
             if (!isDisplayNone && !isVisibilityHidden && !el.classList.contains('hidden')) {
-                // কার্ট সাইডবারের অবস্থান চেক করা (translateX)
                 if (id === 'cartSidebar' && el.classList.contains('translate-x-full')) {
-                    // কার্ট ডানদিকে চলে গেছে (বন্ধ), তাই এটি ওপেন নয়
+                    // কার্ট বন্ধ আছে
                 } else {
                     isAnyCustomModalOpen = true;
                 }
@@ -7412,49 +7389,28 @@ function forceUnfreezeScroll() {
         }
     });
 
-    // ==========================================
     // SAFETY NET: "Never Freeze" লজিক
-    // ==========================================
-    // যদি মডাল ওপেন না থাকে কিন্তু body-তে SweetAlert-এর ক্লাস থাকে, তবে সরিয়ে দিন
-    if (!isSwalOpen && body.classList.contains('swal2-shown')) {
-        body.classList.remove('swal2-shown', 'swal2-height-auto', 'swal2-iosfix');
-    }
-    // ==========================================
-
-    // ৪. লজিক: যদি কোনো মডাল ওপেন না থাকে কিন্তু স্ক্রল লক থাকে, তবে ফোর্স আনলক করুন
     if (!isSwalOpen && !isAnyCustomModalOpen) {
         if (isBodyLocked) {
-            // স্ক্রল চালু করুন
             body.style.overflow = 'auto';
             body.style.position = 'relative';
-            
-            // অতিরিক্ত সুরক্ষা: অ্যাপ কন্টেইনারের স্ক্রলও চালু করুন
             if(app) {
                 app.style.overflow = 'auto';
                 app.style.position = 'relative';
             }
-            
-            // ডিবাগিং-এর জন্য (প্রয়োজনে আন-কমেন্ট করুন)
-            // console.log('Scroll Unfrozen Automatically');
         }
     }
 }
 
-// ৫. ইভেন্ট লিসেনার যোগ করা
-// 'touchstart' ইভেন্টটি মোবাইলে সোয়াইপ করার শুরুতেই ট্রিগার হবে
-// passive: true ব্যবহার করা হয়েছে যাতে স্ক্রলিং পারফরম্যান্সে কোনো সমস্যা না হয়
 document.addEventListener('touchstart', forceUnfreezeScroll, { passive: true });
-
-// ডেস্কটপে মাউস স্ক্রল বা ক্লিক করলেও যেন কাজ করে
 document.addEventListener('mousedown', forceUnfreezeScroll, { passive: true });
 
-// যদি কেউ স্ক্রল করার চেষ্টা করে এবং আটকে যায়, তখনও চেক করা
 window.addEventListener('scroll', () => {
     if (document.body.style.overflow === 'hidden') {
         forceUnfreezeScroll();
     }
 }, { passive: true });
-// আগে দেওয়া জাভাস্ক্রিপ্ট কোডটি অবশ্যই ব্যবহার করুন
+
 document.fonts.ready.then(() => {
     const siteNameEl = document.getElementById('siteName');
     if (siteNameEl) {
@@ -7463,10 +7419,9 @@ document.fonts.ready.then(() => {
     }
 });
 // ==========================================
-// ধাপ ২: index.html এর শেষে এই কোডগুলো বসান
+// ধাপ ২: FACEBOOK CAPI & EVENT TRACKING (আগের মতোই)
 // ==========================================
 
-// হেল্পার ফাংশন (IP & Cookies)
 function getFbcCookie() {
     const match = document.cookie.match(/(^|;) *fbc=([^;]*)/);
     return match ? match[2] : null;
@@ -7480,26 +7435,11 @@ function generateEventId() {
 }
 
 async function trackCAPI(eventName, customData, eventId) {
-    
-    // ==========================================
-    // টায়ার ১: LOW PRIORITY (শুধু ব্রাউজার পিক্সেলে থাকবে)
-    // কারণ: পরিমাণ অনেক বেশি (৩০০০+), রিটার্গেটিং ভ্যালু কম
-    // ==========================================
     if (eventName === 'ViewContent' || eventName === 'PageView') {
         console.log("%c[CAPI Skipped] Low priority event.", "color: gray;", eventName);
         return; 
     }
 
-    // ==========================================
-    // টায়ার ২: MEDIUM & HIGH PRIORITY (সবসময় সার্ভারে যাবে)
-    // কারণ: AddToCart ও Purchase এর পরিমাণ কম (১০০-২০০), রিটার্গেটিং ভ্যালু অনেক বেশি
-    // অ্যাডব্লকার থাকলেও এরা সার্ভারে যাবে কারণ Fetch API ব্লক করে না
-    // ==========================================
-    // (আমরা আর fbc কুকি চেক করছি না, সরাসরি পাঠিয়ে দিচ্ছি)
-    
-    // ==========================================
-    // IP এবং পেলোড তৈরি
-    // ==========================================
     let clientIp = null;
     try {
         const ipResponse = await fetch('https://api.ipify.org?format=json');
