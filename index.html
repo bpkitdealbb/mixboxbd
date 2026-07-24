@@ -1,29 +1,6 @@
 <!DOCTYPE html>
 <html lang="bn">
 <head>
-<!-- ========================================== -->
-<!-- SEO FIX: GOOGLEBOT DETECTION & SSR LOADER -->
-<!-- ========================================== -->
-<script>
-if (/googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot/i.test(navigator.userAgent)) {
-    const p = new URLSearchParams(window.location.search);
-    const route = p.get('route');
-    const id = p.get('id');
-    
-    // শুধুমাত্র প্রোডাক্ট পেজের জন্য SSR HTML লোড করবে (গুগলবটের জন্য এটাই যথেষ্ট)
-    if (route === 'product' && id) {
-        // নিচের লিংকে আপনার আসল GAS Web App URL বসানো
-        fetch('https://script.google.com/macros/s/AKfycbzX8yIaE_j1nRuLp-dP6dkyEwNRXb7KaAct9CS92JvI--SaD1KxoWl8rUGKYU89x0c/exec?route=product&id=' + id)
-            .then(r => r.text())
-            .then(html => {
-                document.open();
-                document.write(html);
-                document.close();
-            });
-    }
-}
-</script>
-<!-- ========================================== -->
 <!-- এই কোডগুলো <head> ট্যাগের নিচেই সবার প্রথমে বসাবেন -->
 <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -452,6 +429,41 @@ font-weight: bold;
 </head>
 <body class="bg-background text-gray-800 font-sans antialiased">
 
+<!-- ========== DYNAMIC RENDERING INTERCEPTOR (SEO FIX) ========== -->
+<script>
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    const route = params.get('route');
+    const id = params.get('id');
+
+    // শুধুমাত্র প্রোডাক্ট রুট এবং আইডি থাকলে চেক করবে
+    if (route === 'product' && id) {
+        // Google-এর Allowed Dynamic Rendering Rule: শুধুমাত্র Render Strategy নির্বাচনের জন্য UA চেক করা
+        const isBot = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebot|facebookexternalhit|twitterbot|linkedinbot/i.test(navigator.userAgent);
+        
+        if (isBot) {
+            // বট ডিটেক্ট হলে: GAS থেকে হালকা SEO HTML আনবে এবং SPA বন্ধ করে দেবে
+            const gasUrl = 'https://script.google.com/macros/s/AKfycbzX8yIaE_j1nRuLp-dP6dkyEwNRXb7KaAct9CS92JvI--SaD1KxoWl8rUGKYU89x0c/exec?route=product&id=' + id;
+            
+            fetch(gasUrl)
+                .then(res => res.text())
+                .then(html => {
+                    // পুরো পেজের ডিওএম বদলে গ্যাসের হালকা HTML বসিয়ে দেবে (JS এক্সিকিউট হবে না)
+                    document.open();
+                    document.write(html);
+                    document.close();
+                })
+                .catch(() => {
+                    // যদি কোনো কারণে GAS ফেইল করে, তবে নরমালি স্পা লোড হবে (কোনো ঝুঁকি নেই)
+                    console.warn("SSR fetch failed, falling back to SPA");
+                });
+            return; 
+        }
+    }
+    // সাধারণ ইউজার হলে এখানে কিছুই করবে না, নিচের স্কেলিটন ও স্পা নরমাল লোড হবে
+})();
+</script>
+<!-- ========== END INTERCEPTOR ========== -->
 <!-- Skeleton Loader -->
 <div id="skeletonLoader" class="fixed inset-0 bg-white z-50 flex flex-col h-screen overflow-y-auto no-scrollbar" aria-hidden="true">
 
@@ -2151,23 +2163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000); // ১০০০ মিলিসেকেন্ড = ১ সেকেন্ড
 
             instantScrollFix(); 
-// ==========================================
-// SEO FIX: INITIAL ROUTE CHECK FOR CLEAN URL
-// ==========================================
-let initialRoute = 'home';
-let initialQuery = '';
-
-const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.has('route')) {
-    initialRoute = urlParams.get('route') || 'home';
-    // id বা name প্যারামিটার থাকলে সেগুলো আলাদা করে রাখা
-    if (urlParams.has('id')) initialQuery = 'id=' + urlParams.get('id');
-    if (urlParams.has('name')) initialQuery = (initialQuery ? initialQuery + '&' : '') + 'name=' + urlParams.get('name');
-}
-
-loadInitialData();
-loadRoute(initialRoute + (initialQuery ? '?' + initialQuery : ''));
-// ==========================================
+            loadInitialData();
             setupEventListeners();
                 if (appData.user && appData.user.userid) silentPointsRefresh();
             document.addEventListener('click', function(event) {
@@ -2225,57 +2221,83 @@ function setupEventListeners() {
     }
 }
 
-// ==========================================
-// UPDATED ROUTING SYSTEM FOR CLEAN URL (SEO)
-// ==========================================
 function navigateTo(route) {
-    // ১. পুরনো হ্যাশ (#) সরিয়ে দেওয়া
-    const cleanRoute = route.startsWith('#') ? route.substring(1) : route;
-    const [path, query] = cleanRoute.split('?');
-    
-    // ২. নতুন Clean URL তৈরি করা (যেমন: ?route=product&id=101)
-    const newUrl = '?route=' + path + (query ? '&' + query : '');
-    
-    // ৩. হোম পেজ রিসেট লজিক
-    if (path === 'home' && window.location.search !== '?route=home') {
+    // ==========================================
+    // ১. স্টোরেজ সেভ করার আগেই চেক করা (পুরাতন লজিক ঠিক আছে)
+    // ==========================================
+    if (route === '#home' && window.location.hash !== '#home') {
         appData.forceHomeReset = true;
-        try { sessionStorage.setItem('homePageNum', 1); } catch (e) {}
+        try {
+            sessionStorage.setItem('homePageNum', 1);
+        } catch (e) {
+            console.warn("SessionStorage access failed:", e);
+        }
     }
+    
+    // ==========================================
+    // ২. নেভিগেশন রিলোড লজিক (এখানেই ফিক্স করা হয়েছে)
+    // ==========================================
+    const currentHash = window.location.hash || '#home';
+    const targetHash = route || '#home';
 
-    // ৪. চেক করা URL আগে থেকেই একই আছে কিনা
-    const currentSearch = window.location.search;
-    if (currentSearch === newUrl) {
+    if (currentHash === targetHash) {
         // Trigger Flash Effect
         const app = document.getElementById('app');
         if(app) {
             app.classList.remove('flash-active');
-            void app.offsetWidth; 
+            void app.offsetWidth; // trigger reflow
             app.classList.add('flash-active');
         }
         
-        if (path === 'home') {
-            appData.allProductsCurrentPage = 1;
-            appData.forceHomeReset = true;
-            try { sessionStorage.setItem('homePageNum', 1); } catch (e) {}
-            window.scrollTo(0, 0);
+        // ==========================================
+        // ফিক্স: যদি ইউজার আগে থেকেই Home-এ থাকে (যেমন পেজ ২ বা ৩)
+        // এবং আবার Home বাটনে ক্লিক করে, তবে পেজ ১-এ নিয়ে আসুন।
+        // ==========================================
+        if (targetHash === '#home') {
+            appData.allProductsCurrentPage = 1; // পেজ নাম্বার ১ সেট করা
+            appData.forceHomeReset = true;      // রিসেট ফ্ল্যাগ অন করা
+            try {
+                sessionStorage.setItem('homePageNum', 1); // স্টোরেজ রিসেট করা
+            } catch (e) {
+                console.warn("SessionStorage write failed:", e);
+            }
+            window.scrollTo(0, 0); // স্ক্রল উপরে নিয়ে আসা
         }
-        loadRoute(cleanRoute);
-        return; 
-    }
+        // ==========================================
 
-    // ৫. URL আপডেট করা (পেজ রিলোড ছাড়াই শুধু ঠিকানা পরিবর্তন করবে)
-    window.history.pushState({}, '', newUrl);
-    loadRoute(cleanRoute);
+        // রুট আবার লোড করা
+        loadRoute(targetHash);
+        return; // এখানেই স্টপ করবে, হ্যাশ চেঞ্জ করবে না
+    }
+    // ==========================================
+
+    // নরমাল নেভিগেশন (অন্য পেজে যাওয়া)
+    window.location.hash = route;
 }
 
-function loadRoute(routeStr) {
+function loadRoute(hash) {
     // ==========================================
-    // FIX: SMART SCROLL RESET
+    // NEW: CLEAN URL DEEP LINKING SUPPORT (SEO FIX)
+    // যদি কেউ সরাসরি ?route=product&id=101 লিংক শেয়ার করে, 
+    // তাহলে সেটাকে হ্যাশ রুটে কনভার্ট করে নেবে (ব্যাক বাটন ও স্ক্রল ঠিক রাখতে)
+    // ==========================================
+    if (!hash || hash === '#' || hash === '') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const queryRoute = urlParams.get('route');
+        const queryId = urlParams.get('id');
+        if (queryRoute && queryId) {
+            hash = `#product?id=${queryId}`;
+        }
+    }
+    // ==========================================
+
+    // ==========================================
+    // FIX: SMART SCROLL RESET (SKIP FOR CHECKOUT RETURN)
     // ==========================================
     let skipScrollToTop = false;
-    if (routeStr.includes('checkout')) {
+    if (hash.includes('checkout')) {
         try {
-            const savedScroll = sessionStorage.getItem('scrollPos_?' + routeStr);
+            const savedScroll = sessionStorage.getItem('scrollPos_' + hash);
             if (savedScroll && parseInt(savedScroll, 10) > 0) {
                 skipScrollToTop = true;
             }
@@ -2287,53 +2309,74 @@ function loadRoute(routeStr) {
     }
     // ==========================================
     instantScrollFix();
-    
-    // নতুন ক্লিন রাউট পার্স করা (যেমন: product?id=101)
-    const [route, queryString] = routeStr.split('?');
-    const params = new URLSearchParams(queryString);
-    const content = document.getElementById('content');
-    
-    // UI আপডেট ফাস্ট করা
-    updateNavActive(route);
-    content.innerHTML = '';
-    stopSlider();
+            const [route, queryString] = hash.replace('#', '').split('?');
+            const params = new URLSearchParams(queryString);
+            const content = document.getElementById('content');
+            
+            // ==========================================================
+            // FIX FOR SLOW NAVIGATION: UPDATE UI FIRST
+            // ==========================================================
+            // বাটনের কালার পরিবর্তন দ্রুত দেখানোর জন্য 
+            // DOM ক্লিয়ার আগেই updateNavActive কল করা হচ্ছে।
+            // এতে ব্যবহারকারী তাৎক্ষণেই ফিডব্যাক পাবেন।
+            updateNavActive(route);
+            // ==========================================================
 
-    // HOME PAGE PAGINATION LOGIC
-    if (route === 'home' || route === '') {
-        try {
-            const storedPage = sessionStorage.getItem('homePageNum');
-            if (storedPage && parseInt(storedPage) > 1) {
-                appData.allProductsCurrentPage = parseInt(storedPage);
+            content.innerHTML = '';
+            stopSlider();
+
+            // ==========================================
+            // OPTIMIZED: ONLY CHECK SESSIONSTORAGE IF HOME
+            // ==========================================
+            // স্পিড বাড়াতে আমরা শুধুমাত্র হোম পেজে লোড করার সময় SessionStorage চেক করব।
+            if (route === 'home' || route === '') {
+                try {
+                    const storedPage = sessionStorage.getItem('homePageNum');
+                    if (storedPage && parseInt(storedPage) > 1) {
+                        appData.allProductsCurrentPage = parseInt(storedPage);
+                    }
+                } catch (e) {
+                    console.warn("SessionStorage read failed:", e);
+                }
+                
+                // Check Force Reset
+                if (appData.forceHomeReset) {
+                    appData.allProductsCurrentPage = 1;
+                    appData.forceHomeReset = false;
+                    try {
+                        sessionStorage.setItem('homePageNum', 1);
+                    } catch (e) {
+                        console.warn("SessionStorage write failed:", e);
+                    }
+                }
             }
-        } catch (e) {}
-        
-        if (appData.forceHomeReset) {
-            appData.allProductsCurrentPage = 1;
-            appData.forceHomeReset = false;
-            try { sessionStorage.setItem('homePageNum', 1); } catch (e) {}
-        }
-    }
-    
-    appData.currentSelectedVariant = null; 
+            // ==========================================
+            
+            appData.currentSelectedVariant = null; // Reset variant selection on nav
 
-    // বাকি সব সুইচ কেস একদম আগের মতোই থাকবে, কোনো পরিবর্তন নেই
-    switch (route) {
-        case '': loadHomePage(); break;
-        case 'home': loadHomePage(); break;
-        case 'categories': loadCategoriesPage(); break;
-        case 'category': loadCategoryProducts(params.get('name')); break;
-        case 'product': loadProductDetails(params.get('id')); break;
-        case 'cart': loadCartPage(); break;
-        case 'checkout': loadCheckoutPage(); break;
-        case 'account': loadAccountPage(); break;
-        case 'my-orders': loadMyOrdersPage(); break; 
-        case 'login': loadTemplate('loginTemplate'); break;
-        case 'register': loadTemplate('registerTemplate'); break;
-        case 'forgot-password': loadTemplate('forgotPasswordTemplate'); break;
-        case 'messages': loadMessagesPage(); break;
-        default: loadHomePage();
-    }
-}
+            switch (route) {
+                case '': loadHomePage(); break;
+                case 'home': loadHomePage(); break;
+                case 'categories': loadCategoriesPage(); break;
+                case 'category': loadCategoryProducts(params.get('name')); break;
+                case 'product': loadProductDetails(params.get('id')); break;
+                case 'cart': loadCartPage(); break;
+                case 'checkout': loadCheckoutPage(); break;
+                case 'account': loadAccountPage(); break;
+                case 'my-orders': loadMyOrdersPage(); break; 
+                case 'login': loadTemplate('loginTemplate'); break;
+                case 'register': loadTemplate('registerTemplate'); break;
+                case 'forgot-password': loadTemplate('forgotPasswordTemplate'); break;
+                case 'messages': loadMessagesPage(); break;
+                default: loadHomePage();
+            }
+            
+            // ==========================================================
+            // REMOVED: Redundant updateUIText call from end of loadRoute
+            // This was causing slowness on Home page because updateUIText
+            // iterates over DOM elements. Specific page loaders handle it.
+            // ==========================================================
+        }
 
         function updateNavActive(route) {
             document.querySelectorAll('nav button').forEach(btn => {
@@ -6813,7 +6856,7 @@ function searchProducts(query) {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by safabox team
+                        <br>Developed by safaboxbd team
                     </div>
                 </div>
             </footer>`;
@@ -7185,8 +7228,9 @@ function searchProducts(query) {
                 .withFailureHandler(handleAppError)
                 .submitReview(reviewData.userId, reviewData.productId, reviewData.customerName, reviewData.rating, reviewData.comment);
         }
+<!-- পরের ভাগ (Part 4) এই লাইনের ঠিক নিচে পেস্ট করুন -->
 // ==========================================
-// MIX BOX - ULTIMATE BACK BUTTON HANDLER (UPDATED FOR CLEAN URLs)
+// MIX BOX - ULTIMATE BACK BUTTON HANDLER (UNIVERSAL SCROLL FIX)
 // ==========================================
 
 let backPressCount = 0;
@@ -7202,14 +7246,11 @@ function maintainHistoryTrap() {
 
 // ২. ডিপ লিংক এবং রুট গার্ড
 window.addEventListener('load', () => {
-    // নতুন ক্লিন URL থেকে Route বের করা
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentRoute = urlParams.get('route') || 'home';
-    
-    if (currentRoute !== 'home') {
+    const currentHash = window.location.hash;
+    if (currentHash && currentHash !== '#home') {
         const currentUrl = window.location.href;
-        window.history.replaceState({ appState: 'base' }, '', '?route=home');
-        window.history.pushState({ appState: 'trap' }, '', '?route=home');
+        window.history.replaceState({ appState: 'base' }, '', '#home');
+        window.history.pushState({ appState: 'trap' }, '', '#home');
         window.history.pushState({ appState: 'base' }, '', currentUrl);
         window.history.pushState({ appState: 'trap' }, '', currentUrl);
     } else {
@@ -7255,7 +7296,7 @@ function closeAllModals() {
     });
 }
 
-// ৫. মূল নেভিগেশন ও এক্সিট কন্ট্রোল (FIXED FOR CLEAN URLS)
+// ৫. মূল নেভিগেশন ও এক্সিট কন্ট্রোল (UNIVERSAL FIX FOR ALL PAGES)
 window.onpopstate = function(event) {
     if (event.state && event.state.appState === 'base') {
         
@@ -7267,6 +7308,10 @@ window.onpopstate = function(event) {
             // ==========================================
             // FIX: UNIVERSAL SCROLL RESTORATION
             // ==========================================
+            // এখান থেকে if (hash === '#home') কন্ডিশনটি সরিয়ে দেওয়া হয়েছে।
+            // appData.homeScrollPos গ্লোবালভাবে আপডেট হয়, তাই এটি প্রোডাক্ট পেজের
+            // সঠিক পজিশনও মনে রাখে। এখন যেকোনো পেজেই মডাল বন্ধ করলে
+            // স্ক্রল জাম্প করবে না।
             const targetY = appData.homeScrollPos || 0;
             window.requestAnimationFrame(() => {
                 window.scrollTo(0, targetY);
@@ -7275,13 +7320,12 @@ window.onpopstate = function(event) {
             return;
         }
 
-        // খ) হোম পেজ এক্সিট লজিক (নতুন ক্লিন URL থেকে Route চেক)
-        const urlParams = new URLSearchParams(window.location.search);
-        const currentRoute = urlParams.get('route') || 'home';
+        const currentHash = window.location.hash;
 
-        if (currentRoute === 'home') {
+        // খ) হোম পেজ এক্সিট লজিক (এই অংশটুকু হোম পেজের জন্য আলাদা থাকছে)
+        if (currentHash === '' || currentHash === '#home') {
             
-            if (appData.lastRoute && appData.lastRoute !== 'home') {
+            if (appData.lastRoute && appData.lastRoute !== '#home') {
                 window.location.reload();
                 return;
             }
@@ -7291,7 +7335,7 @@ window.onpopstate = function(event) {
                 return;
             }
 
-            // স্ক্রল পজিশন লোড করা
+            // স্ক্রল পজিশন লোড করা (SessionStorage Priority)
             let savedScrollY = appData.homeScrollPos || 0;
             try {
                 const stored = sessionStorage.getItem('homeScrollPos');
@@ -7301,7 +7345,7 @@ window.onpopstate = function(event) {
             backPressCount = 1;
             window.history.pushState({ appState: 'trap' }, '', window.location.href); 
 
-            // স্ক্রল করা
+            // এখানে ডাবল চেক দিয়ে স্ক্রল করা হচ্ছে
             window.requestAnimationFrame(() => {
                 window.scrollTo(0, savedScrollY);
             });
@@ -7348,8 +7392,7 @@ window.onpopstate = function(event) {
         } else {
             // গ) রুট গার্ড
             if (window.history.length <= 2) {
-                window.history.replaceState({ appState: 'base' }, '', '?route=home');
-                loadRoute('home');
+                window.location.hash = '#home';
             } else {
                 window.history.back();
             }
@@ -7363,25 +7406,34 @@ window.onpopstate = function(event) {
 // ==========================================
 
 function forceUnfreezeScroll() {
+    // ১. বডি চেক করা
     const body = document.body;
     const app = document.getElementById('app');
     
+    // বডির স্টাইল চেক করা (Inline এবং Computed দুটোই)
     const isBodyLocked = body.style.overflow === 'hidden' || window.getComputedStyle(body).overflow === 'hidden';
+    
+    // ২. সুইটঅ্যালার্ট (SweetAlert) চেক করা
+    // যদি Swal লাইব্রেরি লোড না হয়, তবে এরর আটকাতে typeof চেক করা হয়েছে
     const isSwalOpen = typeof Swal !== 'undefined' && Swal.isVisible();
 
+    // ৩. কাস্টম মডাল চেক করা (যেগুলো স্ক্রল ব্লক করে)
     const modalIds = ['cartOverlay', 'popup-overlay', 'filterModal', 'searchBar', 'skeletonLoader'];
     let isAnyCustomModalOpen = false;
     
     modalIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
+            // Computed Style চেক করা (শুধুমাত্র Class নয়) -> আরও নির্ভুল রেজাল্টের জন্য
             const style = window.getComputedStyle(el);
             const isDisplayNone = style.display === 'none';
             const isVisibilityHidden = style.visibility === 'hidden';
             
+            // এলিমেন্টটি যদি ভিজিবল থাকে এবং hidden ক্লাস না থাকে
             if (!isDisplayNone && !isVisibilityHidden && !el.classList.contains('hidden')) {
+                // কার্ট সাইডবারের অবস্থান চেক করা (translateX)
                 if (id === 'cartSidebar' && el.classList.contains('translate-x-full')) {
-                    // কার্ট বন্ধ আছে
+                    // কার্ট ডানদিকে চলে গেছে (বন্ধ), তাই এটি ওপেন নয়
                 } else {
                     isAnyCustomModalOpen = true;
                 }
@@ -7389,28 +7441,49 @@ function forceUnfreezeScroll() {
         }
     });
 
+    // ==========================================
     // SAFETY NET: "Never Freeze" লজিক
+    // ==========================================
+    // যদি মডাল ওপেন না থাকে কিন্তু body-তে SweetAlert-এর ক্লাস থাকে, তবে সরিয়ে দিন
+    if (!isSwalOpen && body.classList.contains('swal2-shown')) {
+        body.classList.remove('swal2-shown', 'swal2-height-auto', 'swal2-iosfix');
+    }
+    // ==========================================
+
+    // ৪. লজিক: যদি কোনো মডাল ওপেন না থাকে কিন্তু স্ক্রল লক থাকে, তবে ফোর্স আনলক করুন
     if (!isSwalOpen && !isAnyCustomModalOpen) {
         if (isBodyLocked) {
+            // স্ক্রল চালু করুন
             body.style.overflow = 'auto';
             body.style.position = 'relative';
+            
+            // অতিরিক্ত সুরক্ষা: অ্যাপ কন্টেইনারের স্ক্রলও চালু করুন
             if(app) {
                 app.style.overflow = 'auto';
                 app.style.position = 'relative';
             }
+            
+            // ডিবাগিং-এর জন্য (প্রয়োজনে আন-কমেন্ট করুন)
+            // console.log('Scroll Unfrozen Automatically');
         }
     }
 }
 
+// ৫. ইভেন্ট লিসেনার যোগ করা
+// 'touchstart' ইভেন্টটি মোবাইলে সোয়াইপ করার শুরুতেই ট্রিগার হবে
+// passive: true ব্যবহার করা হয়েছে যাতে স্ক্রলিং পারফরম্যান্সে কোনো সমস্যা না হয়
 document.addEventListener('touchstart', forceUnfreezeScroll, { passive: true });
+
+// ডেস্কটপে মাউস স্ক্রল বা ক্লিক করলেও যেন কাজ করে
 document.addEventListener('mousedown', forceUnfreezeScroll, { passive: true });
 
+// যদি কেউ স্ক্রল করার চেষ্টা করে এবং আটকে যায়, তখনও চেক করা
 window.addEventListener('scroll', () => {
     if (document.body.style.overflow === 'hidden') {
         forceUnfreezeScroll();
     }
 }, { passive: true });
-
+// আগে দেওয়া জাভাস্ক্রিপ্ট কোডটি অবশ্যই ব্যবহার করুন
 document.fonts.ready.then(() => {
     const siteNameEl = document.getElementById('siteName');
     if (siteNameEl) {
@@ -7419,9 +7492,10 @@ document.fonts.ready.then(() => {
     }
 });
 // ==========================================
-// ধাপ ২: FACEBOOK CAPI & EVENT TRACKING (আগের মতোই)
+// ধাপ ২: index.html এর শেষে এই কোডগুলো বসান
 // ==========================================
 
+// হেল্পার ফাংশন (IP & Cookies)
 function getFbcCookie() {
     const match = document.cookie.match(/(^|;) *fbc=([^;]*)/);
     return match ? match[2] : null;
@@ -7435,11 +7509,26 @@ function generateEventId() {
 }
 
 async function trackCAPI(eventName, customData, eventId) {
+    
+    // ==========================================
+    // টায়ার ১: LOW PRIORITY (শুধু ব্রাউজার পিক্সেলে থাকবে)
+    // কারণ: পরিমাণ অনেক বেশি (৩০০০+), রিটার্গেটিং ভ্যালু কম
+    // ==========================================
     if (eventName === 'ViewContent' || eventName === 'PageView') {
         console.log("%c[CAPI Skipped] Low priority event.", "color: gray;", eventName);
         return; 
     }
 
+    // ==========================================
+    // টায়ার ২: MEDIUM & HIGH PRIORITY (সবসময় সার্ভারে যাবে)
+    // কারণ: AddToCart ও Purchase এর পরিমাণ কম (১০০-২০০), রিটার্গেটিং ভ্যালু অনেক বেশি
+    // অ্যাডব্লকার থাকলেও এরা সার্ভারে যাবে কারণ Fetch API ব্লক করে না
+    // ==========================================
+    // (আমরা আর fbc কুকি চেক করছি না, সরাসরি পাঠিয়ে দিচ্ছি)
+    
+    // ==========================================
+    // IP এবং পেলোড তৈরি
+    // ==========================================
     let clientIp = null;
     try {
         const ipResponse = await fetch('https://api.ipify.org?format=json');
