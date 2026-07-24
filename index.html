@@ -2166,7 +2166,7 @@ if (urlParams.has('route')) {
 }
 
 loadInitialData();
-loadRoute(initialRoute + (initialQuery ? '?' + initialQuery : ''));
+loadRoute(getCurrentRouteKey());
 // ==========================================
             setupEventListeners();
                 if (appData.user && appData.user.userid) silentPointsRefresh();
@@ -2187,7 +2187,7 @@ loadRoute(initialRoute + (initialQuery ? '?' + initialQuery : ''));
 
         // ================= ROUTING =================
 function setupEventListeners() {
-    window.addEventListener('hashchange', () => loadRoute(window.location.hash));
+    window.addEventListener('hashchange', () => loadRoute(getCurrentRouteKey()));
     const searchInput = document.getElementById('searchInput');
     
     if(searchInput) {
@@ -3518,11 +3518,25 @@ function renderPaginationControls(currentPage, totalProducts) {
     html += `<button onclick="loadAllProductsSection(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1 border rounded font-medium transition-colors ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed border-gray-200' : 'hover:bg-gray-50 text-gray-700'}"><i class="fas fa-chevron-right"></i></button>`;
     container.innerHTML = html;
 }
+// হেল্পার: বর্তমান রাউটের একটি ইউনিক স্ট্রিং তৈরি করা (Hash এবং Query Param উভয়ই সাপোর্ট করে)
+function getCurrentRouteKey() {
+    const hash = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+    const route = params.get('route');
+    if (route) {
+        const name = params.get('name') || params.get('id') || '';
+        return route + (name ? '?' + name : '');
+    } else if (hash) {
+        return hash.replace('#', '');
+    }
+    return 'home';
+}
+
 window.addEventListener('scroll', () => {
-    const currentHash = window.location.hash;
+    const routeKey = getCurrentRouteKey();
 
     // ১. হোম পেজের স্ক্রল সেভ করা
-    if (currentHash === '' || currentHash === '#home') {
+    if (routeKey === 'home' || routeKey === '') {
         const scrollY = window.scrollY;
         appData.homeScrollPos = scrollY;
         try {
@@ -3533,7 +3547,7 @@ window.addEventListener('scroll', () => {
     // ==========================================
     // ২. ক্যাটাগরি পেজের স্ক্রল সেভ করা
     // ==========================================
-    else if (currentHash.includes('category')) {
+    else if (routeKey.includes('category')) {
         const scrollY = window.scrollY;
         try {
             sessionStorage.setItem('scrollPos_' + currentHash, scrollY);
@@ -3544,10 +3558,10 @@ window.addEventListener('scroll', () => {
     // ==========================================
     // ৩. চেকআউট পেজের স্ক্রল সেভ করা (নতুন)
     // ==========================================
-    else if (currentHash.includes('checkout')) {
+    else if (routeKey.includes('checkout')) {
         const scrollY = window.scrollY;
         try {
-            sessionStorage.setItem('scrollPos_' + currentHash, scrollY);
+            sessionStorage.setItem('scrollPos_' + routeKey, scrollY);
         } catch (e) {
             console.warn("SessionStorage error (Checkout):", e);
         }
@@ -4909,7 +4923,7 @@ function loadCategoryProducts(rawName) {
     
     let targetScrollY = 0;
     try {
-        const savedScroll = sessionStorage.getItem('scrollPos_' + window.location.hash);
+        const savedScroll = sessionStorage.getItem('scrollPos_' + getCurrentRouteKey());
         if (savedScroll) {
             targetScrollY = parseInt(savedScroll, 10);
         }
@@ -5693,10 +5707,9 @@ function loadCheckoutPage() {
     // ==========================================
     // FIX: CHECKOUT SCROLL RESTORATION
     // ==========================================
-    const currentHash = window.location.hash;
     let targetScrollY = 0;
     try {
-        const savedScroll = sessionStorage.getItem('scrollPos_' + currentHash);
+        const savedScroll = sessionStorage.getItem('scrollPos_' + getCurrentRouteKey());
         if (savedScroll) {
             targetScrollY = parseInt(savedScroll, 10);
         }
@@ -7277,12 +7290,13 @@ window.onpopstate = function(event) {
             return;
         }
 
-        const currentHash = window.location.hash;
+        // খ) বর্তমান রাউট চেক করা (Hash এবং Search Parameter উভয়ই)
+        const currentRoute = getCurrentRouteKey();
 
-        // খ) হোম পেজ এক্সিট লজিক (এই অংশটুকু হোম পেজের জন্য আলাদা থাকছে)
-        if (currentHash === '' || currentHash === '#home') {
+        // গ) হোম পেজ এক্সিট লজিক 
+        if (currentRoute === 'home' || currentRoute === '') {
             
-            if (appData.lastRoute && appData.lastRoute !== '#home') {
+            if (appData.lastRoute && appData.lastRoute !== 'home') {
                 window.location.reload();
                 return;
             }
@@ -7349,7 +7363,7 @@ window.onpopstate = function(event) {
         } else {
             // গ) রুট গার্ড
             if (window.history.length <= 2) {
-                window.location.hash = '#home';
+                window.location.href = '?route=home';
             } else {
                 window.history.back();
             }
