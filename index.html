@@ -429,41 +429,6 @@ font-weight: bold;
 </head>
 <body class="bg-background text-gray-800 font-sans antialiased">
 
-<!-- ========== DYNAMIC RENDERING INTERCEPTOR (SEO FIX) ========== -->
-<script>
-(function() {
-    const params = new URLSearchParams(window.location.search);
-    const route = params.get('route');
-    const id = params.get('id');
-
-    // শুধুমাত্র প্রোডাক্ট রুট এবং আইডি থাকলে চেক করবে
-    if (route === 'product' && id) {
-        // Google-এর Allowed Dynamic Rendering Rule: শুধুমাত্র Render Strategy নির্বাচনের জন্য UA চেক করা
-        const isBot = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebot|facebookexternalhit|twitterbot|linkedinbot/i.test(navigator.userAgent);
-        
-        if (isBot) {
-            // বট ডিটেক্ট হলে: GAS থেকে হালকা SEO HTML আনবে এবং SPA বন্ধ করে দেবে
-            const gasUrl = 'https://script.google.com/macros/s/AKfycbzX8yIaE_j1nRuLp-dP6dkyEwNRXb7KaAct9CS92JvI--SaD1KxoWl8rUGKYU89x0c/exec?route=product&id=' + id;
-            
-            fetch(gasUrl)
-                .then(res => res.text())
-                .then(html => {
-                    // পুরো পেজের ডিওএম বদলে গ্যাসের হালকা HTML বসিয়ে দেবে (JS এক্সিকিউট হবে না)
-                    document.open();
-                    document.write(html);
-                    document.close();
-                })
-                .catch(() => {
-                    // যদি কোনো কারণে GAS ফেইল করে, তবে নরমালি স্পা লোড হবে (কোনো ঝুঁকি নেই)
-                    console.warn("SSR fetch failed, falling back to SPA");
-                });
-            return; 
-        }
-    }
-    // সাধারণ ইউজার হলে এখানে কিছুই করবে না, নিচের স্কেলিটন ও স্পা নরমাল লোড হবে
-})();
-</script>
-<!-- ========== END INTERCEPTOR ========== -->
 <!-- Skeleton Loader -->
 <div id="skeletonLoader" class="fixed inset-0 bg-white z-50 flex flex-col h-screen overflow-y-auto no-scrollbar" aria-hidden="true">
 
@@ -988,7 +953,8 @@ font-weight: bold;
     </template>
 
 <template id="cartPageTemplate">
-    <div class="animate-fade-in pb-16">
+    <!-- pb-72 দেওয়া হয়েছে কারণ স্টিকি বারের কারণে শেষের রিকমেন্ডেশন প্রোডাক্ট লুকিয়ে যাবে না -->
+    <div class="animate-fade-in pb-72">
         <h1 class="text-2xl font-bold mb-6" data-i18n="cart">Shopping Cart</h1>
         <div id="cartPageItems" class="space-y-4"></div>
         
@@ -998,24 +964,7 @@ font-weight: bold;
             <button onclick="navigateTo('#home')" class="cart-btn-start" data-i18n="start_shopping">Start Shopping</button>
         </div>
         
-        <div id="cartSummary" class="hidden bg-white rounded-xl shadow-sm border p-4 mt-6 space-y-2">
-            <div class="space-y-1 text-sm">
-                <div class="flex justify-between text-gray-600"><span data-i18n="subtotal">Subtotal</span> <span id="pageSubtotal" class="font-medium">৳ 0</span></div>
-                <div class="flex justify-between text-gray-600"><span data-i18n="delivery">Delivery</span> <span id="pageDelivery" class="font-medium">৳ 0</span></div>
-                <div id="pageProdDiscContainer" class="flex justify-between text-green-600 hidden"><span data-i18n="product_discount">Product Discount</span> <span id="pageProdDisc">-৳ 0</span></div>
-                <div id="pageDelDiscContainer" class="flex justify-between text-green-600 hidden"><span data-i18n="delivery_discount">Delivery Discount</span> <span id="pageDelDisc">-৳ 0</span></div>
-                <div id="pagePtsDiscContainer" class="flex justify-between text-purple-600 hidden"><span data-i18n="points_discount">Points Discount</span> <span id="pagePtsDisc">-৳ 0</span></div>
-                <div class="flex justify-between text-lg font-bold border-t pt-2 mt-2"><span data-i18n="total">Total</span> <span id="pageTotal" class="text-primary">৳ 0</span></div>
-            </div>
-            <div class="flex mt-4">
-                <input type="text" id="pageCouponCode" placeholder="Coupon Code" class="flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-                <button onclick="handleApplyCouponFromPage()" class="bg-gray-800 text-white px-4 py-2 rounded-r-lg text-sm font-medium" data-i18n="apply">Apply</button>
-            </div>
-            <div id="pageCouponMessage" class="text-xs"></div>
-            <button onclick="proceedToCheckout()" class="w-full bg-primary text-white py-3 rounded-lg font-bold mt-2 hover:opacity-90 shadow-lg" data-i18n="checkout">Checkout</button>
-        </div>
-        
-        <!-- COUPONS: আলাদা div, summary এর বাইরে -->
+        <!-- ১. কুপন সেকশন (আগে থেকে এখানে আনা হয়েছে) -->
         <div id="cartCouponsSection" class="hidden mt-6">
             <div class="cart-section-header">
                 <i class="fas fa-ticket-alt"></i>
@@ -1028,7 +977,7 @@ font-weight: bold;
             </div>
         </div>
         
-        <!-- RECOMMENDATIONS: আলাদা div, summary এর বাইরে -->
+        <!-- ২. রিকমেন্ডেশন সেকশন (আগে থেকে এখানে আনা হয়েছে) -->
         <div id="cartRecommendationsSection" class="hidden mt-6">
             <div class="cart-section-header">
                 <i class="fas fa-truck-fast"></i>
@@ -1043,6 +992,24 @@ font-weight: bold;
                 </button>
             </div>
             <div id="cartRecommendationMore" class="hidden space-y-2 mt-3"></div>
+        </div>
+
+        <!-- ৩. চেকআউট সামারি (সবার শেষে এনে স্টিকি করা হয়েছে) -->
+        <div id="cartSummary" class="hidden bg-white border-t border-gray-200 p-4 space-y-2 sticky bottom-16 z-30 -mx-4 px-4 shadow-[0_-4px_12px_-1px_rgba(0,0,0,0.1)]">
+            <div class="space-y-1 text-sm">
+                <div class="flex justify-between text-gray-600"><span data-i18n="subtotal">Subtotal</span> <span id="pageSubtotal" class="font-medium">৳ 0</span></div>
+                <div class="flex justify-between text-gray-600"><span data-i18n="delivery">Delivery</span> <span id="pageDelivery" class="font-medium">৳ 0</span></div>
+                <div id="pageProdDiscContainer" class="flex justify-between text-green-600 hidden"><span data-i18n="product_discount">Product Discount</span> <span id="pageProdDisc">-৳ 0</span></div>
+                <div id="pageDelDiscContainer" class="flex justify-between text-green-600 hidden"><span data-i18n="delivery_discount">Delivery Discount</span> <span id="pageDelDisc">-৳ 0</span></div>
+                <div id="pagePtsDiscContainer" class="flex justify-between text-purple-600 hidden"><span data-i18n="points_discount">Points Discount</span> <span id="pagePtsDisc">-৳ 0</span></div>
+                <div class="flex justify-between text-lg font-bold border-t pt-2 mt-2"><span data-i18n="total">Total</span> <span id="pageTotal" class="text-primary">৳ 0</span></div>
+            </div>
+            <div class="flex mt-4">
+                <input type="text" id="pageCouponCode" placeholder="Coupon Code" class="flex-1 px-3 py-2 border rounded-l-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                <button onclick="handleApplyCouponFromPage()" class="bg-gray-800 text-white px-4 py-2 rounded-r-lg text-sm font-medium" data-i18n="apply">Apply</button>
+            </div>
+            <div id="pageCouponMessage" class="text-xs"></div>
+            <button onclick="proceedToCheckout()" class="w-full bg-primary text-white py-3 rounded-lg font-bold mt-2 hover:opacity-90 shadow-lg" data-i18n="checkout">Checkout</button>
         </div>
     </div>
 </template>
@@ -1374,7 +1341,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzX8yIaE_j1nRuLp-dP6dkyEwNRXb7KaAct9CS92JvI--SaD1KxoWl8rUGKYU89x0c/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyPdAhoaZR3vCcXNsFXVdMw-FjxA5P9ID6k1PgDzByMvjsIN8Ld1CISZ1JScjCpqmoP/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -2276,21 +2243,6 @@ function navigateTo(route) {
 }
 
 function loadRoute(hash) {
-    // ==========================================
-    // NEW: CLEAN URL DEEP LINKING SUPPORT (SEO FIX)
-    // যদি কেউ সরাসরি ?route=product&id=101 লিংক শেয়ার করে, 
-    // তাহলে সেটাকে হ্যাশ রুটে কনভার্ট করে নেবে (ব্যাক বাটন ও স্ক্রল ঠিক রাখতে)
-    // ==========================================
-    if (!hash || hash === '#' || hash === '') {
-        const urlParams = new URLSearchParams(window.location.search);
-        const queryRoute = urlParams.get('route');
-        const queryId = urlParams.get('id');
-        if (queryRoute && queryId) {
-            hash = `#product?id=${queryId}`;
-        }
-    }
-    // ==========================================
-
     // ==========================================
     // FIX: SMART SCROLL RESET (SKIP FOR CHECKOUT RETURN)
     // ==========================================
