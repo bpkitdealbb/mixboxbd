@@ -954,7 +954,7 @@ font-weight: bold;
 
 <template id="cartPageTemplate">
     <!-- pb-72 দেওয়া হয়েছে কারণ স্টিকি বারের কারণে শেষের রিকমেন্ডেশন প্রোডাক্ট লুকিয়ে যাবে না -->
-    <div class="animate-fade-in pb-72">
+    <div class="animate-fade-in pb-16">
         <h1 class="text-2xl font-bold mb-6" data-i18n="cart">Shopping Cart</h1>
         <div id="cartPageItems" class="space-y-4"></div>
         
@@ -995,7 +995,7 @@ font-weight: bold;
         </div>
 
         <!-- ৩. চেকআউট সামারি (সবার শেষে এনে স্টিকি করা হয়েছে) -->
-        <div id="cartSummary" class="hidden bg-white border-t border-gray-200 p-4 space-y-2 sticky bottom-16 z-30 -mx-4 px-4 shadow-[0_-4px_12px_-1px_rgba(0,0,0,0.1)]">
+        <div id="cartSummary" class="hidden bg-white p-4 space-y-2 sticky bottom-0 left-0 right-0 z-50 -mx-4 px-4 shadow-[0_-4px_12px_-1px_rgba(0,0,0,0.1)] border-t-2 border-gray-100">
             <div class="space-y-1 text-sm">
                 <div class="flex justify-between text-gray-600"><span data-i18n="subtotal">Subtotal</span> <span id="pageSubtotal" class="font-medium">৳ 0</span></div>
                 <div class="flex justify-between text-gray-600"><span data-i18n="delivery">Delivery</span> <span id="pageDelivery" class="font-medium">৳ 0</span></div>
@@ -1341,7 +1341,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyPdAhoaZR3vCcXNsFXVdMw-FjxA5P9ID6k1PgDzByMvjsIN8Ld1CISZ1JScjCpqmoP/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwj1gqxBA8pQhV2Uh0os9ddB-wFvrONVtHCpQ2oD2gdfVA4sMMizqWlftoMjGOh_WI/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
