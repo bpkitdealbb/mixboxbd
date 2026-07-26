@@ -424,6 +424,8 @@ white-space: nowrap;
 color: var(--primary-color);
 font-weight: bold;
 }
+@keyframes stickyUp{from{opacity:0;clip-path:inset(0 0 100% 0)}to{opacity:1;clip-path:inset(0 0 0 0)}}
+#cartSummary:not(.hidden){animation:stickyUp .4s ease-out}
 </style>
 
 </head>
@@ -4158,7 +4160,7 @@ function updateCartPageUI() {
     }
     
     emptyState.classList.add('hidden');
-    summary.classList.remove('hidden');
+    summary.style.animation='none',summary.offsetHeight,summary.style.animation='',summary.classList.remove('hidden');
 
     // কার্ট আইটেম রেন্ডার করা
     container.innerHTML = appData.cart.map((item, idx) => {
@@ -7579,51 +7581,59 @@ function shareCartViaWhatsApp() {
     if (!items.length) return Swal.fire('Warning', t('fill_all'), 'warning');
     
     const s = appData.settings;
-    const lang = appData.language === 'bn' ? 'bn' : 'en';
-    const isLoggedIn = !!appData.user; // চেক করছি ইউজার লগইন আছে কিনা
+    const siteName = s.sitename || 'SafaBoxbd';
+    const pageLink = window.location.href;
+    const fmt = (n) => '৳' + Math.round(n).toLocaleString('en-IN');
 
-    // ১. পণ্যের তালিকা তৈরি করা হচ্ছে
+    // ১. পণ্যের তালিকা তৈরি
     let itemLines = '';
     items.forEach((p, i) => {
         const q = p.quantity || p.qty || 1;
         const pr = parseFloat(p.price) || 0;
         const variantText = p.selectedVariant ? ` (${p.selectedVariant})` : '';
-        itemLines += `${i+1}. ${p.name}${variantText}\n   ${lang === 'bn' ? 'পরিমাণ' : 'Qty'}: ${q} | ${lang === 'bn' ? 'মূল্য' : 'Price'}: ৳${pr}\n\n`;
+        itemLines += `${i+1}. ${p.name}${variantText}\n   └─ পরিমাণ: ${q}\n   └─ মূল্য: ${fmt(pr)}\n`;
     });
 
-    // ২. স্ক্রিন থেকে সরাসরি ডাটা তুলে আনা হচ্ছে
-    const sub = document.getElementById('pageSubtotal')?.innerText || '৳ 0';
-    const del = document.getElementById('pageDelivery')?.innerText || '৳ 0';
-    const total = document.getElementById('pageTotal')?.innerText || '৳ 0';
-    
-    // কুপন সম্পর্কিত ভ্যারিয়েবল (শুধুমাত্র লগইন করা ইউজারদের জন্য দেখাবে)
-    const prodDisc = document.getElementById('pageProdDisc')?.innerText || '';
-    const delDisc = document.getElementById('pageDelDisc')?.innerText || '';
-    const couponCode = document.getElementById('pageCouponCode')?.value || '';
+    // ২. সাবটোটাল হিসাব
+    const subTotal = items.reduce((sum, i) => sum + ((parseFloat(i.price)) * (i.quantity || i.qty)), 0);
 
-    // ৩. ফাইনাল মেসেজ তৈরি করা হচ্ছে
-    let msg = `*${s.sitename || 'Store'}*\n\n${itemLines}`;
-    msg += `━━━━━━━━━━━━━━\n`;
-    msg += lang === 'bn' ? `সাবটোটাল: ${sub}\n` : `Subtotal: ${sub}\n`;
-    msg += lang === 'bn' ? `ডেলিভারি: ${del}\n` : `Delivery: ${del}\n`;
-    
-    // 🔴 লজিক: ইউজার লগইন থাকলে তবেই কুপনের ডিটেইলস মেসেজে যোগ হবে
-    if (isLoggedIn) {
-        if (prodDisc) {
-            msg += lang === 'bn' ? `পণ্য ছাড়: ${prodDisc}\n` : `Product Discount: ${prodDisc}\n`;
+    // ৩. ডেলিভারি চার্জ হিসাব (গেস্ট ইউজার = কুপন নেই)
+    const baseDelivery = parseFloat(s.deliverycharge) || 0;
+    let deliveryTotal = 0;
+    if (items.length > 0) {
+        deliveryTotal = baseDelivery;
+        // প্রথম আইটেমের অতিরিক্ত কোয়ান্টিটির চার্জ
+        const firstQty = items[0].quantity || items[0].qty || 1;
+        if (firstQty > 1) {
+            deliveryTotal += ((firstQty - 1) * (parseFloat(items[0].extradeliverycharge || 0)));
         }
-        if (delDisc) {
-            msg += lang === 'bn' ? `ডেলিভারি ছাড়: ${delDisc}\n` : `Delivery Discount: ${delDisc}\n`;
-        }
-        if (couponCode) {
-            msg += lang === 'bn' ? `কুপন কোড: ${couponCode}\n` : `Coupon Code: ${couponCode}\n`;
+        // বাকি আইটেমগুলোর চার্জ
+        for (let i = 1; i < items.length; i++) {
+            const qty = items[i].quantity || items[i].qty || 1;
+            deliveryTotal += (qty * (parseFloat(items[i].extradeliverycharge || 0)));
         }
     }
-    
-    msg += `━━━━━━━━━━━━━━\n`;
-    msg += lang === 'bn' ? `মোট: ${total}\n(ডেলিভারি চার্জ সহ)` : `Total: ${total}\n(With delivery charge)`;
+    const finalTotal = subTotal + deliveryTotal;
 
-    // ৪. WhatsApp ওপেন করা হচ্ছে
+    // ৪. ফাইনাল মেসেজ তৈরি
+    let msg = `━━━━━━━━━━━━━━━━━━━━━━━\n📌 *সম্মানিত গ্রাহক, আপনার অর্ডারটি নিশ্চিত করার জন্য অনুগ্রহ করে নিচের তথ্যগুলো পূরণ করুন এবং বাকি অংশ অপরিবর্তিত রেখে মেসেজটি পাঠান।*\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `👤 নাম:\n📱 মোবাইল:\n📍 জেলা:\n🏠 উপজেলা:\n🏡 সম্পূর্ণ ঠিকানা:\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━\n📦 *অর্ডারের পণ্যসমূহ*\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += itemLines;
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━\n💰 *অর্ডার সারসংক্ষেপ*\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `সাবটোটাল : ${fmt(subTotal)}\n`;
+    msg += `ডেলিভারি : ${fmt(deliveryTotal)}\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🟢 *মোট পরিশোধযোগ্য : ${fmt(finalTotal)}*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `📝 *অতিরিক্ত নির্দেশনা লিখুন (যদি থাকে):*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🚚 *অর্ডার নিশ্চিত হওয়ার পর নির্ধারিত সময়ের মধ্যে আপনার ঠিকানায় পৌঁছে দেওয়া হবে।*\n`;
+    msg += `📞 *প্রয়োজনে আমাদের প্রতিনিধি আপনার সাথে যোগাযোগ করবেন।*\n`;
+    msg += `🤝 *${siteName}-এর প্রতি আপনার আস্থা ও বিশ্বাসের জন্য আন্তরিক ধন্যবাদ। আমরা আপনাকে সর্বোত্তম সেবা দিতে প্রতিশ্রুতিবদ্ধ।*\n`;
+    msg += `${pageLink}`;
+
+    // ৫. WhatsApp ওপেন করা
     const n = (s.whatsappnumber || '').replace(/\D/g, '');
     if (n) {
         window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg)}`, '_blank');
