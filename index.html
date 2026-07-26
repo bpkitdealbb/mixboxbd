@@ -951,7 +951,6 @@ font-weight: bold;
             </div>
         </div>
     </template>
-
 <template id="cartPageTemplate">
     <!-- pb-72 দেওয়া হয়েছে কারণ স্টিকি বারের কারণে শেষের রিকমেন্ডেশন প্রোডাক্ট লুকিয়ে যাবে না -->
     <div class="animate-fade-in pb-16">
@@ -963,7 +962,13 @@ font-weight: bold;
             <h3 data-i18n="empty_cart_msg">Your cart is empty</h3>
             <button onclick="navigateTo('#home')" class="cart-btn-start" data-i18n="start_shopping">Start Shopping</button>
         </div>
-        
+                <!-- GUEST WHATSAPP BUTTON (স্টিকি ডিভ থেকে বের করা হয়েছে) -->
+        <div id="whatsappGuestCheckoutContainer" class="mt-6 hidden">
+            <button onclick="shareCartViaWhatsApp()" class="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-500/30 flex items-center justify-center gap-2 transition-all active:scale-95 border-2 border-green-500">
+                <i class="fab fa-whatsapp text-2xl"></i> 
+                <span data-i18n="order_via_whatsapp">লগইন ছাড়াই WhatsApp এ অর্ডার করুন</span>
+            </button>
+        </div>
         <!-- ১. কুপন সেকশন (আগে থেকে এখানে আনা হয়েছে) -->
         <div id="cartCouponsSection" class="hidden mt-6">
             <div class="cart-section-header">
@@ -1519,6 +1524,11 @@ function escapeHTML(str) {
         // ============================================================
         const I18N = {
             en: {
+                            order_via_whatsapp: "Order Via WhatsApp Without Login",
+                            cod_100: "100% Cash on Delivery",
+                bd_fastest: "Fastest Delivery All Over Bangladesh",
+                fast_support: "Fastest Support",
+                genuine_100: "100% Genuine Products",
                 home: "Home", categories: "Categories", message: "Message", cart: "Cart", account: "Account",
                 search_ph: "Search products...",
                 top_cat: "TOP CATEGORIES", featured: "FEATURED", all_prod: "ALL PRODUCTS", view_all: "View All",
@@ -1656,6 +1666,11 @@ function escapeHTML(str) {
                 available_coupons: "Available Coupons"
             },
             bn: {
+                            order_via_whatsapp: "লগইন ছাড়াই WhatsApp এ অর্ডার করুন",
+                            cod_100: "১০০% ক্যাশ অন ডেলিভারি",
+                bd_fastest: "সারাদেশে দ্রুততম ডেলিভারি",
+                fast_support: "দ্রুততম সাপোর্ট",
+                genuine_100: "১০০% নির্ভরযোগ্য প্রোডাক্ট",
                 home: "হোম", categories: "ক্যাটাগরি", message: "মেসেজ", cart: "কার্ট", account: "অ্যাকাউন্ট",
                 search_ph: "পণ্য খুঁজুন...",
                 top_cat: "শীর্ষ ক্যাটাগরি", featured: "জনপ্রিয় পণ্য", all_prod: "সকল পণ্য", view_all: "সব দেখুন",
@@ -4577,6 +4592,17 @@ function updateQty(idx, delta) {
     
     // ৪. অর্ডার সামারি আপডেট করা (এখানে লোকাল স্টোরেজে সেভ হয়)
     updateOrderSummary();
+        // ==========================================
+    // NEW: পেজ UI আপডেটের পর WhatsApp বাটন স্টেটাস চেক
+    // ==========================================
+    const waBtn = document.getElementById('whatsappGuestCheckoutContainer');
+    if(waBtn) {
+        if (!appData.user) {
+            waBtn.classList.remove('hidden');
+        } else {
+            waBtn.classList.add('hidden');
+        }
+    }
     // ==========================================
 }
 
@@ -5249,9 +5275,16 @@ function loadCartPage() {
         updateCartPageUI();
     }
     
-    // ==========================================
-    // কুপন ও রিকমেন্ডেশন: সবসময় দেখাবে (কার্ট খালি থাকলেও)
-    // ==========================================
+    // নতুন: লগইন না থাকলে WhatsApp বাটন দেখাবে
+    const waBtn = document.getElementById('whatsappGuestCheckoutContainer');
+    if(waBtn) {
+        if (!appData.user) {
+            waBtn.classList.remove('hidden');
+        } else {
+            waBtn.classList.add('hidden');
+        }
+    }
+    
     renderCartCoupons();
     renderCartRecommendations();
 }
@@ -5613,7 +5646,7 @@ function createRecCard(product, prefix) {
     const isSelected = appData.cart.some(item => item.id == product.id && item.selected !== false);
     
     return `
-        <div class="rec-new-card">
+        <div class="rec-new-card" onclick="navigateTo('#product?id=${product.id}')" style="cursor: pointer;">
             <img src="${product.imagemain}" class="rec-new-img" loading="lazy" alt="${product.name}" onerror="this.src='https://via.placeholder.com/54?text=Img'">
             <div class="rec-new-info">
                 <div class="rec-new-name">${product.name}</div>
@@ -5628,7 +5661,7 @@ function createRecCard(product, prefix) {
                 ${isSelected ? `
                     <span class="rec-new-btn added"><i class="fas fa-check" style="margin-right:4px"></i>${tL('already_added')}</span>
                 ` : `
-                    <button onclick="addRecToCart('${product.id}')" class="rec-new-btn">${tL('add_item')}</button>
+                    <button onclick="event.stopPropagation(); addRecToCart('${product.id}')" class="rec-new-btn">${tL('add_item')}</button>
                 `}
             </div>
         </div>
@@ -6789,6 +6822,25 @@ function searchProducts(query) {
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 border-t border-gray-800 pt-8 text-center md:text-left">
                         <div>
+                                                            <!-- TRUST BADGES / FEATURE ICONS -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                        <div class="flex flex-col items-center justify-center bg-gray-900/50 rounded-xl py-4 px-2 border border-gray-800">
+                            <i class="fas fa-money-bill-wave text-2xl text-green-400 mb-2"></i>
+                            <span class="text-[11px] font-bold text-gray-300 text-center leading-tight">${t('cod_100')}</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center bg-gray-900/50 rounded-xl py-4 px-2 border border-gray-800">
+                            <i class="fas fa-truck-fast text-2xl text-blue-400 mb-2"></i>
+                            <span class="text-[11px] font-bold text-gray-300 text-center leading-tight">${t('bd_fastest')}</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center bg-gray-900/50 rounded-xl py-4 px-2 border border-gray-800">
+                            <i class="fas fa-headset text-2xl text-yellow-400 mb-2"></i>
+                            <span class="text-[11px] font-bold text-gray-300 text-center leading-tight">${t('fast_support')}</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center bg-gray-900/50 rounded-xl py-4 px-2 border border-gray-800">
+                            <i class="fas fa-shield-halved text-2xl text-purple-400 mb-2"></i>
+                            <span class="text-[11px] font-bold text-gray-300 text-center leading-tight">${t('genuine_100')}</span>
+                        </div>
+                    </div>
                             <h3 class="font-bold text-lg mb-4 text-white underline">Links</h3>
                             <ul class="space-y-2">
                                 ${policyLinks}
@@ -7520,6 +7572,63 @@ async function trackCAPI(eventName, customData, eventId) {
         console.log("%c[CAPI Fired]", "color: green; font-weight: bold;", eventName);
     } catch (err) {
         console.error("CAPI Fetch Error:", err);
+    }
+}
+function shareCartViaWhatsApp() {
+    const items = appData.cart.filter(i => i.selected !== false);
+    if (!items.length) return Swal.fire('Warning', t('fill_all'), 'warning');
+    
+    const s = appData.settings;
+    const lang = appData.language === 'bn' ? 'bn' : 'en';
+    const isLoggedIn = !!appData.user; // চেক করছি ইউজার লগইন আছে কিনা
+
+    // ১. পণ্যের তালিকা তৈরি করা হচ্ছে
+    let itemLines = '';
+    items.forEach((p, i) => {
+        const q = p.quantity || p.qty || 1;
+        const pr = parseFloat(p.price) || 0;
+        const variantText = p.selectedVariant ? ` (${p.selectedVariant})` : '';
+        itemLines += `${i+1}. ${p.name}${variantText}\n   ${lang === 'bn' ? 'পরিমাণ' : 'Qty'}: ${q} | ${lang === 'bn' ? 'মূল্য' : 'Price'}: ৳${pr}\n\n`;
+    });
+
+    // ২. স্ক্রিন থেকে সরাসরি ডাটা তুলে আনা হচ্ছে
+    const sub = document.getElementById('pageSubtotal')?.innerText || '৳ 0';
+    const del = document.getElementById('pageDelivery')?.innerText || '৳ 0';
+    const total = document.getElementById('pageTotal')?.innerText || '৳ 0';
+    
+    // কুপন সম্পর্কিত ভ্যারিয়েবল (শুধুমাত্র লগইন করা ইউজারদের জন্য দেখাবে)
+    const prodDisc = document.getElementById('pageProdDisc')?.innerText || '';
+    const delDisc = document.getElementById('pageDelDisc')?.innerText || '';
+    const couponCode = document.getElementById('pageCouponCode')?.value || '';
+
+    // ৩. ফাইনাল মেসেজ তৈরি করা হচ্ছে
+    let msg = `*${s.sitename || 'Store'}*\n\n${itemLines}`;
+    msg += `━━━━━━━━━━━━━━\n`;
+    msg += lang === 'bn' ? `সাবটোটাল: ${sub}\n` : `Subtotal: ${sub}\n`;
+    msg += lang === 'bn' ? `ডেলিভারি: ${del}\n` : `Delivery: ${del}\n`;
+    
+    // 🔴 লজিক: ইউজার লগইন থাকলে তবেই কুপনের ডিটেইলস মেসেজে যোগ হবে
+    if (isLoggedIn) {
+        if (prodDisc) {
+            msg += lang === 'bn' ? `পণ্য ছাড়: ${prodDisc}\n` : `Product Discount: ${prodDisc}\n`;
+        }
+        if (delDisc) {
+            msg += lang === 'bn' ? `ডেলিভারি ছাড়: ${delDisc}\n` : `Delivery Discount: ${delDisc}\n`;
+        }
+        if (couponCode) {
+            msg += lang === 'bn' ? `কুপন কোড: ${couponCode}\n` : `Coupon Code: ${couponCode}\n`;
+        }
+    }
+    
+    msg += `━━━━━━━━━━━━━━\n`;
+    msg += lang === 'bn' ? `মোট: ${total}\n(ডেলিভারি চার্জ সহ)` : `Total: ${total}\n(With delivery charge)`;
+
+    // ৪. WhatsApp ওপেন করা হচ্ছে
+    const n = (s.whatsappnumber || '').replace(/\D/g, '');
+    if (n) {
+        window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg)}`, '_blank');
+    } else {
+        Swal.fire('Info', 'WhatsApp number is not configured.', 'info');
     }
 }
     </script>
