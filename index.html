@@ -1856,74 +1856,52 @@ function generateProductDetailsCache(productsArray) {
         console.warn("Details cache save failed", e);
     }
 }
+// ==========================================
+// POLYFILL: requestIdleCallback (পুরানো ব্রাউজারের জন্য)
+// ==========================================
+if (!('requestIdleCallback' in window)) {
+    window.requestIdleCallback = function(cb) {
+        return setTimeout(function() {
+            cb({ didTimeout: false, timeRemaining: function() { return 50; } });
+        }, 1);
+    };
+}
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
     const localVersion = localStorage.getItem('local_data_version');
 
-    // ==========================================
-    // নতুন যোগ করা হয়েছে: ১৫ সেকেন্ডের টাইমআউট ভেরিয়েবল
-    // ==========================================
     let initTimeoutId;
 
-    // ১. পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার করা
+    // ==========================================
+    // ফেজ ১: ক্যাশ থেকে ইনস্ট্যান্ট রেন্ডার
+    // ==========================================
     if (cachedDataStr) {
         try {
             const data = JSON.parse(cachedDataStr);
-            appData.settings = data.settings;
-            appData.categories = data.categories;
-            appData.products = data.products;
-            const _hf1 = ['image2','image3','image4','image5','videourl','description'];
-            appData.products = appData.products.map(p => { const l = {...p}; _hf1.forEach(f => delete l[f]); return l; });
-            appData.banners = data.banners;
-            appData.locations = data.locations;
-            appData.socialMedia = data.socialMedia;
-            appData.policies = data.policies;
-            appData.popups = data.popups;
-            appData.coupons = data.coupons || [];
-            appData.reviews = data.reviews;
-                    // হালকা ক্যাশ আপডেট করা হচ্ছে
-                    if (data.products) generateProductDetailsCache(data.products);
-            updateDOMWithSettings(appData.settings);
-
-            document.getElementById('skeletonLoader').classList.add('hidden');
-            document.getElementById('app').classList.remove('hidden');
-            document.getElementById('app').classList.add('flex');
-            
-            loadRoute(window.location.hash || '#home');
-            updateCartBadge();
-            updateOrderSummary();
-            updateUIText();
-            syncCartWithLivePrices();
-            initFilterOptions();
-            initPopupSystem();
+            // ⚡ প্রথম ১২টি প্রোডাক্ট দিয়ে হোম পেজ তৎক্ষণাৎ দেখান
+            loadCriticalData(data);
+            // 🔇 বাকি প্রোডাক্ট ব্যাকগ্রাউন্ডে প্রসেস করুন
+            requestIdleCallback(() => { processRemainingProducts(data.products); });
         } catch (e) {
             console.error("Cache parse error", e);
             localStorage.removeItem('cached_app_data');
         }
     }
 
-    // ==========================================
-    // নতুন যোগ করা হয়েছে: টাইমআউট শুরু করা (শুধুমাত্র ক্যাশ না থাকলে)
-    // ==========================================
+    // টাইমআউট (শুধুমাত্র ক্যাশ না থাকলে)
     if (!cachedDataStr) {
         initTimeoutId = setTimeout(function() {
             const skeleton = document.getElementById('skeletonLoader');
             const app = document.getElementById('app');
-            
-            // চেক করুন স্কেলেটন এখনও দেখা চলছে কিনা
             if (skeleton && !skeleton.classList.contains('hidden')) {
-                // স্কেলেটন লুকিয়ে দিন
                 skeleton.classList.add('hidden');
-                // মূল অ্যাপ দেখান
                 app.classList.remove('hidden');
                 app.classList.add('flex');
-                
-                // ইউজারকে এরর মেসেজ দেখান
                 document.getElementById('content').innerHTML = `
                     <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
                         <i class="fas fa-wifi text-6xl text-gray-300 mb-4"></i>
                         <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সংযোগ স্থাপন করা যায়নি</h2>
-                        <p class="text-gray-500 text-sm mb-6 max-w-xs">দয়া করে আপনার ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                        <p class="text-gray-500 text-sm mb-6 max-w-xs">দয়া করে আপনার ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
                         <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
                             <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
                         </button>
@@ -1932,86 +1910,44 @@ function loadInitialData() {
             }
         }, 10000);
     }
-    // ==========================================
 
-    // ২. একটি মাত্র রিকোয়েস্টে ডাটা + ভার্সন দুটোই আনা হচ্ছে
+    // ==========================================
+    // ফেজ ২: সার্ভার থেকে ফ্রেশ ডাটা
+    // ==========================================
     const timestamp = new Date().getTime();
     fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
         .then(response => response.json())
         .then(res => {
-            // ==========================================
-            // নতুন যোগ করা হয়েছে: ডাটা চলে এলে টাইমআউট বাতিল করা
-            // ==========================================
             clearTimeout(initTimeoutId);
-            // ==========================================
 
             if (res.success) {
                 const serverVersion = res.serverVersion;
-
-                if (localVersion && localVersion === serverVersion && cachedDataStr) {
-                    return;
-                }
+                if (localVersion && localVersion === serverVersion && cachedDataStr) return;
 
                 localStorage.setItem('cached_app_data', JSON.stringify(res.data));
-                                        // নতুন ডাটা থেকে হালকা ক্যাশ তৈরি করা হচ্ছে
-                        if (res.data.products) generateProductDetailsCache(res.data.products);
                 localStorage.setItem('local_data_version', serverVersion);
 
-                appData.settings = res.data.settings;
-                appData.categories = res.data.categories;
-                appData.products = res.data.products;
-                const _hf2 = ['image2','image3','image4','image5','videourl','description'];
-                appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
-                appData.banners = res.data.banners;
-                appData.locations = res.data.locations;
-                appData.socialMedia = res.data.socialMedia;
-                appData.policies = res.data.policies;
-                appData.popups = res.data.popups;
-                appData.coupons = res.data.coupons || [];
-                appData.reviews = res.data.reviews;
-
-                updateDOMWithSettings(appData.settings);
-
-                if (!cachedDataStr) {
-                    document.getElementById('skeletonLoader').classList.add('hidden');
-                    document.getElementById('app').classList.remove('hidden');
-                    document.getElementById('app').classList.add('flex');
-                }
-
-                appData.computedPages = null;
-                loadRoute(window.location.hash || '#home');
-                updateCartBadge();
-                updateOrderSummary();
-                updateUIText();
-                syncCartWithLivePrices();
-                initFilterOptions();
-                initPopupSystem();
+                // ⚡ ক্রিটিক্যাল ডাটা দিয়ে হোম পেজ ইমিডিয়েটলি রেন্ডার
+                loadCriticalData(res.data);
+                // 🔇 ভারী প্রোডাক্ট প্রসেসিং ব্যাকগ্রাউন্ডে
+                requestIdleCallback(() => { processRemainingProducts(res.data.products); });
             }
         })
         .catch(err => {
-            // ==========================================
-            // নতুন যোগ করা হয়েছে: সাথে সাথে এরর আসলে টাইমআউট বাতিল করা
-            // ==========================================
             clearTimeout(initTimeoutId);
-            // ==========================================
-            
             console.error(err);
-            
-            // যদি ক্যাশ ডাটা না থাকে, তাহলেই শুধু এরর দেখাবে (যাতে ১৫ সেকেন্ড অপেক্ষা করতে না হয়)
             if (!cachedDataStr) {
                 const skeleton = document.getElementById('skeletonLoader');
                 const app = document.getElementById('app');
-                
                 if (skeleton && !skeleton.classList.contains('hidden')) {
                     skeleton.classList.add('hidden');
                     app.classList.remove('hidden');
                     app.classList.add('flex');
-                    
                     document.getElementById('content').innerHTML = `
                         <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
                             <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
                             <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সমস্যা হচ্ছে</h2>
-                            <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                            <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
                             <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
                                 <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
                             </button>
@@ -2022,6 +1958,81 @@ function loadInitialData() {
         });
 }
 
+// ==========================================
+// নতুন ফাংশন: ক্রিটিক্যাল ডাটা দিয়ে হোম পেজ ⚡ ইনস্ট্যান্টলি রেন্ডার
+// ==========================================
+function loadCriticalData(data) {
+    // সেটিংস, ব্যানার, ক্যাটাগরি ইত্যাদি লোড
+    appData.settings = data.settings;
+    appData.banners = data.banners;
+    appData.categories = data.categories;
+    appData.locations = data.locations;
+    appData.socialMedia = data.socialMedia;
+    appData.policies = data.policies;
+    appData.popups = data.popups;
+    appData.coupons = data.coupons || [];
+    appData.reviews = data.reviews;
+
+    // ==========================================
+    // 🎯 মূল ট্রিক: প্রথম ১২টি প্রোডাক্ট দিয়ে হোম পেজ তৈরি
+    // ফিচার্ড (৬টি) + পেজ ১ (১০টি) দেখানোর জন্য এটাই যথেষ্ট
+    // বাকি প্রোডাক্ট ব্যাকগ্রাউন্ডে আসবে
+    // ==========================================
+    const HEAVY_FIELDS = ['image2', 'image3', 'image4', 'image5', 'videourl', 'description'];
+    if (data.products && data.products.length > 0) {
+        const firstBatch = data.products.slice(0, 12);
+        appData.products = firstBatch.map(p => {
+            const light = { ...p };
+            HEAVY_FIELDS.forEach(f => delete light[f]);
+            return light;
+        });
+    }
+    // ==========================================
+
+    updateDOMWithSettings(appData.settings);
+
+    document.getElementById('skeletonLoader').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('app').classList.add('flex');
+
+    loadRoute(window.location.hash || '#home');
+    updateCartBadge();
+    updateOrderSummary();
+    updateUIText();
+    syncCartWithLivePrices();
+    initFilterOptions();
+    initPopupSystem();
+}
+
+// ==========================================
+// নতুন ফাংশন: বাকি সব প্রোডাক্ট 🔇 ব্যাকগ্রাউন্ডে প্রসেস
+// ==========================================
+function processRemainingProducts(allProducts) {
+    if (!allProducts || allProducts.length === 0) return;
+
+    // হালকা ক্যাশ তৈরি (সব প্রোডাক্টের জন্য)
+    generateProductDetailsCache(allProducts);
+
+    // ভারী ফিল্ড সরিয়ে হালকা অ্যারে তৈরি
+    const HEAVY_FIELDS = ['image2', 'image3', 'image4', 'image5', 'videourl', 'description'];
+    appData.products = allProducts.map(p => {
+        const light = { ...p };
+        HEAVY_FIELDS.forEach(f => delete light[f]);
+        return light;
+    });
+
+    // পেজ লেআউট রিসেট (নতুন ডাটা দিয়ে আবার তৈরি হবে)
+    appData.computedPages = null;
+
+    // যদি হোম পেজে থাকি, "All Products" গ্রিড আপডেট করুন
+    const currentHash = window.location.hash || '#home';
+    if (currentHash === '#home' || currentHash === '') {
+        loadAllProductsSection(appData.allProductsCurrentPage || 1, false);
+    }
+
+    // ফিল্টার অপশন আপডেট (নতুন প্রোডাক্ট আসায় প্রাইস রেঞ্জ পরিবর্তন হতে পারে)
+    initFilterOptions();
+}
         // ==========================================
         // NEW HELPER: UPDATE DOM ELEMENTS DYNAMICALLY
         // ==========================================
