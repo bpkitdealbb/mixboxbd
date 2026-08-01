@@ -1348,7 +1348,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwj1gqxBA8pQhV2Uh0os9ddB-wFvrONVtHCpQ2oD2gdfVA4sMMizqWlftoMjGOh_WI/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwe2Th32VyzxQzpNiyucPwL1BuJ-AQp5x6MjUWzQRQUShhKNIuR30HEYNHiF0Au82Lz/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -3520,6 +3520,8 @@ function renderPaginationControls(currentPage, totalProducts) {
     const totalPages = 1 + extraPages;
     if (totalPages <= 1) { container.innerHTML = ''; return; }
 
+    container.className = 'mt-6 flex flex-col items-center';
+
     const PER_ROW = 10;
     const totalRows = Math.ceil(totalPages / PER_ROW);
     let html = '';
@@ -3529,25 +3531,22 @@ function renderPaginationControls(currentPage, totalProducts) {
         const end = Math.min(start + PER_ROW - 1, totalPages);
         const isLastRow = row === totalRows - 1;
 
-        html += `<div class="flex justify-center items-center gap-1.5 ${row > 0 ? 'mt-2' : ''}">`;
+        html += `<div class="inline-flex justify-center items-center gap-1 ${row > 0 ? 'mt-2' : ''}">`;
 
-        // শুধুমাত্র সর্বশেষ লাইনে Previous বাটন
         if (isLastRow) {
-            html += `<button onclick="loadAllProductsSection(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="px-3 py-1 border rounded font-medium transition-colors ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed border-gray-200' : 'hover:bg-gray-50 text-gray-700'}"><i class="fas fa-chevron-left"></i></button>`;
+            html += `<button onclick="loadAllProductsSection(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="w-6 h-6 rounded font-medium text-[10px] flex items-center justify-center border transition-colors ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed border-gray-200' : 'hover:bg-gray-50 text-gray-700'}"><i class="fas fa-chevron-left text-[8px]"></i></button>`;
         }
 
-        // নাম্বার বাটনগুলো
         for (let i = start; i <= end; i++) {
             if (i === currentPage) {
-                html += `<button class="w-8 h-8 flex items-center justify-center rounded font-bold text-white bg-primary shadow-md">${i}</button>`;
+                html += `<button class="w-6 h-6 rounded font-bold text-[11px] flex items-center justify-center bg-primary text-white shadow-md">${i}</button>`;
             } else {
-                html += `<button onclick="loadAllProductsSection(${i})" class="w-8 h-8 flex items-center justify-center rounded font-medium text-gray-700 border hover:bg-gray-50 transition-colors">${i}</button>`;
+                html += `<button onclick="loadAllProductsSection(${i})" class="w-6 h-6 rounded font-medium text-[10px] flex items-center justify-center border text-gray-700 hover:bg-gray-50 transition-colors">${i}</button>`;
             }
         }
 
-        // শুধুমাত্র সর্বশেষ লাইনে Next বাটন
         if (isLastRow) {
-            html += `<button onclick="loadAllProductsSection(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1 border rounded font-medium transition-colors ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed border-gray-200' : 'hover:bg-gray-50 text-gray-700'}"><i class="fas fa-chevron-right"></i></button>`;
+            html += `<button onclick="loadAllProductsSection(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="w-6 h-6 rounded font-medium text-[10px] flex items-center justify-center border transition-colors ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed border-gray-200' : 'hover:bg-gray-50 text-gray-700'}"><i class="fas fa-chevron-right text-[8px]"></i></button>`;
         }
 
         html += `</div>`;
@@ -6887,7 +6886,7 @@ function searchProducts(query) {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by safabox team
+                        <br>Developed by safaboxbd team
                     </div>
                 </div>
             </footer>`;
