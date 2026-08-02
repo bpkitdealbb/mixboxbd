@@ -6052,8 +6052,8 @@ function placeOrder() {
     google.script.run.withSuccessHandler(res => {
         Swal.close(); // লোডিং বন্ধ করা
         
-        // === SESSION INVALID CHECK ===
-        if (!res.success) {
+        // শুধুমাত্র সত্যিক সেশন টোকেন এরর হলে সেশন এরর দেখাবে (যেমন: Unauthorized. Invalid session.)
+        if (errorMsg.includes('unauthorized') || errorMsg.includes('invalid session')) {
             const errorMsg = (res.error || '').toLowerCase();
             // যদি এরর মেসেজে এই শব্দগুলো থাকে তবে সেশন এরর ধরে নেবে
             if (errorMsg.includes('session') || errorMsg.includes('token') || errorMsg.includes('invalid') || errorMsg.includes('expired')) {
@@ -6112,7 +6112,8 @@ function placeOrder() {
     }).withFailureHandler(err => {
         // === SESSION INVALID CHECK (FAILURE HANDLER) ===
         const errStr = String(err).toLowerCase();
-        if (errStr.includes('session') || errStr.includes('token') || errStr.includes('unauthorized') || errStr.includes('expired') || errStr.includes('access')) {
+            // শুধুমাত্র নেটওয়ার্ক বা সার্ভার লেভেলের টোকেন এরর হলে সেশন এরর দেখাবে
+    if (errStr.includes('unauthorized') || errStr.includes('invalid session')) {
             handleSessionError();
         } else {
             Swal.fire('Error', err.message, 'error');
