@@ -1348,7 +1348,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwe2Th32VyzxQzpNiyucPwL1BuJ-AQp5x6MjUWzQRQUShhKNIuR30HEYNHiF0Au82Lz/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwMo5WujSJsXHNM3gMKhq-K0M8o8h4Shg-mpJ85-dxPfYeSjPQw5MUykeWTBRVaQQM/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -1531,7 +1531,7 @@ function escapeHTML(str) {
                 bd_fastest: "Fastest Delivery All Over Bangladesh",
                 fast_support: "Fastest Support",
                 genuine_100: "100% Genuine Products",
-                home: "Home", categories: "Categories", message: "Message", cart: "Cart", account: "Account",
+                home: "Home", categories: "All Categories", message: "Message", cart: "Cart", account: "Account",
                 search_ph: "Search products...",
                 top_cat: "TOP CATEGORIES", featured: "FEATURED", all_prod: "ALL PRODUCTS", view_all: "View All",
                 related: "Related Products",
@@ -1673,7 +1673,7 @@ function escapeHTML(str) {
                 bd_fastest: "সারাদেশে দ্রুততম ডেলিভারি",
                 fast_support: "দ্রুততম সাপোর্ট",
                 genuine_100: "১০০% নির্ভরযোগ্য প্রোডাক্ট",
-                home: "হোম", categories: "ক্যাটাগরি", message: "মেসেজ", cart: "কার্ট", account: "অ্যাকাউন্ট",
+                home: "হোম", categories: "সকল ক্যাটাগরি", message: "মেসেজ", cart: "কার্ট", account: "অ্যাকাউন্ট",
                 search_ph: "পণ্য খুঁজুন...",
                 top_cat: "শীর্ষ ক্যাটাগরি", featured: "জনপ্রিয় পণ্য", all_prod: "সকল পণ্য", view_all: "সব দেখুন",
                 related: "সম্পর্কিত পণ্য",
@@ -3274,31 +3274,20 @@ function shuffleArray(array) {
 
 // ১. সম্পূর্ণ প্রোডাক্ট লিস্টকে পেজ ভিত্তিক বিন্যাস (Layout) করার মেইন ফাংশন
 function generateAllPagesLayout() {
-    const allProducts = appData.products || [];
+    // ==========================================
+    // ফিক্স: ফিচার্ড সেকশনে দেখানো প্রোডাক্টগুলো এখান থেকে বাদ দেওয়া
+    // ==========================================
+    let allProducts = appData.products || [];
+    if (appData.featuredBannerProductIds && appData.featuredBannerProductIds.size > 0) {
+        allProducts = allProducts.filter(p => !appData.featuredBannerProductIds.has(String(p.id)));
+    }
     if (allProducts.length === 0) return;
 
-    // ১ থেকে ৬ নম্বর প্রোডাক্ট ফিচার্ড (আলাদা থাকবে)
-    const featuredProds = allProducts.slice(0, 6);
-    // ৭ ও ৮ নম্বর প্রোডাক্ট অল প্রোডাক্ট সেকশনের শুরুতে ফিক্সড থাকবে
-    const fixedProds = allProducts.slice(6, 8);
-    // ৯ নম্বর থেকে বাকি সব প্রোডাক্ট ডাইনামিক পুলে যাবে
-    const dynamicPool = allProducts.slice(8);
-
-    // অ্যাক্টিভ ব্যানার ক্যাটাগরিগুলো ফিল্টার করা (শিটের ক্রমানুসারে থাকবে)
-    const bannerCats = (appData.categories || []).filter(c => 
-        c.inlinebanner && 
-        c.inlinebanner.trim() !== '' && 
-        (c.inlinebanner.startsWith('http://') || c.inlinebanner.startsWith('https://'))
-    );
-
-    // ব্যানারগুলোকে ইউনিক অবজেক্ট হিসেবে অ্যারেতে রাখা (এখানে কোনো shuffle হবে না, শিটের সিরিয়াল ঠিক থাকবে)
-    let activeBanners = bannerCats.map(cat => {
-        return {
-            category: cat.categoryname, 
-            bannerUrl: cat.inlinebanner,
-            products: []
-        };
-    });
+    // অল প্রোডাক্ট সেকশনের শুরুতে ২টি প্রোডাক্ট ফিক্সড থাকবে (পেজ ১-এ)
+    const fixedProds = allProducts.slice(0, 2);
+    // বাকি সব প্রোডাক্ট ডাইনামিক পুলে যাবে
+    const dynamicPool = allProducts.slice(2);
+    let activeBanners = []; 
 
     // প্রোডাক্টগুলোকে তাদের সঠিক ব্যানারে ভাগ করা
     const normalPool = [];
@@ -4868,13 +4857,83 @@ function loadHeroSlider() {
             container.innerHTML = html;
         }
 
-        function loadFeaturedProducts() {
-            const container = document.getElementById('featuredProductsList');
-            if (!container) return;
-            // Use totalstock (sum of variants) to check availability
-            const prods = appData.products.filter(p => p.totalstock > 0).slice(0, 6);
-            container.innerHTML = prods.map(p => createProductCard(p)).join('');
+function loadFeaturedProducts() {
+    const container = document.getElementById('featuredProductsList');
+    if (!container) return;
+    
+    // ১. শীটের ঠিক প্রথম ৬টি প্রোডাক্ট নিয়ে নেওয়া হচ্ছে (র‍্যান্ডম নয়, ফিক্সড)
+    const fixedFeaturedProds = appData.products.slice(0, 6); 
+
+    const usedProductIds = new Set(); 
+    let html = '';
+
+    // প্রথম ৬টি প্রোডাক্ট রেন্ডার করা এবং তাদের আইডি সেভ করা হচ্ছে
+    fixedFeaturedProds.forEach(p => {
+        usedProductIds.add(String(p.id)); 
+        html += createProductCard(p);
+    });
+
+    // ২. অ্যাক্টিভ ব্যানারগুলো খুঁজে বের করা হচ্ছে
+    const activeBanners = appData.categories.filter(c => 
+        c.inlinebanner && 
+        c.inlinebanner.trim() !== '' && 
+        (c.inlinebanner.startsWith('http://') || c.inlinebanner.startsWith('https://'))
+    );
+
+    // ৩. ব্যানার এবং তার প্রোডাক্ট প্রসেসিং
+    activeBanners.forEach(banner => {
+        const catName = banner.categoryname;
+        
+        // ⚠️ গুরুত্বপূর্ণ ফিক্স: ঐ ক্যাটাগরির প্রোডাক্ট খুঁজার সময় 
+        // আগের ৬টি ফিচার্ড প্রোডাক্টের তালিকা থেকে বাদ দেওয়া হচ্ছে
+        const matchingProducts = appData.products.filter(p => 
+            (p.category === catName || p.category.startsWith(catName + ' > ')) && 
+            p.totalstock > 0 &&
+            !usedProductIds.has(String(p.id)) // <-- এই লাইনটিই ডুপ্লিকেশন রোধ করছে
+        );
+
+        if (matchingProducts.length === 0) return;
+
+        shuffleArray(matchingProducts);
+        const displayProducts = matchingProducts.slice(0, 4);
+
+        displayProducts.forEach(p => usedProductIds.add(String(p.id)));
+
+        // ব্যানার ইমেজ/ভিডিও চেক করা
+        const isVideo = banner.inlinebanner.match(/\.(mp4|webm|ogg)($|\?)/i);
+        let mediaTag = '';
+        if (isVideo) {
+            mediaTag = `<video src="${banner.inlinebanner}" class="w-full h-auto object-cover" autoplay loop muted playsinline onerror="this.parentElement.parentElement.style.display='none';"></video>`;
+        } else {
+            mediaTag = `<img src="${banner.inlinebanner}" class="w-full h-auto object-cover" loading="lazy" onerror="this.parentElement.parentElement.style.display='none';" alt="${banner.categoryname}">`;
         }
+
+        // ব্যানার HTML তৈরি
+        html += `
+            <div class="col-span-2 w-full my-2">
+                <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
+                     onclick="event.stopPropagation(); navigateTo('#category?name=${encodeURIComponent(banner.categoryname)}')">
+                    ${mediaTag}
+                </div>
+            </div>
+        `;
+        
+        // প্রোডাক্ট কার্ড তৈরি
+        displayProducts.forEach(p => {
+            html += createProductCard(p);
+        });
+
+        // গ্রিড ঠিক রাখতে ফাঁকা ডিভ
+        if (displayProducts.length % 2 !== 0) {
+            html += `<div class="w-full h-full pointer-events-none hidden md:block"></div>`;
+        }
+    });
+
+    container.innerHTML = html;
+
+    // ৪. গ্লোবাল ভেরিয়েবলে সব ব্যবহৃত আইডি সেভ করা হচ্ছে 
+    appData.featuredBannerProductIds = usedProductIds;
+}
 
         // ================= UPDATED: Product Card Generator =================
         function createProductCard(p) {
