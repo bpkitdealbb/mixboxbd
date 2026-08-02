@@ -2561,46 +2561,6 @@ function normalizeCategoryPath(input) {
   str = str.replace(/\s+/g, ' ').trim();
   return str;
 }
-
-// ফ্রন্টএন্ডের isCategoryMatch ফাংশনটি এভাবে আপডেট করে দিন
-function isCategoryMatch(productCategory, categoryList) {
-    if (!productCategory || !categoryList || categoryList.length === 0) return false;
-    const normalizedProduct = normalizeCategoryPath(productCategory);
-    const productPaths = [];
-    const parts = normalizedProduct.split(' > ');
-    let currentPath = '';
-    parts.forEach((part, index) => {
-        currentPath += (index > 0 ? ' > ' : '') + part.trim();
-        productPaths.push(currentPath);
-    });
-    for (let i = 0; i < productPaths.length; i++) {
-        if (categoryList.includes(productPaths[i])) {
-            return true;
-        }
-    }
-    return false;
-}
-// ==========================================
-// NEW: HIERARCHICAL CATEGORY MATCHING (FRONTEND)
-// ব্যাকএন্ডের লজিকের সাথে হুবহু মিল রাখতে ফ্রন্টএন্ডেও এই ফাংশন ব্যবহার করা হবে
-// ==========================================
-function isCategoryMatch(productCategory, categoryList) {
-    if (!productCategory || !categoryList || categoryList.length === 0) return false;
-    const normalizedProduct = (productCategory || '').toString().trim().toLowerCase();
-    const productPaths = [];
-    const parts = normalizedProduct.split('>');
-    let currentPath = '';
-    parts.forEach((part, index) => {
-        currentPath += (index > 0 ? ' > ' : '') + part.trim();
-        productPaths.push(currentPath);
-    });
-    for (let i = 0; i < productPaths.length; i++) {
-        if (categoryList.includes(productPaths[i])) {
-            return true;
-        }
-    }
-    return false;
-}
 // ==========================================
 // NEW: HELPER FUNCTION TO TOGGLE ORDER DETAILS
 // ==========================================
@@ -3607,83 +3567,142 @@ function toggleSelectItem(idx) {
     if(document.getElementById('cartRecommendationsSection')) renderCartRecommendations();
 }
 // ==========================================
-// NEW: LOCAL COUPON VALIDATION LOGIC
+// FIX: SINGLE & CORRECT CATEGORY MATCH FUNCTION
 // ==========================================
+function isCategoryMatch(productCategory, categoryList) {
+    if (!productCategory || !categoryList || !categoryList.length) return false;
+    
+    // ১. প্রোডাক্ট ক্যাটাগরিকে নরমালাইজ করা (স্পেস ও ছোট হাতে)
+    const normalizedProduct = normalizeCategoryPath(productCategory);
+    
+    // ২. সব লেভেলের পাথ তৈরি করা (যেমন: socks, socks > hand)
+    const parts = normalizedProduct.split(' > ');
+    const productPaths = [];
+    let currentPath = '';
+    
+    parts.forEach((part, index) => {
+        currentPath += (index > 0 ? ' > ' : '') + part.trim();
+        productPaths.push(currentPath);
+    });
+    
+    // ৩. কুপন লিস্টের যেকোনো পাথের সাথে ম্যাচ আছে কিনা
+    for (let i = 0; i < productPaths.length; i++) {
+        if (categoryList.includes(productPaths[i])) {
+            return true;
+        }
+    }
+    return false;
+}
 function validateCouponLocally(rawCode, selectedItems) {
     if (!appData.coupons || appData.coupons.length === 0) {
         return { success: false, message: 'No coupons available right now.' };
     }
 
-    // ১. কুপন কোড ম্যাচিং চেক (Case-Insensitive)
+    // ১. কুপন কোড ম্যাচিং
     const coupon = appData.coupons.find(c => c.couponcode && c.couponcode.toLowerCase() === rawCode.toLowerCase());
     if (!coupon) {
         return { success: false, message: 'Invalid Coupon Code!' };
     }
 
-    // ২. এক্সপায়ারি ডেট চেক
+    // ২. এক্সপায়ারি চেক
     if (coupon.expirydate) {
         const now = new Date();
-        // সময়টি শেষ দিনের রাত ১২টা পর্যন্ত বিবেচনা করার জন্য একদিন যোগ করা হয়েছে
         const expiry = new Date(coupon.expirydate);
         expiry.setDate(expiry.getDate() + 1); 
-        
         if (now > expiry) {
             return { success: false, message: 'This coupon has expired.' };
         }
     }
 
-    // ৩. সিলেক্টেড আইটেমের সাবটোটাল বের করা
-    const subTotal = selectedItems.reduce((sum, item) => sum + ((item.price) * (item.quantity || item.qty)), 0);
+    // ==========================================
+    // ৩. ক্যাটাগরি পার্সিং (KEY FIX: applicablecategory একবচন)
+    // ==========================================
+    let isAllCategory = true;
+    let applicableCategories = [];
+    let excludedCategories = [];
 
-    // ৪. মিনিমাম পারচেজ চেক
+    try {
+        // ⚠️ খেয়াল করুন: applicablecategory (একবচন 's' নেই)
+        let rawAppCat = coupon.applicablecategory || '';
+        let rawExCat = coupon.excludedcategories || '';
+
+        // কমা দিয়ে সেপারেট করে প্রতিটি ক্যাটাগরিকে নরমালাইজ করা হচ্ছে
+        if (rawAppCat && rawAppCat.toString().toLowerCase().trim() !== 'all') {
+            applicableCategories = rawAppCat.toString().split(',')
+                .map(c => normalizeCategoryPath(c))
+                .filter(c => c !== '');
+            if (applicableCategories.length > 0) isAllCategory = false;
+        }
+
+        if (rawExCat) {
+            excludedCategories = rawExCat.toString().split(',')
+                .map(c => normalizeCategoryPath(c))
+                .filter(c => c !== '');
+        }
+    } catch (e) {
+        console.warn("Category parse error, assuming all categories.");
+    }
+
+    // ==========================================
+    // ৪. কার্ট আইটেম ম্যাচিং (নতুন যোগ করা হয়েছে)
+    // ==========================================
+    let hasApplicableItem = false;
+    let applicableSubTotal = 0;
+
+    selectedItems.forEach(item => {
+        const itemCat = (item.category || '').toString().trim();
+        
+        // কুপনের আওতায় কিনা?
+        let isApplicable = isAllCategory || isCategoryMatch(itemCat, applicableCategories);
+        // এক্সক্লুডেড কিনা?
+        let isExcluded = isCategoryMatch(itemCat, excludedCategories);
+
+        // আওতায় পড়ে এবং এক্সক্লুডেড না হলে টাকা যোগ হবে
+        if (isApplicable && !isExcluded) {
+            hasApplicableItem = true;
+            applicableSubTotal += ((item.price) * (item.quantity || item.qty || 1));
+        }
+    });
+
+    // যদি কোনো পণ্য ম্যাচ না করে, তাহলে রিজেক্ট
+    if (!hasApplicableItem) {
+        const errorMsg = appData.language === 'bn' 
+            ? 'এই কুপনটি আপনার কার্টের কোনো পণ্যের জন্য প্রযোজ্য নয়।' 
+            : 'This coupon is not applicable to any items in your cart.';
+        return { success: false, message: errorMsg };
+    }
+
+    // ==========================================
+    // ৫. মিনিমাম পারচেজ (শুধুমাত্র ম্যাচিং পণ্যের টাকায়)
+    // ==========================================
     const minPurchase = parseFloat(coupon.minpurchase) || 0;
-    if (subTotal < minPurchase) {
+    if (applicableSubTotal < minPurchase) {
         const msg = appData.language === 'bn' 
-            ? `এই কুপন ব্যবহার করতে নূন্যতম ৳${minPurchase} কেনাকাটা করতে হবে।` 
-            : `Minimum purchase of ৳${minPurchase} is required for this coupon.`;
+            ? `প্রযোজ্য পণ্যের নূন্যতম ৳${minPurchase} কেনাকাটা করতে হবে।` 
+            : `Minimum purchase of ৳${minPurchase} is required for applicable items.`;
         return { success: false, message: msg };
     }
 
-    // ৫. ডিসকাউন্ট ক্যালকুলেশন (Flat / Percentage)
+    // ==========================================
+    // ৬. ডিসকাউন্ট (ম্যাচিং পণ্যের টাকায়)
+    // ==========================================
     let discountAmount = 0;
     if (coupon.type === 'flat') {
         discountAmount = parseFloat(coupon.discountamount) || 0;
     } else if (coupon.type === 'percentage') {
         const percentage = parseFloat(coupon.discountamount) || 0;
-        discountAmount = (subTotal * percentage) / 100;
+        discountAmount = (applicableSubTotal * percentage) / 100;
         const maxDisc = parseFloat(coupon.maxdiscountamount) || 0;
         if (maxDisc > 0 && discountAmount > maxDisc) {
             discountAmount = maxDisc;
         }
     }
 
-    // ৬. ডেলিভারি ডিসকাউন্ট চেক
+    // ৭. ডেলিভারি ডিসকাউন্ট
     let isFreeDelivery = coupon.freedelivery === 'yes';
     let deliveryDiscountAmount = parseFloat(coupon.deliverydiscountamount) || 0;
 
-    // ৭. ক্যাটাগরি রেস্ট্রিকশন চেক (যদি লোকাল ডাটায় থাকে)
-    let isAllCategory = true;
-    let applicableCategories = [];
-    let excludedCategories = [];
-
-    try {
-        if (coupon.applicablecategories) {
-            applicableCategories = typeof coupon.applicablecategories === 'string' 
-                ? safeJsonParse(coupon.applicablecategories) 
-                : (Array.isArray(coupon.applicablecategories) ? coupon.applicablecategories : []);
-            if (applicableCategories.length > 0) isAllCategory = false;
-        }
-        if (coupon.excludedcategories) {
-            excludedCategories = typeof coupon.excludedcategories === 'string' 
-                ? safeJsonParse(coupon.excludedcategories) 
-                : (Array.isArray(coupon.excludedcategories) ? coupon.excludedcategories : []);
-        }
-    } catch (e) {
-        console.warn("Could not parse local coupon categories, assuming all categories.");
-    }
-
-    // সার্ভার রেসপন্সের মতো একই ফরম্যাটে রিটার্ন করা হচ্ছে 
-    // যাতে বাকি কোডে কোনো পরিবর্তন করতে না হয়
+    // সার্ভারের মতো ফরম্যাটে রিটার্ন
     return {
         success: true,
         couponCode: coupon.couponcode,
