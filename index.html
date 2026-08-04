@@ -1348,7 +1348,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwMo5WujSJsXHNM3gMKhq-K0M8o8h4Shg-mpJ85-dxPfYeSjPQw5MUykeWTBRVaQQM/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCp0R2B45Ib_eRV_a7I2GV2-8Ub6lx_YhlWtriNsavmo53lFCRNJddiqzjR5tqpjDn/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -2420,21 +2420,21 @@ function loadMyOrdersPage() {
             loadingEl.classList.add('hidden');
             console.log("My Orders Response:", res);
             
-            // SUCCESS HANDLER ERROR CHECK
-            if (!res.success) {
-                 const errorMsg = (res.error || '').toLowerCase();
-                 console.log("Error detected in Success Handler:", errorMsg);
-                 
-                 // এরর মেসেজে সেশন বা টোকেন রিলেটেড শব্দ আছে কিনা?
-                 if (errorMsg.includes('session') || errorMsg.includes('token') || errorMsg.includes('invalid') || errorMsg.includes('expired') || errorMsg.includes('unauthorized')) {
-                     handleSessionError();
+                 // ROBUST SUCCESS HANDLER ERROR CHECK
+                 if (!res.success) {
+                     const errorMsg = (res.error || '').toLowerCase();
+                     console.log("Error detected in Success Handler:", errorMsg);
+                     
+                     // শুধুমাত্র ব্যাকএন্ডের এক্স্যাক্ট সেশন এরর মেসেজটিকে সেশন এরর হিসেবে ধরবে
+                     if (errorMsg.includes('unauthorized') && errorMsg.includes('invalid session')) {
+                         handleSessionError();
+                         return;
+                     }
+                     // অন্যান্য এরর (ডাটাবেস লোড ফেইল, নেটওয়ার্ক ইত্যাদি) হলে দেখান
+                     errorEl.classList.remove('hidden');
+                     errorText.innerText = res.error || t('error_loading');
                      return;
                  }
-                 // অন্যান্য এরর হলে দেখান
-                 errorEl.classList.remove('hidden');
-                 errorText.innerText = res.error || t('error_loading');
-                 return;
-            }
 
             if (res.success) {
                 allOrdersCache = res.orders || [];
@@ -6052,20 +6052,19 @@ function placeOrder() {
     google.script.run.withSuccessHandler(res => {
         Swal.close(); // লোডিং বন্ধ করা
         
-        // শুধুমাত্র সত্যিক সেশন টোকেন এরর হলে সেশন এরর দেখাবে (যেমন: Unauthorized. Invalid session.)
-        if (errorMsg.includes('unauthorized') || errorMsg.includes('invalid session')) {
-            const errorMsg = (res.error || '').toLowerCase();
-            // যদি এরর মেসেজে এই শব্দগুলো থাকে তবে সেশন এরর ধরে নেবে
-            if (errorMsg.includes('session') || errorMsg.includes('token') || errorMsg.includes('invalid') || errorMsg.includes('expired')) {
-                handleSessionError(); 
-                return; 
-            }
-            // অন্যান্য এরর থাকলে সাধারণ এরর দেখাবে
-            else {
-                Swal.fire('Failed', res.error, 'error'); 
-            }
-        }
-        // ===========================================
+                // === ROBUST SESSION INVALID CHECK ===
+                if (!res.success) {
+                    const errorMsg = (res.error || '').toLowerCase();
+                    // শুধুমাত্র ব্যাকএন্ডের এক্স্যাক্ট সেশন এরর মেসেজটিকে সেশন এরর হিসেবে ধরবে
+                    if (errorMsg.includes('unauthorized') && errorMsg.includes('invalid session')) {
+                        handleSessionError(); 
+                        return; 
+                    }
+                    // অন্যান্য সব এরর (কুপন লিমিট, স্টক, ফর্ম্যাট) এখান দেখাবে
+                    else {
+                        Swal.fire('Error', res.error, 'error'); 
+                    }
+                }
 
         if (res.success) {
             // === FACEBOOK PIXEL EVENT (Purchase + CAPI Sync) ===
@@ -6112,8 +6111,7 @@ function placeOrder() {
     }).withFailureHandler(err => {
         // === SESSION INVALID CHECK (FAILURE HANDLER) ===
         const errStr = String(err).toLowerCase();
-            // শুধুমাত্র নেটওয়ার্ক বা সার্ভার লেভেলের টোকেন এরর হলে সেশন এরর দেখাবে
-    if (errStr.includes('unauthorized') || errStr.includes('invalid session')) {
+        if (errStr.includes('session') || errStr.includes('token') || errStr.includes('unauthorized') || errStr.includes('expired') || errStr.includes('access')) {
             handleSessionError();
         } else {
             Swal.fire('Error', err.message, 'error');
