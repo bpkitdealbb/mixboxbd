@@ -1348,7 +1348,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCp0R2B45Ib_eRV_a7I2GV2-8Ub6lx_YhlWtriNsavmo53lFCRNJddiqzjR5tqpjDn/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwOgyWiokSxCgpMUk4DhMt-u82AB4WXS3Q3r8WNaTfCSyf_QoxwZh2_lNBEvHrUfEnM/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -4420,16 +4420,19 @@ function addToCart(product, qty = 1) {
         currency: 'BDT'
     }, { eventID: currentEventId }); // পিক্সেলে আইডি পাস করুন
 
-    // সার্ভার-সাইড ট্র্যাকিং (CAPI)
-    trackCAPI('AddToCart', {
-        content_name: product.name,
-        content_category: product.category,
-        content_ids: [String(product.id)],
-        content_type: 'product',
-        value: finalPrice * qty,
-        currency: 'BDT'
-    }, currentEventId); // CAPI তে একই আইডি পাস করুন
-    // =========================
+    // সার্ভার-সাইড ট্র্যাকিং (CAPI) - NON-BLOCKING
+    if (typeof trackCAPI === 'function') {
+        setTimeout(() => {
+            trackCAPI('AddToCart', {
+                content_name: product.name,
+                content_category: product.category,
+                content_ids: [String(product.id)],
+                content_type: 'product',
+                value: finalPrice * qty,
+                currency: 'BDT'
+            }, currentEventId); 
+        }, 0);
+    }
     updateCartBadge();
     updateOrderSummary();
     const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
@@ -6079,8 +6082,12 @@ function placeOrder() {
             // ১. ব্রাউজার পিক্সেলে পাঠানো (eventID দিয়ে)
             fbq('track', 'Purchase', purchaseData, { eventID: res.orderId }); 
             
-            // ২. সার্ভারে পাঠানো (IP, UserAgent, Cookies সহ)
-            trackCAPI('Purchase', purchaseData, res.orderId); 
+            // ২. সার্ভারে পাঠানো (NON-BLOCKING)
+            if (typeof trackCAPI === 'function') {
+                setTimeout(() => {
+                    trackCAPI('Purchase', purchaseData, res.orderId); 
+                }, 0);
+            }
             // ============================================
 
             // কার্ট এবং অন্যান্য স্টেট ক্লিয়ার করা
@@ -6963,7 +6970,7 @@ function searchProducts(query) {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by safabox team
+                        <br>Developed by safaboxbd team
                     </div>
                 </div>
             </footer>`;
