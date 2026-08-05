@@ -745,7 +745,16 @@ font-weight: bold;
                 
                 <div id="topCategories" class="grid grid-cols-4 gap-3"></div>
             </section>
-
+            <!-- Our Brand Section -->
+            <section id="ourBrandSection" class="border-y border-gray-100 py-6 bg-white mb-6 hidden">
+                <div class="flex items-center w-full mb-6 px-2">
+                    <div class="h-[1px] bg-gray-800 flex-1"></div>
+                    <h2 class="mx-3 text-xl md:text-2xl font-bold uppercase text-gray-800 tracking-wide text-center" data-i18n="our_brands">OUR BRANDS</h2>
+                    <div class="h-[1px] bg-gray-800 flex-1"></div>
+                </div>
+                <div id="brandSliderContainer" class="flex overflow-x-auto no-scrollbar scroll-smooth px-2" style="scroll-snap-type: x mandatory; scroll-padding: 16px;"></div>
+                <div id="brandSliderDots" class="flex justify-center space-x-2 mt-4"></div>
+            </section>
             <!-- Featured Section -->
             <section id="featuredProducts" class="border-y border-gray-100 py-6 bg-white mb-6">
                 <!-- SECTION HEADING WITH LINES (UPDATED SIZE) -->
@@ -1526,6 +1535,7 @@ function escapeHTML(str) {
         // ============================================================
         const I18N = {
             en: {
+our_brands: "OUR BRANDS",
                             order_via_whatsapp: "Order Via WhatsApp Without Login",
                             cod_100: "100% Cash on Delivery",
                 bd_fastest: "Fastest Delivery All Over Bangladesh",
@@ -1668,6 +1678,7 @@ function escapeHTML(str) {
                 available_coupons: "Available Coupons"
             },
             bn: {
+our_brands: "আমাদের ব্র্যান্ডসমূহ",
                             order_via_whatsapp: "লগইন ছাড়াই WhatsApp এ অর্ডার করুন",
                             cod_100: "১০০% ক্যাশ অন ডেলিভারি",
                 bd_fastest: "সারাদেশে দ্রুততম ডেলিভারি",
@@ -4741,9 +4752,10 @@ function buyNow(product, qty = 1) {
         // ================= PAGE LOADERS =================
         function loadHomePage() {
             loadTemplate('homeTemplate');
-            loadHeroSlider();
-            loadTopCategories();
-            loadFeaturedProducts();
+loadHeroSlider();
+loadTopCategories();
+loadOurBrandSection(); // <--- এই লাইনটি যোগ করুন
+loadFeaturedProducts();
             
             // FIX: Load the saved page number instead of always 1
             const savedPage = appData.allProductsCurrentPage || 1;
@@ -4830,7 +4842,10 @@ function loadHeroSlider() {
             }, 4000);
         }
 
-        function stopSlider() { if (appData.sliderInterval) clearInterval(appData.sliderInterval); }
+function stopSlider() { 
+    if (appData.sliderInterval) clearInterval(appData.sliderInterval); 
+    if (brandSliderInterval) { clearInterval(brandSliderInterval); brandSliderInterval = null; }
+}
         function scrollToSlide(idx) {
             const container = document.getElementById('sliderContainer');
             if (container) container.scrollTo({ left: container.clientWidth * idx, behavior: 'smooth' });
@@ -4878,7 +4893,108 @@ function loadHeroSlider() {
             
             container.innerHTML = html;
         }
+let brandSliderInterval = null; // গ্লোবাল ভেরিয়েবলে কোথাও বসাতে পারেন
 
+function loadOurBrandSection() {
+    const container = document.getElementById('brandSliderContainer');
+    const dotsContainer = document.getElementById('brandSliderDots');
+    const section = document.getElementById('ourBrandSection');
+
+    if (!container || !section) return;
+
+    // শুধুমাত্র ব্র্যান্ড ক্যাটাগরি
+    const brandCats = appData.categories.filter(c => c.istop === 'brand');
+
+    // ব্র্যান্ড না থাকলে সেকশন লুকানো হবে
+    if (brandCats.length === 0) {
+        section.classList.add('hidden');
+        if (brandSliderInterval) {
+            clearInterval(brandSliderInterval);
+            brandSliderInterval = null;
+        }
+        return;
+    }
+
+    section.classList.remove('hidden');
+    container.innerHTML = '';
+    dotsContainer.innerHTML = '';
+
+    // স্লাইড তৈরি
+    brandCats.forEach((c, index) => {
+        const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
+
+        const slide = document.createElement('div');
+        slide.className = 'w-full shrink-0 flex justify-center items-center px-3';
+        slide.style.scrollSnapAlign = 'center';
+
+        slide.onclick = () => {
+            navigateTo(`#category?name=${encodeURIComponent(displayName)}`);
+        };
+
+        slide.innerHTML = `
+            <div class="inline-block rounded-2xl overflow-hidden border border-gray-200 bg-white">
+                <img
+                    src="${c.categoryimageurl}"
+                    alt="${displayName}"
+                    class="block max-w-full h-auto"
+                    loading="lazy"
+                    onerror="this.src='https://via.placeholder.com/250x250/f3f4f6/9ca3af?text=Brand'">
+            </div>
+        `;
+
+        container.appendChild(slide);
+
+        // Dot তৈরি
+        const dot = document.createElement('button');
+        dot.className = index === 0
+            ? 'h-2 w-6 rounded-full bg-gray-800 transition-all duration-300'
+            : 'h-2 w-2 rounded-full bg-gray-300 transition-all duration-300';
+
+        dot.onclick = (e) => {
+            e.stopPropagation();
+            scrollBrandToSlide(index);
+        };
+
+        dotsContainer.appendChild(dot);
+    });
+
+    // পুরোনো Interval বন্ধ
+    if (brandSliderInterval) {
+        clearInterval(brandSliderInterval);
+    }
+
+    // Auto Slide
+    if (brandCats.length > 1) {
+        brandSliderInterval = setInterval(() => {
+            const currentIdx = Math.round(container.scrollLeft / container.clientWidth);
+            const nextIdx = (currentIdx + 1) % brandCats.length;
+            scrollBrandToSlide(nextIdx);
+        }, 3000);
+    }
+
+    // Scroll করলে Dot Update
+    container.onscroll = function () {
+        const activeIdx = Math.round(container.scrollLeft / container.clientWidth);
+        const dots = dotsContainer.querySelectorAll('button');
+
+        dots.forEach((dot, i) => {
+            dot.className = i === activeIdx
+                ? 'h-2 w-6 rounded-full bg-gray-800 transition-all duration-300'
+                : 'h-2 w-2 rounded-full bg-gray-300 transition-all duration-300';
+        });
+    };
+}
+
+// নির্দিষ্ট Slide-এ যাওয়ার ফাংশন
+function scrollBrandToSlide(index) {
+    const container = document.getElementById('brandSliderContainer');
+    if (!container) return;
+
+    container.scrollTo({
+        left: container.clientWidth * index,
+        behavior: 'smooth'
+    });
+}
 function loadFeaturedProducts() {
     const container = document.getElementById('featuredProductsList');
     if (!container) return;
@@ -5016,7 +5132,7 @@ function loadFeaturedProducts() {
             
             const cats = uniqueMainCats.map(mainName => {
                 return appData.categories.find(c => c.categoryname === mainName || c.categoryname.startsWith(mainName + ' > '));
-            }).filter(c => c);
+}).filter(c => c.istop !== 'brand'); 
 
             container.innerHTML = cats.map(c => {
                 const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
@@ -5030,7 +5146,6 @@ function loadFeaturedProducts() {
                 `;
             }).join('');
         }
-
 function loadCategoryProducts(rawName) {
     const content = document.getElementById('content');
     content.innerHTML = ''; 
@@ -5047,9 +5162,24 @@ function loadCategoryProducts(rawName) {
         window.scrollTo(0, targetScrollY);
     });
     
-    // সমাধান: লজিকের জন্য নরমালাইজড নাম (ছোট হাতে) এবং ডিসপ্লের জন্য সুন্দর নাম (বড় হাতে) আলাদা করা হচ্ছে
     const name = normalizeCategoryPath(rawName);
     const displayName = toCategoryTitleCase(name);
+
+    // ==========================================
+    // আপডেটেড লজিক: মূল/প্যারেন্ট ক্যাটাগরির istop চেক করা হচ্ছে
+    // ==========================================
+    // যদি নামে ' > ' থাকে (মানে সাব-ক্যাটাগরি), তবে প্রথম অংশটি আলাদা করা হচ্ছে
+    const rootCatName = name.includes(' > ') ? name.split(' > ')[0] : name;
+    
+    // এখন শুধু মূল ক্যাটাগরিটি খুঁজে তার istop চেক করা হচ্ছে
+    const rootCatObj = appData.categories.find(c => c.categoryname === rootCatName);
+    
+    // মূল ক্যাটাগরি brand হলে isBrand = true
+    const isBrand = rootCatObj && rootCatObj.istop === 'brand';
+    
+    // ব্র্যান্ড হলে "Our Brands", না হলে "All Categories"
+    const rootLabel = isBrand ? t('our_brands') : t('categories');
+    // ==========================================
 
     const isSubCategory = name.includes(' > ');
 
@@ -5069,7 +5199,7 @@ function loadCategoryProducts(rawName) {
         if(bcContainer) {
             bcContainer.classList.remove('hidden');
             let bcHtml = '';
-            bcHtml += `<button onclick="navigateTo('#categories')" class="hover:text-gray-800">${t('categories')}</button>`;
+            bcHtml += `<button onclick="navigateTo('#categories')" class="hover:text-gray-800">${rootLabel}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
             bcHtml += `<button onclick="navigateTo('#category?name=${encodeURIComponent(mainCat)}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
@@ -5098,7 +5228,7 @@ function loadCategoryProducts(rawName) {
             
             subCatContainer.innerHTML = `
                 <div class="text-base font-semibold text-primary flex items-center space-x-2 mb-4 px-1">
-                    <button onclick="navigateTo('#categories')" class="hover:text-gray-800">${t('categories')}</button>
+                    <button onclick="navigateTo('#categories')" class="hover:text-gray-800">${rootLabel}</button>
                     <span class="mx-1 text-gray-400">/</span>
                     <span class="text-gray-800">${displayName}</span>
                 </div>
@@ -5138,7 +5268,7 @@ function loadCategoryProducts(rawName) {
             if(bcContainer) {
                 bcContainer.classList.remove('hidden');
                 let bcHtml = '';
-                bcHtml += `<button onclick="navigateTo('#categories')" class="hover:text-gray-800">${t('categories')}</button>`;
+                bcHtml += `<button onclick="navigateTo('#categories')" class="hover:text-gray-800">${rootLabel}</button>`;
                 bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
                 bcHtml += `<span class="text-gray-800">${displayName}</span>`;
                 bcContainer.innerHTML = bcHtml;
@@ -6755,41 +6885,45 @@ function searchProducts(query) {
         function toggleSearch() { const sb = document.getElementById('searchBar'); sb.classList.toggle('hidden'); if(!sb.classList.contains('hidden')) document.getElementById('searchInput').focus(); }
         function clearSearch() { document.getElementById('searchInput').value = ''; document.getElementById('searchResults').classList.add('hidden'); }
 
-        function initFilterOptions() {
-            const select = document.getElementById('filterCategory');
-            if(!select) return;
-            
-            const allMainCats = appData.categories.map(c => c.categoryname.split(' > ')[0]);
-            const uniqueMainCats = [...new Set(allMainCats)].sort();
-            
-            select.innerHTML = '<option value="all">' + t('all_categories') + '</option>' + 
-                uniqueMainCats.map(c => `<option value="${c}">${toCategoryTitleCase(c)}</option>`).join('');
-            
-            select.onchange = (e) => {
-                // সমাধান: ড্রপডাউন থেকে যে নামটা আসছে সেটাকে আবার ছোট হাতে করে নেওয়া হচ্ছে
-                const selectedMain = normalizeCategoryPath(e.target.value);
-                
-                const subCatContainer = document.getElementById('subCategoryFilterContainer');
-                const subCatSelect = document.getElementById('filterSubCategory');
-                
-                if (selectedMain === 'all') {
-                    subCatContainer.classList.add('hidden');
-                    return;
-                }
-
-                const subCats = appData.categories
-                    .filter(c => c.categoryname.startsWith(selectedMain + ' > '))
-                    .map(c => c.categoryname);
-
-                if (subCats.length > 0) {
-                    subCatSelect.innerHTML = '<option value="all">' + t('select_sub_category') + '</option>' +
-                        subCats.map(sc => `<option value="${sc}">${toCategoryTitleCase(sc.split(' > ')[1])}</option>`).join('');
-                    subCatContainer.classList.remove('hidden');
-                } else {
-                    subCatContainer.classList.add('hidden');
-                }
-            };
+function initFilterOptions() {
+    const select = document.getElementById('filterCategory');
+    if(!select) return;
+    
+    const allMainCats = appData.categories.map(c => c.categoryname.split(' > ')[0]);
+    const validMainCats = allMainCats.filter(catName => {
+        const catObj = appData.categories.find(c => c.categoryname === catName || c.categoryname.startsWith(catName + ' > '));
+        return catObj && catObj.istop !== 'brand';
+    });
+    const uniqueMainCats = [...new Set(validMainCats)].sort();
+    
+    select.innerHTML = '<option value="all">' + t('all_categories') + '</option>' + 
+        uniqueMainCats.map(c => `<option value="${c}">${toCategoryTitleCase(c)}</option>`).join('');
+    
+    select.onchange = (e) => {
+        // সমাধান: ড্রপডাউন থেকে যে নামটা আসছে সেটাকে আবার ছোট হাতে করে নেওয়া হচ্ছে
+        const selectedMain = normalizeCategoryPath(e.target.value);
+        
+        const subCatContainer = document.getElementById('subCategoryFilterContainer');
+        const subCatSelect = document.getElementById('filterSubCategory');
+        
+        if (selectedMain === 'all') {
+            subCatContainer.classList.add('hidden');
+            return;
         }
+
+        const subCats = appData.categories
+            .filter(c => c.categoryname.startsWith(selectedMain + ' > '))
+            .map(c => c.categoryname);
+
+        if (subCats.length > 0) {
+            subCatSelect.innerHTML = '<option value="all">' + t('select_sub_category') + '</option>' +
+                subCats.map(sc => `<option value="${sc}">${toCategoryTitleCase(sc.split(' > ')[1])}</option>`).join('');
+            subCatContainer.classList.remove('hidden');
+        } else {
+            subCatContainer.classList.add('hidden');
+        }
+    };
+}
 
         function toggleFilter() {
             const modal = document.getElementById('filterModal');
