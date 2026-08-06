@@ -4904,90 +4904,93 @@ function loadOurBrandSection() {
     const dotsContainer = document.getElementById('brandSliderDots');
     const section = document.getElementById('ourBrandSection');
 
-    if (!container || !section) return;
+    if (!container || !section) return;  
 
-    // শুধুমাত্র ব্র্যান্ড ক্যাটাগরি
-    const brandCats = appData.categories.filter(c => c.istop === 'brand');
+    // শুধুমাত্র ব্র্যান্ড ক্যাটাগরি  
+    const brandCats = appData.categories.filter(c => c.istop === 'brand');  
 
-    // ব্র্যান্ড না থাকলে সেকশন লুকানো হবে
-    if (brandCats.length === 0) {
-        section.classList.add('hidden');
-        if (brandSliderInterval) {
-            clearInterval(brandSliderInterval);
-            brandSliderInterval = null;
-        }
-        return;
-    }
+    // ব্র্যান্ড না থাকলে সেকশন লুকানো হবে  
+    if (brandCats.length === 0) {  
+        section.classList.add('hidden');  
+        if (brandSliderInterval) {  
+            clearInterval(brandSliderInterval);  
+            brandSliderInterval = null;  
+        }  
+        return;  
+    }  
 
-    section.classList.remove('hidden');
-    container.innerHTML = '';
-    dotsContainer.innerHTML = '';
+    section.classList.remove('hidden');  
+    container.innerHTML = '';  
+    dotsContainer.innerHTML = '';  
 
-    // স্লাইড তৈরি
-    brandCats.forEach((c, index) => {
-        const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
+    // স্লাইড তৈরি  
+    brandCats.forEach((c, index) => {  
+        const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);  
 
-        const slide = document.createElement('div');
-        slide.className = 'w-full shrink-0 flex justify-center items-center px-3';
-        slide.style.scrollSnapAlign = 'center';
+        const slide = document.createElement('div');  
+        slide.className = 'w-full shrink-0 flex justify-center items-center px-3 cursor-pointer';  
+        slide.style.scrollSnapAlign = 'center';  
 
-        slide.onclick = () => {
-            navigateTo(`#category?name=${encodeURIComponent(displayName)}`);
-        };
+        // ডাইনামিক রাউট (brand নাকি category)
+        slide.onclick = () => {  
+            const routeType = c.istop === 'brand' ? 'brand' : 'category';
+            navigateTo(`#${routeType}?name=${encodeURIComponent(displayName)}`);  
+        };  
 
-        slide.innerHTML = `
-            <div class="inline-block rounded-2xl overflow-hidden border border-gray-200 bg-white">
-                <img
-                    src="${c.categoryimageurl}"
-                    alt="${displayName}"
-                    class="block max-w-full h-auto"
-                    loading="lazy"
-                    onerror="this.src='https://via.placeholder.com/250x250/f3f4f6/9ca3af?text=Brand'">
-            </div>
-        `;
+        slide.innerHTML = `  
+            <div class="inline-block rounded-2xl overflow-hidden border border-gray-200 bg-white">  
+                <img  
+                    src="${c.categoryimageurl}"  
+                    alt="${displayName}"  
+                    class="block max-w-full h-auto"  
+                    loading="lazy"  
+                    onerror="this.src='https://via.placeholder.com/250x250/f3f4f6/9ca3af?text=Brand'">  
+            </div>  
+        `;  
 
-        container.appendChild(slide);
+        container.appendChild(slide);  
 
-        // Dot তৈরি
-        const dot = document.createElement('button');
-        dot.className = index === 0
-            ? 'h-2 w-6 rounded-full bg-gray-800 transition-all duration-300'
-            : 'h-2 w-2 rounded-full bg-gray-300 transition-all duration-300';
+        // Dot তৈরি  
+        const dot = document.createElement('button');  
+        dot.className = index === 0  
+            ? 'h-2 w-6 rounded-full bg-gray-800 transition-all duration-300'  
+            : 'h-2 w-2 rounded-full bg-gray-300 transition-all duration-300';  
 
-        dot.onclick = (e) => {
-            e.stopPropagation();
-            scrollBrandToSlide(index);
-        };
+        dot.onclick = (e) => {  
+            e.stopPropagation();  
+            scrollBrandToSlide(index);  
+        };  
 
-        dotsContainer.appendChild(dot);
-    });
+        dotsContainer.appendChild(dot);  
+    });  
 
-    // পুরোনো Interval বন্ধ
-    if (brandSliderInterval) {
-        clearInterval(brandSliderInterval);
-    }
+    // পুরোনো Interval বন্ধ  
+    if (brandSliderInterval) {  
+        clearInterval(brandSliderInterval);  
+    }  
 
-    // Auto Slide
-    if (brandCats.length > 1) {
-        brandSliderInterval = setInterval(() => {
-            const currentIdx = Math.round(container.scrollLeft / container.clientWidth);
-            const nextIdx = (currentIdx + 1) % brandCats.length;
-            scrollBrandToSlide(nextIdx);
-        }, 3000);
-    }
+    // Auto Slide  
+    if (brandCats.length > 1) {  
+        brandSliderInterval = setInterval(() => {  
+            const currentIdx = Math.round(container.scrollLeft / container.clientWidth);  
+            const nextIdx = (currentIdx + 1) % brandCats.length;  
+            scrollBrandToSlide(nextIdx);  
+        }, 3000);  
+    }  
 
-    // Scroll করলে Dot Update
-    container.onscroll = function () {
-        const activeIdx = Math.round(container.scrollLeft / container.clientWidth);
-        const dots = dotsContainer.querySelectorAll('button');
+    // Scroll করলে Dot Update  
+    container.onscroll = function () {  
+        const activeIdx = Math.round(container.scrollLeft / container.clientWidth);  
+        const dots = dotsContainer.querySelectorAll('button');  
 
-        dots.forEach((dot, i) => {
-            dot.className = i === activeIdx
-                ? 'h-2 w-6 rounded-full bg-gray-800 transition-all duration-300'
-                : 'h-2 w-2 rounded-full bg-gray-300 transition-all duration-300';
-        });
+        dots.forEach((dot, i) => {  
+            dot.className = i === activeIdx  
+                ? 'h-2 w-6 rounded-full bg-gray-800 transition-all duration-300'  
+                : 'h-2 w-2 rounded-full bg-gray-300 transition-all duration-300';  
+        });  
     };
 }
+
 
 // নির্দিষ্ট Slide-এ যাওয়ার ফাংশন
 function scrollBrandToSlide(index) {
@@ -7108,7 +7111,7 @@ function initFilterOptions() {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by safabox team
+                        <br>Developed by safaboxbd team
                     </div>
                 </div>
             </footer>`;
