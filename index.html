@@ -2338,7 +2338,10 @@ function loadRoute(hash) {
                 case '': loadHomePage(); break;
                 case 'home': loadHomePage(); break;
                 case 'categories': loadCategoriesPage(); break;
-                case 'category': loadCategoryProducts(params.get('name')); break;
+                case 'category':
+case 'brand':
+  loadCategoryProducts(params.get('name')); 
+  break;
                 case 'product': loadProductDetails(params.get('id')); break;
                 case 'cart': loadCartPage(); break;
                 case 'checkout': loadCheckoutPage(); break;
@@ -2364,7 +2367,8 @@ function loadRoute(hash) {
                 btn.classList.add('text-gray-500');
             });
             let activeId = 'home';
-            if (route === 'categories' || route === 'category') activeId = 'categories';
+            if (route === 'categories' || route === 'category' || route === 'brand') activeId = 'categories';
+
             if (route === 'messages') activeId = 'messages';
             if (route === 'cart' || route === 'checkout') activeId = 'cart';
             if (route === 'account' || route.includes('login') || route.includes('register') || route.includes('my-orders')) activeId = 'account';
@@ -4875,7 +4879,7 @@ function stopSlider() {
         let html = cats.map(c => {
             const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
             return `
-            <div onclick="navigateTo('#category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer group">
+            <div onclick="navigateTo('#brand?name=${encodeURIComponent(displayName)})" class="text-center cursor-pointer group">
                 <div class="aspect-square rounded-xl overflow-hidden border border-gray-100 group-hover:border-primary/30 transition">
                     <img src="${c.categoryimageurl}" class="w-full h-full object-cover transform group-hover:scale-110 transition" loading="lazy">
                 </div>
