@@ -1357,7 +1357,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwOgyWiokSxCgpMUk4DhMt-u82AB4WXS3Q3r8WNaTfCSyf_QoxwZh2_lNBEvHrUfEnM/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxtxaFgRkOG_Xe6CVPhXVudk_FQuYhpe-FDqPOzh7g5EcSTW2XmzmkbchEp3vGCSVPh/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -3807,11 +3807,11 @@ function updateOrderSummary() {
         items.forEach(item => {
             const qty = item.qty;
             const extra = item.extraCharge;
-            if (isFirstItem) {
-                totalShipping += baseDelivery;
-                if (qty > 1) totalShipping += ((qty - 1) * extra);
-                isFirstItem = false;
-            } else {
+        if (isFirstItem) {
+            totalShipping += baseDelivery;
+            totalShipping += (qty * extra); // FIX: প্রথম প্রোডাক্টের এক্সট্রা চার্জ বাদ যাবে না
+            isFirstItem = false;
+        } else {
                 totalShipping += (qty * extra);
             }
         });
@@ -4409,13 +4409,17 @@ function addToCart(product, qty = 1) {
         else existing.qty += qty;
     } else {
         if (appData.cart.length >=5) return Swal.fire(t('limit'), t('cart_full'), 'warning');
-        appData.cart.push({ 
+    // NEW: ভ্যারিয়েন্ট সিলেক্ট করা থাকলে প্রোডাক্টের মূল চার্জের বদলে ভ্যারিয়েন্টের চার্জ বসাবে
+    const finalExtraCharge = selectedVariantData ? appData.currentSelectedVariantCharge : parseFloat(product.extradeliverycharge || 0);
+
+    appData.cart.push({ 
             ...product, 
             quantity: qty, 
             uniqueId: uniqueId,
             selectedVariant: selectedVariantData,
-            price: finalPrice // Overwrite price with specific variant price
-        });
+            price: finalPrice, // Overwrite price with specific variant price
+            extradeliverycharge: finalExtraCharge // Overwrite extra delivery charge
+    });
     }
     
     resetCouponLogic(); 
@@ -4559,7 +4563,8 @@ function quickBuyNow(id) {
                                 selected: true,
                                 uniqueId: uniqueId,
                                 selectedVariant: vName,
-                                price: vPrice
+                                price: vPrice,
+                                extradeliverycharge: parseFloat(btn.querySelector('.text-primary').getAttribute('data-charge')) || 0 // NEW
                             });
                         }
                         
@@ -4720,13 +4725,17 @@ function buyNow(product, qty = 1) {
         // ==========================================
         
         // === LOGIC: নতুন আইটেম সবার উপরে যোগ করা ===
+        // NEW: ভ্যারিয়েন্ট সিলেক্ট করা থাকলে প্রোডাক্টের মূল চার্জের বদলে ভ্যারিয়েন্টের চার্জ বসাবে
+        const finalExtraCharge = selectedVariantData ? appData.currentSelectedVariantCharge : parseFloat(product.extradeliverycharge || 0);
+
         appData.cart.unshift({ 
             ...product, 
             quantity: qty, 
             selected: true,
             uniqueId: uniqueId,
             selectedVariant: selectedVariantData,
-            price: finalPrice
+            price: finalPrice,
+            extradeliverycharge: finalExtraCharge // Overwrite extra delivery charge
         });
         // ===================================================
     }
@@ -5386,6 +5395,7 @@ function loadProductDetails(id) {
                 data-name="${v.name}" 
                 data-price="${v.price}" 
                 data-stock="${v.stock}"
+                data-charge="${v.extradeliverycharge || 0}"
                 ${v.stock <= 0 ? 'disabled' : ''}
                 onclick="selectVariant(this, ${mainPrice})">
                 ${v.name}
@@ -5487,6 +5497,8 @@ function loadProductDetails(id) {
             const price = parseFloat(btn.getAttribute('data-price'));
             
             appData.currentSelectedVariant = name;
+            // NEW: ভ্যারিয়েন্টের নিজস্ব এক্সট্রা চার্জ গ্লোবালে সেভ করা হচ্ছে
+            appData.currentSelectedVariantCharge = parseFloat(btn.getAttribute('data-charge')) || 0;
 
             // Price Update (If price is defined, use it, else use fallback/main price)
             if (!isNaN(price)) {
@@ -7111,7 +7123,7 @@ function initFilterOptions() {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by safaboxbd team
+                        <br>Developed by safabd team
                     </div>
                 </div>
             </footer>`;
@@ -7851,11 +7863,9 @@ function shareCartViaWhatsApp() {
     let deliveryTotal = 0;
     if (items.length > 0) {
         deliveryTotal = baseDelivery;
-        // প্রথম আইটেমের অতিরিক্ত কোয়ান্টিটির চার্জ
+        // FIX: প্রথম আইটেমের এক্সট্রা চার্জ (সবসময় যোগ হবে)
         const firstQty = items[0].quantity || items[0].qty || 1;
-        if (firstQty > 1) {
-            deliveryTotal += ((firstQty - 1) * (parseFloat(items[0].extradeliverycharge || 0)));
-        }
+        deliveryTotal += (firstQty * (parseFloat(items[0].extradeliverycharge || 0)));
         // বাকি আইটেমগুলোর চার্জ
         for (let i = 1; i < items.length; i++) {
             const qty = items[i].quantity || items[i].qty || 1;
