@@ -1868,7 +1868,7 @@ function generateProductDetailsCache(productsArray) {
     }
 }
 // ==========================================
-// স্মার্ট লোডিং ইন্ডিকেটর সিস্টেম (স্থির ও স্মুথ)
+// স্মার্ট লোডিং ইন্ডিকেটর (সম্পূর্ণ স্ট্যাবল সংস্করণ)
 // ==========================================
 let loadingIndicatorShown = false;
 
@@ -1876,43 +1876,56 @@ function showLoadingToast(mainMessage, subMessage = null) {
     const skeleton = document.getElementById('skeletonLoader');
     if (!skeleton || skeleton.classList.contains('hidden')) return;
 
-    let warning = document.getElementById('slowLoadingWarning');
-    
-    // ১. প্রথমবার কল হলে সম্পূর্ণ বক্সটি স্ক্রিনে একবারই তৈরি হবে
-    if (!warning) {
-        warning = document.createElement('div');
-        warning.id = 'slowLoadingWarning';
-        warning.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; margin:0 auto; width:max-content; max-width:90vw; z-index:100; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; text-align:center; transition: all 0.3s ease;';
-        warning.className = 'animate-fade-in-up';
-        
-        warning.innerHTML = `
-            <div style="display:flex; align-items:center; gap:8px;">
-                <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
-                <span id="toastMainText">${mainMessage}</span>
-            </div>
-            <div id="toastSubText" style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:2px; display:${subMessage ? 'block' : 'none'};">
-                ${subMessage || ''}
-            </div>
-        `;
-        document.body.appendChild(warning);
-        loadingIndicatorShown = true;
-        return;
+    // ১. মেইন সেন্টারিং কন্টেইনার (যা পজিশন আগে থেকেই ফিক্সড করে রাখবে)
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; display:flex; justify-content:center; align-items:center; z-index:100; pointer-events:none;';
+        document.body.appendChild(container);
     }
 
-    // ২. ৩ সেকেন্ড পর যখন আবার কল হবে, তখন পুরো বক্স নতুন করে রেন্ডার না করে 
-    // শুধু ২য় লাইনটির টেক্সট বসিয়ে দৃশ্যমান করা হবে (বক্স সম্পূর্ণ স্থির থাকবে)
-    const subTextElem = document.getElementById('toastSubText');
-    if (subTextElem && subMessage) {
-        subTextElem.innerText = subMessage;
-        subTextElem.style.display = 'block';
+    // ২. টেক্সট কনটেন্ট রেডি করা
+    let innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
+            <span>${mainMessage}</span>
+        </div>
+    `;
+    
+    if (subMessage) {
+        innerHTML += `
+            <div style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:3px;">
+                ${subMessage}
+            </div>
+        `;
     }
+
+    // ৩. আসল টোস্ট বক্স
+    let warning = document.getElementById('slowLoadingWarning');
+    
+    if (!warning) {
+        // নতুন তৈরি হলে: HTML আগেই সেট করা হচ্ছে যাতে সাইজ বা পজিশন পরে না বদলায়
+        warning = document.createElement('div');
+        warning.id = 'slowLoadingWarning';
+        warning.style.cssText = 'pointer-events:auto; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; transition: all 0.3s ease;';
+        warning.className = 'animate-fade-in-up';
+        warning.innerHTML = innerHTML;
+        container.appendChild(warning); // কন্টেইনারে অ্যাপেন্ড করা হলো
+    } else {
+        // আগেই থাকলে: পজিশন বা এনিমেশন না ছেড়েই শুধু টেক্সট স্মুথলি আপডেট হবে
+        warning.innerHTML = innerHTML;
+    }
+
+    loadingIndicatorShown = true;
 }
 
 function hideSlowLoadingWarning() {
-    const warning = document.getElementById('slowLoadingWarning');
-    if (warning) warning.remove();
+    const container = document.getElementById('toastContainer');
+    if (container) container.remove();
     loadingIndicatorShown = false;
 }
+
 
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
@@ -1969,20 +1982,19 @@ function loadInitialData() {
     // ক্যাশ না থাকলে তাৎক্ষণিক টোস্ট ও টাইমার চালু
     // ==========================================
     if (!cachedDataStr) {
-        // ১. সাথে সাথে প্রথম মেসেজটি দেখাবে
+        // ১. সাথে সাথে প্রথম মেসেজটি একদম স্ট্যাবলভাবে আসবে
         showLoadingToast("SafaBoxbd লোডিং হচ্ছে...");
 
-// ৩ সেকেন্ড পর ১ম লাইনের ঠিক নিচে ২য় লাইনটি স্থিরভাবে চলে আসবে
-slowToastTimeoutId = setTimeout(function() {
-    const skeleton = document.getElementById('skeletonLoader');
-    if (skeleton && !skeleton.classList.contains('hidden')) {
-        showLoadingToast(
-            "SafaBoxbd লোডিং হচ্ছে...", 
-            "ইন্টারনেট ধীরে আছে, অনুগ্রহ অপেক্ষা করুন..."
-        );
-    }
-}, 3000);
-
+        // ২. ৩ সেকেন্ড পর প্রথম মেসেজের নিচে দ্বিতীয় লাইনটি স্মুথলি যুক্ত হবে
+        slowToastTimeoutId = setTimeout(function() {
+            const skeleton = document.getElementById('skeletonLoader');
+            if (skeleton && !skeleton.classList.contains('hidden')) {
+                showLoadingToast(
+                    "SafaBoxbd লোডিং হচ্ছে...", 
+                    "ইন্টারনেট ধীরে আছে, অনুগ্রহ অপেক্ষা করুন..."
+                );
+            }
+        }, 3000);
 
         // ৩. ২০ সেকেন্ড হার্ড টাইমআউট (এরর স্ক্রিন)
         initTimeoutId = setTimeout(function() {
