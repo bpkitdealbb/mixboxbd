@@ -1872,7 +1872,7 @@ function generateProductDetailsCache(productsArray) {
 // ==========================================
 let loadingIndicatorShown = false;
 
-function showLoadingToast(line1, line2 = null) {
+function showLoadingToast(mainMessage, subMessage = null) {
     const skeleton = document.getElementById('skeletonLoader');
     if (!skeleton || skeleton.classList.contains('hidden')) return;
 
@@ -1881,22 +1881,30 @@ function showLoadingToast(line1, line2 = null) {
     if (!warning) {
         warning = document.createElement('div');
         warning.id = 'slowLoadingWarning';
-        // flex-direction এবং text alignment ঠিক রাখা হয়েছে
-        warning.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; margin:0 auto; width:max-content; max-width:90vw; z-index:100; background:#1f2937; color:white; padding:10px 20px; border-radius:10px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; align-items:center; gap:10px; text-align:left; transition: all 0.3s ease;';
+        // flex-direction: column; এবং align-items: center; ব্যবহার করে দুইটি লাইন মাঝ বরাবর আনা হয়েছে
+        warning.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; margin:0 auto; width:max-content; max-width:90vw; z-index:100; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center; transition: all 0.3s ease;';
         warning.className = 'animate-fade-in-up';
         document.body.appendChild(warning);
     }
     
-    // ১ম লাইনের নিচে ২য় লাইনটি সাজানোর জন্য HTML স্ট্রাকচার
-    let htmlContent = `<i class="fas fa-circle-notch fa-spin" style="color:#fbbf24; font-size: 16px;"></i>`;
-    htmlContent += `<div style="display:flex; flex-direction:column; gap:2px;">`;
-    htmlContent += `<span style="font-weight: 500;">${line1}</span>`;
-    if (line2) {
-        htmlContent += `<span style="font-size: 11px; color: #d1d5db; opacity: 0.9;">${line2}</span>`;
+    // ১ম লাইন: আইকন + মেইন টেক্সট
+    let innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
+            <span>${mainMessage}</span>
+        </div>
+    `;
+    
+    // ২য় লাইন (যদি থাকে)
+    if (subMessage) {
+        innerHTML += `
+            <div style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:2px;">
+                ${subMessage}
+            </div>
+        `;
     }
-    htmlContent += `</div>`;
 
-    warning.innerHTML = htmlContent;
+    warning.innerHTML = innerHTML;
     loadingIndicatorShown = true;
 }
 
@@ -1905,7 +1913,6 @@ function hideSlowLoadingWarning() {
     if (warning) warning.remove();
     loadingIndicatorShown = false;
 }
-
 
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
@@ -1962,10 +1969,10 @@ function loadInitialData() {
     // ক্যাশ না থাকলে তাৎক্ষণিক টোস্ট ও টাইমার চালু
     // ==========================================
     if (!cachedDataStr) {
-        // ১. সাথে সাথে প্রথম মেসেজ দেখাবে (এক লাইনে)
+        // ১. সাথে সাথে প্রথম মেসেজটি দেখাবে
         showLoadingToast("SafaBoxbd লোডিং হচ্ছে...");
 
-        // ২. ৩ সেকেন্ড পর আগের মেসেজটির নিচে নতুন মেসেজটি যুক্ত হবে
+        // ২. ৩ সেকেন্ড পর প্রথম মেসেজটির নিচে ২য় মেসেজ যুক্ত হয়ে যাবে (আলাদা লাইনে)
         slowToastTimeoutId = setTimeout(function() {
             const skeleton = document.getElementById('skeletonLoader');
             if (skeleton && !skeleton.classList.contains('hidden')) {
@@ -1974,7 +1981,7 @@ function loadInitialData() {
                     "ইন্টারনেট ধীরে আছে, অনুগ্রহ অপেক্ষা করুন..."
                 );
             }
-        }, 3000);
+        }, 2000);
 
         // ৩. ২০ সেকেন্ড হার্ড টাইমআউট (এরর স্ক্রিন)
         initTimeoutId = setTimeout(function() {
@@ -2000,6 +2007,7 @@ function loadInitialData() {
             }
         }, 20000);
     }
+
 
 
     // ২. সার্ভার থেকে লাইভ ডাটা আনা
