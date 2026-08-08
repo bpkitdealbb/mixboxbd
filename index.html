@@ -1872,11 +1872,12 @@ function generateProductDetailsCache(productsArray) {
 // ==========================================
 let loadingIndicatorShown = false;
 
+// ১. আপডেট করা স্ট্যাবল টোস্ট ফাংশন
 function showLoadingToast(mainMessage, subMessage = null) {
     const skeleton = document.getElementById('skeletonLoader');
     if (!skeleton || skeleton.classList.contains('hidden')) return;
 
-    // ১. মেইন সেন্টারিং কন্টেইনার (যা পজিশন আগে থেকেই ফিক্সড করে রাখবে)
+    // মেইন সেন্টারিং কন্টেইনার
     let container = document.getElementById('toastContainer');
     if (!container) {
         container = document.createElement('div');
@@ -1885,48 +1886,53 @@ function showLoadingToast(mainMessage, subMessage = null) {
         document.body.appendChild(container);
     }
 
-    // ২. টেক্সট কনটেন্ট রেডি করা
-    let innerHTML = `
-        <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
-            <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
-            <span>${mainMessage}</span>
-        </div>
-    `;
-    
-    if (subMessage) {
-        innerHTML += `
-            <div style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:3px;">
-                ${subMessage}
-            </div>
-        `;
-    }
-
-    // ৩. আসল টোস্ট বক্স
+    // আসল টোস্ট বক্স
     let warning = document.getElementById('slowLoadingWarning');
     
     if (!warning) {
-        // নতুন তৈরি হলে: HTML আগেই সেট করা হচ্ছে যাতে সাইজ বা পজিশন পরে না বদলায়
+        // নতুন তৈরি হলে DOM স্ট্রাকচার তৈরি হবে এবং নির্দিষ্ট ID বসানো থাকবে
         warning = document.createElement('div');
         warning.id = 'slowLoadingWarning';
-        warning.style.cssText = 'pointer-events:auto; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; transition: all 0.3s ease;';
+        warning.style.cssText = 'pointer-events:auto; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; transform: translateZ(0);';
         warning.className = 'animate-fade-in-up';
-        warning.innerHTML = innerHTML;
-        container.appendChild(warning); // কন্টেইনারে অ্যাপেন্ড করা হলো
+        
+        warning.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+                <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
+                <span id="toastMainMessage">${mainMessage}</span>
+            </div>
+            <div id="toastSubMessage" style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:3px; display:${subMessage ? 'block' : 'none'};">
+                ${subMessage || ''}
+            </div>
+        `;
+        container.appendChild(warning);
     } else {
-        // আগেই থাকলে: পজিশন বা এনিমেশন না ছেড়েই শুধু টেক্সট স্মুথলি আপডেট হবে
-        warning.innerHTML = innerHTML;
+        // দ্বিতীয়বার কল হলে পুরো HTML না ভেঙে শুধু নির্দিষ্ট আইডি-র টেক্সট আপডেট হবে
+        const mainEl = document.getElementById('toastMainMessage');
+        const subEl = document.getElementById('toastSubMessage');
+        
+        if (mainEl) mainEl.textContent = mainMessage;
+        if (subEl) {
+            if (subMessage) {
+                subEl.textContent = subMessage;
+                subEl.style.display = 'block';
+            } else {
+                subEl.style.display = 'none';
+            }
+        }
     }
 
     loadingIndicatorShown = true;
 }
 
+// ২. টোস্ট বন্ধ করার ফাংশন
 function hideSlowLoadingWarning() {
     const container = document.getElementById('toastContainer');
     if (container) container.remove();
     loadingIndicatorShown = false;
 }
 
-
+// ৩. ডাটা লোড করার মূল ফাংশন (যা আপনার আগে থেকেই আছে)
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
     const localVersion = localStorage.getItem('local_data_version');
@@ -1934,14 +1940,13 @@ function loadInitialData() {
     let initTimeoutId = null;
     let slowToastTimeoutId = null;
 
-    // টাইমার ও টোস্ট বন্ধ করার হেলপার ফাংশন
     function clearAllDataTimeouts() {
         if (slowToastTimeoutId) clearTimeout(slowToastTimeoutId);
         if (initTimeoutId) clearTimeout(initTimeoutId);
         hideSlowLoadingWarning();
     }
 
-    // ১. পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার করা
+    // পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার করা
     if (cachedDataStr) {
         try {
             const data = JSON.parse(cachedDataStr);
@@ -1978,25 +1983,23 @@ function loadInitialData() {
         }
     }
 
-    // ==========================================
     // ক্যাশ না থাকলে তাৎক্ষণিক টোস্ট ও টাইমার চালু
-    // ==========================================
     if (!cachedDataStr) {
-        // ১. সাথে সাথে প্রথম মেসেজটি একদম স্ট্যাবলভাবে আসবে
+        // ১ম মেসেজ: প্রথমবারেই একদম ফিক্সড পজিশনে তৈরি হবে
         showLoadingToast("SafaBoxbd লোডিং হচ্ছে...");
 
-        // ২. ৩ সেকেন্ড পর প্রথম মেসেজের নিচে দ্বিতীয় লাইনটি স্মুথলি যুক্ত হবে
+        // ২য় মেসেজ: ৩ সেকেন্ড পর তৈরি না হয়ে শুধু নিচের আইডি-র টেক্সট দেখাবে
         slowToastTimeoutId = setTimeout(function() {
             const skeleton = document.getElementById('skeletonLoader');
             if (skeleton && !skeleton.classList.contains('hidden')) {
                 showLoadingToast(
                     "SafaBoxbd লোডিং হচ্ছে...", 
-                    "ইন্টারনেট ধীরে আছে, অনুগ্রহ অপেক্ষা করুন..."
+                    "ইন্টারনেট ধীরে আছে, অনুগ্রহ করে অপেক্ষা করুন..."
                 );
             }
         }, 3000);
 
-        // ৩. ২০ সেকেন্ড হার্ড টাইমআউট (এরর স্ক্রিন)
+        // ২০ সেকেন্ড হার্ড টাইমআউট (এরর স্ক্রিন)
         initTimeoutId = setTimeout(function() {
             clearAllDataTimeouts();
             const skeleton = document.getElementById('skeletonLoader');
@@ -2021,14 +2024,11 @@ function loadInitialData() {
         }, 20000);
     }
 
-
-
-    // ২. সার্ভার থেকে লাইভ ডাটা আনা
+    // সার্ভার থেকে লাইভ ডাটা আনা
     const timestamp = new Date().getTime();
     fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
         .then(response => response.json())
         .then(res => {
-            // ডাটা চলে এলে সব টাইমার ও টোস্ট রিমুভ হবে
             clearAllDataTimeouts();
 
             if (res.success) {
@@ -2101,11 +2101,6 @@ function loadInitialData() {
         });
 }
 
-
-
-        // ==========================================
-        // NEW HELPER: UPDATE DOM ELEMENTS DYNAMICALLY
-        // ==========================================
 function updateDOMWithSettings(settings) {
     if(!settings) return;
     
