@@ -1357,7 +1357,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxtxaFgRkOG_Xe6CVPhXVudk_FQuYhpe-FDqPOzh7g5EcSTW2XmzmkbchEp3vGCSVPh/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby2pSrUGcwX82V7nXcB-74OO9szJyE1zA1WDZ1_YIa0EUMnsDJuDNmNar-7hkVHxibM/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -1867,14 +1867,46 @@ function generateProductDetailsCache(productsArray) {
         console.warn("Details cache save failed", e);
     }
 }
+// ==========================================
+// স্মার্ট লোডিং ইন্ডিকেটর সিস্টেম (পুরো ফাংশনের বাইরে বসান)
+// ==========================================
+let loadingIndicatorShown = false;
+
+function showSlowLoadingWarning() {
+    if (loadingIndicatorShown) return;
+    loadingIndicatorShown = true;
+    
+    const skeleton = document.getElementById('skeletonLoader');
+    if (skeleton && !skeleton.classList.contains('hidden')) {
+        const warning = document.createElement('div');
+        warning.id = 'slowLoadingWarning';
+        warning.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:100; background:#1f2937; color:white; padding:10px 20px; border-radius:10px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; align-items:center; gap:8px;';
+        warning.className = 'animate-fade-in-up'; // আপনার কাস্টম টেইলউইন্ড কনফিগ থেকে এনিমেশন পাবে পাবে
+        warning.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i> ইন্টারনেট ধীরে আছে, অনুগ্রহ অপেক্ষা করুন...';
+        document.body.appendChild(warning);
+    }
+}
+
+function hideSlowLoadingWarning() {
+    const warning = document.getElementById('slowLoadingWarning');
+    if (warning) warning.remove();
+    loadingIndicatorShown = false;
+}
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
     const localVersion = localStorage.getItem('local_data_version');
 
-    // ==========================================
-    // নতুন যোগ করা হয়েছে: ১৫ সেকেন্ডের টাইমআউট ভেরিয়েবল
-    // ==========================================
-    let initTimeoutId;
+    let initTimeoutId = null;
+    let slowToastTimeoutId = null;
+
+    // টাইমারগুলো একসাথে বন্ধ করার হেলপার ফাংশন
+    function clearAllDataTimeouts() {
+        if (slowToastTimeoutId) clearTimeout(slowToastTimeoutId);
+        if (initTimeoutId) clearTimeout(initTimeoutId);
+        if (typeof hideSlowLoadingWarning === 'function') {
+            hideSlowLoadingWarning();
+        }
+    }
 
     // ১. পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার করা
     if (cachedDataStr) {
@@ -1892,8 +1924,9 @@ function loadInitialData() {
             appData.popups = data.popups;
             appData.coupons = data.coupons || [];
             appData.reviews = data.reviews;
-                    // হালকা ক্যাশ আপডেট করা হচ্ছে
-                    if (data.products) generateProductDetailsCache(data.products);
+            
+            // হালকা ক্যাশ আপডেট
+            if (data.products) generateProductDetailsCache(data.products);
             updateDOMWithSettings(appData.settings);
 
             document.getElementById('skeletonLoader').classList.add('hidden');
@@ -1914,22 +1947,30 @@ function loadInitialData() {
     }
 
     // ==========================================
-    // নতুন যোগ করা হয়েছে: টাইমআউট শুরু করা (শুধুমাত্র ক্যাশ না থাকলে)
+    // ক্যাশ না থাকলে টাইমার ও ওয়ার্নিং চালু করা
     // ==========================================
     if (!cachedDataStr) {
+        // ৩ সেকেন্ড পর ধীরগতির ইন্টারনেট টোস্ট দেখাবে
+        slowToastTimeoutId = setTimeout(function() {
+            const skeleton = document.getElementById('skeletonLoader');
+            if (skeleton && !skeleton.classList.contains('hidden')) {
+                if (typeof showSlowLoadingWarning === 'function') {
+                    showSlowLoadingWarning();
+                }
+            }
+        }, 1100);
+
+        // ২০ সেকেন্ড হার্ড টাইমআউট (এরর স্ক্রিন দেখাবে)
         initTimeoutId = setTimeout(function() {
+            clearAllDataTimeouts();
             const skeleton = document.getElementById('skeletonLoader');
             const app = document.getElementById('app');
             
-            // চেক করুন স্কেলেটন এখনও দেখা চলছে কিনা
             if (skeleton && !skeleton.classList.contains('hidden')) {
-                // স্কেলেটন লুকিয়ে দিন
                 skeleton.classList.add('hidden');
-                // মূল অ্যাপ দেখান
                 app.classList.remove('hidden');
                 app.classList.add('flex');
                 
-                // ইউজারকে এরর মেসেজ দেখান
                 document.getElementById('content').innerHTML = `
                     <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
                         <i class="fas fa-wifi text-6xl text-gray-300 mb-4"></i>
@@ -1941,20 +1982,16 @@ function loadInitialData() {
                     </div>
                 `;
             }
-        }, 10000);
+        }, 20000);
     }
-    // ==========================================
 
-    // ২. একটি মাত্র রিকোয়েস্টে ডাটা + ভার্সন দুটোই আনা হচ্ছে
+    // ২. সার্ভার থেকে লাইভ ডাটা আনা
     const timestamp = new Date().getTime();
     fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
         .then(response => response.json())
         .then(res => {
-            // ==========================================
-            // নতুন যোগ করা হয়েছে: ডাটা চলে এলে টাইমআউট বাতিল করা
-            // ==========================================
-            clearTimeout(initTimeoutId);
-            // ==========================================
+            // ডাটা চলে আসলেই সব টাইমার ও টোস্ট বন্ধ
+            clearAllDataTimeouts();
 
             if (res.success) {
                 const serverVersion = res.serverVersion;
@@ -1964,8 +2001,7 @@ function loadInitialData() {
                 }
 
                 localStorage.setItem('cached_app_data', JSON.stringify(res.data));
-                                        // নতুন ডাটা থেকে হালকা ক্যাশ তৈরি করা হচ্ছে
-                        if (res.data.products) generateProductDetailsCache(res.data.products);
+                if (res.data.products) generateProductDetailsCache(res.data.products);
                 localStorage.setItem('local_data_version', serverVersion);
 
                 appData.settings = res.data.settings;
@@ -2000,15 +2036,10 @@ function loadInitialData() {
             }
         })
         .catch(err => {
-            // ==========================================
-            // নতুন যোগ করা হয়েছে: সাথে সাথে এরর আসলে টাইমআউট বাতিল করা
-            // ==========================================
-            clearTimeout(initTimeoutId);
-            // ==========================================
-            
+            // এরর হলেও টাইমার ক্লিয়ার করা
+            clearAllDataTimeouts();
             console.error(err);
             
-            // যদি ক্যাশ ডাটা না থাকে, তাহলেই শুধু এরর দেখাবে (যাতে ১৫ সেকেন্ড অপেক্ষা করতে না হয়)
             if (!cachedDataStr) {
                 const skeleton = document.getElementById('skeletonLoader');
                 const app = document.getElementById('app');
@@ -2032,6 +2063,7 @@ function loadInitialData() {
             }
         });
 }
+
 
         // ==========================================
         // NEW HELPER: UPDATE DOM ELEMENTS DYNAMICALLY
@@ -2081,11 +2113,20 @@ function updateDOMWithSettings(settings) {
             const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
             return regex.test(email.trim());
         }
-
-        // ==========================================
-// ==========================================
-// ROBUST JSON CLEANER (FIXED VERSION)
-// ==========================================
+function isCartItemOutOfStock(cartItem) {
+    if (!cartItem) return true;
+    const product = appData.products.find(p => p.id == cartItem.id);
+    if (!product) return true; 
+    
+    // ভ্যারিয়েন্ট থাকলে ভ্যারিয়েন্টের স্টক চেক করবে
+    if (cartItem.selectedVariant && product.variants && product.variants.length > 0) {
+        const variant = product.variants.find(v => v.name.trim().toLowerCase() === cartItem.selectedVariant.trim().toLowerCase());
+        return !variant || variant.stock <= 0;
+    } else {
+        // সাধারণ প্রোডাক্টের মোট স্টক চেক করবে
+        return product.totalstock <= 0;
+    }
+}
 function safeJsonParse(jsonString) {
     if (!jsonString || typeof jsonString !== 'string') {
         return [];
@@ -4104,34 +4145,39 @@ function removeCoupon() { appData.coupon = null; updateOrderSummary(); }
             document.getElementById('cartOverlay').classList.add('hidden');
         }
 
-        function updateCartSidebarUI() {
-            const container = document.getElementById('cartItems');
-            if (appData.cart.length === 0) {
-                container.innerHTML = `<div class="text-center py-10 text-gray-400"><i class="fas fa-shopping-basket text-4xl mb-3"></i><p>Empty Cart</p></div>`;
-            } else {
-                container.innerHTML = appData.cart.map((item, idx) => `
-                    <div class="flex items-center bg-white border rounded-lg p-2 shadow-sm">
-                        <input type="checkbox" ${item.selected !== false ? 'checked' : ''} 
-                               onclick="toggleSelectItem(${idx})" 
-                               class="w-5 h-5 mr-3 accent-primary cursor-pointer shrink-0">
-                        <img src="${item.imagemain}" class="w-16 h-16 object-cover rounded-lg bg-gray-100">
-                        <div class="ml-3 flex-1">
-                            <h4 class="text-sm font-bold truncate">${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}</h4>
-                            <p class="text-xs text-primary font-bold">৳ ${(item.price).toFixed(0)}</p>
-                            <div class="flex items-center justify-between mt-1">
-                                <div class="flex items-center border rounded text-xs">
-                                    <button onclick="updateQty(${idx}, -1)" class="px-2 py-1 text-gray-600 hover:bg-gray-100">-</button>
-                                    <span class="px-2 font-bold">${item.quantity || item.qty}</span>
-                                    <button onclick="updateQty(${idx}, 1)" class="px-2 py-1 text-gray-600 hover:bg-gray-100">+</button>
-                                </div>
-                                <button onclick="removeItem(${idx})" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
-                            </div>
+function updateCartSidebarUI() {
+    const container = document.getElementById('cartItems');
+    if (appData.cart.length === 0) {
+        container.innerHTML = `<div class="text-center py-10 text-gray-400"><i class="fas fa-shopping-basket text-4xl mb-3"></i><p>Empty Cart</p></div>`;
+    } else {
+        container.innerHTML = appData.cart.map((item, idx) => {
+            // ✅ FIX: ভ্যারিয়েবলটি টেমপ্লেট স্ট্রিং এর বাইরে ক্যালকুলেট করা হচ্ছে
+            const isSideOOS = isCartItemOutOfStock(item);
+            
+            return `
+            <div class="flex items-center bg-white border rounded-lg p-2 shadow-sm">
+                <input type="checkbox" ${item.selected !== false ? 'checked' : ''} 
+                       onclick="toggleSelectItem(${idx})" 
+                       class="w-5 h-5 mr-3 accent-primary cursor-pointer shrink-0">
+                <img src="${item.imagemain}" class="w-16 h-16 object-cover rounded-lg bg-gray-100">
+                <div class="ml-3 flex-1">
+                    <h4 class="text-sm font-bold truncate">${item.name} ${item.selectedVariant ? `(${item.selectedVariant})` : ''}</h4>
+                    <p class="text-xs text-primary font-bold">৳ ${(item.price).toFixed(0)}</p>
+                    <div class="flex items-center justify-between mt-1">
+                        <div class="flex items-center border rounded text-xs ${isSideOOS ? 'opacity-40 pointer-events-none' : ''}">
+                            <button onclick="updateQty(${idx}, -1)" class="px-2 py-1 text-gray-600 hover:bg-gray-100">-</button>
+                            <span class="px-2 font-bold">${item.quantity || item.qty}</span>
+                            <button onclick="updateQty(${idx}, 1)" class="px-2 py-1 text-gray-600 hover:bg-gray-100">+</button>
                         </div>
+                        <button onclick="removeItem(${idx})" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
                     </div>
-                `).join('');
-            }
-            updateOrderSummary();
-        }
+                </div>
+            </div>
+        `;
+        }).join('');
+    }
+    updateOrderSummary();
+}
 
 // ==========================================
 // UPDATED: ROBUST LIVE PRICE SYNC FUNCTION
@@ -4213,7 +4259,8 @@ function updateCartPageUI() {
     container.innerHTML = appData.cart.map((item, idx) => {
         const qty = item.quantity || item.qty || 1;
         const currentPrice = parseFloat(item.price || 0);
-        
+                // NEW: স্টক আউট চেক
+        const isOOS = isCartItemOutOfStock(item);
         // SAVINGS CALCULATION
         let originalPrice = parseFloat(item.mainprice || item.regularprice || 0);
         if (!originalPrice || originalPrice <= currentPrice) {
@@ -4232,9 +4279,9 @@ function updateCartPageUI() {
 
         return `
             <div onclick="navigateTo('#product?id=${item.id}')" 
-                 class="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex gap-3 items-center relative group cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
+                 class="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex gap-3 items-center relative group cursor-pointer hover:shadow-md transition-shadow overflow-hidden ${isOOS ? 'opacity-60' : ''}">
                 
-                <!-- ১. চেকবক্স -->
+                <!-- ১. চেকবক্স (সবসময় সচল থাকবে) -->
                 <div class="flex items-center" onclick="event.stopPropagation()">
                     <input type="checkbox" ${item.selected !== false ? 'checked' : ''} 
                            onclick="toggleSelectItem(${idx})" 
@@ -4242,19 +4289,15 @@ function updateCartPageUI() {
                 </div>
 
                 <!-- ২. প্রোডাক্ট ছবি -->
-                <div class="w-24 h-24 shrink-0">
+                <div class="w-24 h-24 shrink-0 relative">
                     <img src="${item.imagemain}" class="w-full h-full object-cover rounded-lg border border-gray-100 bg-gray-50" loading="lazy">
+                    ${isOOS ? '<div class="absolute inset-0 bg-white/70 flex items-center justify-center rounded-lg"><span class="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow">STOCK OUT</span></div>' : ''}
                 </div>
 
                 <!-- ৩. প্রোডাক্ট বিবরণ -->
                 <div class="flex-1 min-w-0 flex flex-col justify-between h-24">
                     
                     <div class="min-h-0">
-                        <!-- 
-                           টাইটেল: আমরা এখানে একটি ইউনিক ID (title-idx) দিয়েছি 
-                           এবং প্রাথমিকভাবে কোনো টেক্সট দিইনি, পরে JS দিয়ে সেট করা হবে।
-                           line-clamp-2 রিমুভ করা হয়েছে কারণ আমরা নিজেরাই লিমিট হ্যান্ডেল করব।
-                        -->
                         <h3 id="title-${idx}" class="text-sm font-bold text-gray-800 leading-tight"></h3>
                         
                         <div class="flex items-center gap-2 flex-wrap mt-1">
@@ -4270,19 +4313,20 @@ function updateCartPageUI() {
                     </div>
 
                     <div class="flex justify-between items-center mt-1 shrink-0">
-                        <!-- পরিমাণ কন্ট্রোলার -->
+                        <!-- ৪. পরিমাণ কন্ট্রোলার (শুধু স্টক আউট হলে বন্ধ হবে) -->
                         <div class="flex items-center justify-between w-28 h-7 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden" onclick="event.stopPropagation()">
                             <button onclick="event.stopPropagation(); updateQty(${idx}, -1)" 
-                                    class="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 active:scale-90 transition-all duration-100">
+                                    class="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 active:scale-90 transition-all duration-100 ${isOOS ? 'pointer-events-none opacity-40' : ''}">
                                 <i class="fas fa-minus text-xs"></i>
                             </button>
                             <span class="text-xs font-bold text-gray-800 w-6 text-center select-none">${qty}</span>
                             <button onclick="event.stopPropagation(); updateQty(${idx}, 1)" 
-                                    class="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 active:scale-90 transition-all duration-100">
+                                    class="w-8 h-full flex items-center justify-center text-gray-600 hover:bg-gray-200 active:bg-gray-300 active:scale-90 transition-all duration-100 ${isOOS ? 'pointer-events-none opacity-40' : ''}">
                                 <i class="fas fa-plus text-xs"></i>
                             </button>
                         </div>
 
+                        <!-- ৫. ডিলিট বাটন (সবসময় সচল থাকবে) -->
                         <button onclick="event.stopPropagation(); removeItem(${idx})" class="text-gray-400 hover:text-red-500 p-1 transition shrink-0">
                             <i class="fas fa-trash-alt text-sm"></i>
                         </button>
@@ -4508,7 +4552,7 @@ function quickBuyNow(id) {
                 variantsHtml += `
                     <button class="swal-variant-btn w-full flex justify-between items-center p-3 mb-2 border border-gray-200 rounded-lg hover:border-primary hover:bg-gray-50 transition-all group cursor-pointer">
                         <span class="font-bold text-gray-800 group-hover:text-primary text-sm">${v.name}</span>
-                        <span class="text-primary font-bold text-sm">৳ ${v.price}</span>
+<span class="text-primary font-bold text-sm" data-charge="${v.extradeliverycharge || 0}">৳ ${v.price}</span>
                     </button>
                 `;
             }
@@ -4756,7 +4800,18 @@ function buyNow(product, qty = 1) {
         function proceedToCheckout() {
             const selectedItems = appData.cart.filter(item => item.selected !== false);
             if (selectedItems.length === 0) return Swal.fire('Empty', 'Please select items to checkout', 'warning');
-            
+                // NEW: চেকআউট করার আগে দেখুন কোনো সিলেক্টেড আইটেম কি স্টক আউট হয়ে গেছে
+    const outOfStockItem = selectedItems.find(item => isCartItemOutOfStock(item));
+    if (outOfStockItem) {
+        const variantText = outOfStockItem.selectedVariant ? ` (${outOfStockItem.selectedVariant})` : '';
+        return Swal.fire({
+            icon: 'warning',
+            title: 'স্টক শেষ!',
+            text: `"${outOfStockItem.name}${variantText}" এখন স্টকে নেই। অনুগ্রহ করে এই পণ্যটি রিমুভ করে চেকআউট করুন।`,
+            confirmButtonText: 'ওকে, বুঝেছি',
+            confirmButtonColor: appData.settings.themecolor || '#2563eb'
+        });
+    }
             if (!appData.user) return Swal.fire({ icon: 'warning', title: t('login_req'), text: t('login_to_continue'), confirmButtonText: t('login') }).then(() => navigateTo('#login'));
             navigateTo('#checkout');
         }
