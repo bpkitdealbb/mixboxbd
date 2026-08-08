@@ -1868,7 +1868,7 @@ function generateProductDetailsCache(productsArray) {
     }
 }
 // ==========================================
-// স্মার্ট লোডিং ইন্ডিকেটর সিস্টেম (মাল্টি-লাইন সাপোর্ট)
+// স্মার্ট লোডিং ইন্ডিকেটর সিস্টেম (স্থির ও স্মুথ)
 // ==========================================
 let loadingIndicatorShown = false;
 
@@ -1878,34 +1878,34 @@ function showLoadingToast(mainMessage, subMessage = null) {
 
     let warning = document.getElementById('slowLoadingWarning');
     
+    // ১. প্রথমবার কল হলে সম্পূর্ণ বক্সটি স্ক্রিনে একবারই তৈরি হবে
     if (!warning) {
         warning = document.createElement('div');
         warning.id = 'slowLoadingWarning';
-        // flex-direction: column; এবং align-items: center; ব্যবহার করে দুইটি লাইন মাঝ বরাবর আনা হয়েছে
-        warning.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; margin:0 auto; width:max-content; max-width:90vw; z-index:100; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center; transition: all 0.3s ease;';
+        warning.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; margin:0 auto; width:max-content; max-width:90vw; z-index:100; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; text-align:center; transition: all 0.3s ease;';
         warning.className = 'animate-fade-in-up';
-        document.body.appendChild(warning);
-    }
-    
-    // ১ম লাইন: আইকন + মেইন টেক্সট
-    let innerHTML = `
-        <div style="display:flex; align-items:center; gap:8px;">
-            <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
-            <span>${mainMessage}</span>
-        </div>
-    `;
-    
-    // ২য় লাইন (যদি থাকে)
-    if (subMessage) {
-        innerHTML += `
-            <div style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:2px;">
-                ${subMessage}
+        
+        warning.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
+                <span id="toastMainText">${mainMessage}</span>
+            </div>
+            <div id="toastSubText" style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:2px; display:${subMessage ? 'block' : 'none'};">
+                ${subMessage || ''}
             </div>
         `;
+        document.body.appendChild(warning);
+        loadingIndicatorShown = true;
+        return;
     }
 
-    warning.innerHTML = innerHTML;
-    loadingIndicatorShown = true;
+    // ২. ৩ সেকেন্ড পর যখন আবার কল হবে, তখন পুরো বক্স নতুন করে রেন্ডার না করে 
+    // শুধু ২য় লাইনটির টেক্সট বসিয়ে দৃশ্যমান করা হবে (বক্স সম্পূর্ণ স্থির থাকবে)
+    const subTextElem = document.getElementById('toastSubText');
+    if (subTextElem && subMessage) {
+        subTextElem.innerText = subMessage;
+        subTextElem.style.display = 'block';
+    }
 }
 
 function hideSlowLoadingWarning() {
@@ -1972,16 +1972,17 @@ function loadInitialData() {
         // ১. সাথে সাথে প্রথম মেসেজটি দেখাবে
         showLoadingToast("SafaBoxbd লোডিং হচ্ছে...");
 
-        // ২. ৩ সেকেন্ড পর প্রথম মেসেজটির নিচে ২য় মেসেজ যুক্ত হয়ে যাবে (আলাদা লাইনে)
-        slowToastTimeoutId = setTimeout(function() {
-            const skeleton = document.getElementById('skeletonLoader');
-            if (skeleton && !skeleton.classList.contains('hidden')) {
-                showLoadingToast(
-                    "SafaBoxbd লোডিং হচ্ছে...", 
-                    "ইন্টারনেট ধীরে আছে, অনুগ্রহ অপেক্ষা করুন..."
-                );
-            }
-        }, 2000);
+// ৩ সেকেন্ড পর ১ম লাইনের ঠিক নিচে ২য় লাইনটি স্থিরভাবে চলে আসবে
+slowToastTimeoutId = setTimeout(function() {
+    const skeleton = document.getElementById('skeletonLoader');
+    if (skeleton && !skeleton.classList.contains('hidden')) {
+        showLoadingToast(
+            "SafaBoxbd লোডিং হচ্ছে...", 
+            "ইন্টারনেট ধীরে আছে, অনুগ্রহ অপেক্ষা করুন..."
+        );
+    }
+}, 3000);
+
 
         // ৩. ২০ সেকেন্ড হার্ড টাইমআউট (এরর স্ক্রিন)
         initTimeoutId = setTimeout(function() {
