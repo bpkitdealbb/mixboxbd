@@ -1872,67 +1872,78 @@ function generateProductDetailsCache(productsArray) {
 // ==========================================
 let loadingIndicatorShown = false;
 
-// ১. আপডেট করা স্ট্যাবল টোস্ট ফাংশন
 function showLoadingToast(mainMessage, subMessage = null) {
     const skeleton = document.getElementById('skeletonLoader');
     if (!skeleton || skeleton.classList.contains('hidden')) return;
 
-    // মেইন সেন্টারিং কন্টেইনার
+    // ১. কন্টেইনার — একবার তৈরি হলে আর পজিশন পরিবর্তন হবে না
     let container = document.getElementById('toastContainer');
     if (!container) {
         container = document.createElement('div');
         container.id = 'toastContainer';
-        container.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; display:flex; justify-content:center; align-items:center; z-index:100; pointer-events:none;';
+        container.style.cssText = 'position:fixed; bottom:80px; left:0; right:0; display:flex; justify-content:center; z-index:100; pointer-events:none;';
         document.body.appendChild(container);
     }
 
-    // আসল টোস্ট বক্স
+    // ২. টোস্ট বক্স — কোনো এনিমেশন নেই, প্রথম ফ্রেম থেকেই ফিক্সড পজিশনে
     let warning = document.getElementById('slowLoadingWarning');
-    
+
     if (!warning) {
-        // নতুন তৈরি হলে DOM স্ট্রাকচার তৈরি হবে এবং নির্দিষ্ট ID বসানো থাকবে
         warning = document.createElement('div');
         warning.id = 'slowLoadingWarning';
-        warning.style.cssText = 'pointer-events:auto; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; transform: translateZ(0);';
-        warning.className = 'animate-fade-in-up';
-        
-        warning.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
-                <i class="fas fa-circle-notch fa-spin" style="color:#fbbf24;"></i>
-                <span id="toastMainMessage">${mainMessage}</span>
-            </div>
-            <div id="toastSubMessage" style="font-size:12px; color:#e5e7eb; opacity:0.9; margin-top:3px; display:${subMessage ? 'block' : 'none'};">
-                ${subMessage || ''}
-            </div>
-        `;
+        warning.style.cssText = 'pointer-events:auto; background:#1f2937; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-family:Poppins,sans-serif; box-shadow:0 4px 12px rgba(0,0,0,0.3); text-align:center;';
+
+        // মেইন লাইন — DOM এলিমেন্ট হিসেবে তৈরি (innerHTML রিপ্লেস এড়াতে)
+        const mainDiv = document.createElement('div');
+        mainDiv.style.cssText = 'display:flex; align-items:center; justify-content:center; gap:8px;';
+        const spinner = document.createElement('i');
+        spinner.className = 'fas fa-circle-notch fa-spin';
+        spinner.style.color = '#fbbf24';
+        const mainSpan = document.createElement('span');
+        mainSpan.id = 'toastMainText';
+        mainSpan.textContent = mainMessage;
+        mainDiv.appendChild(spinner);
+        mainDiv.appendChild(mainSpan);
+        warning.appendChild(mainDiv);
+
+        // সাব লাইন — আগে থেকেই ডমে আছে, শুধু লুকানো আছে
+        const subDiv = document.createElement('div');
+        subDiv.id = 'toastSubLine';
+        subDiv.style.cssText = 'font-size:12px; color:#e5e7eb; max-height:0; overflow:hidden; opacity:0; transition:max-height 0.4s ease, opacity 0.4s ease, margin-top 0.4s ease; margin-top:0;';
+        if (subMessage) {
+            subDiv.textContent = subMessage;
+            // যদি প্রথম কলেই সাবমেসেজ থাকে
+            subDiv.style.maxHeight = '20px';
+            subDiv.style.opacity = '0.9';
+            subDiv.style.marginTop = '3px';
+        }
+        warning.appendChild(subDiv);
+
         container.appendChild(warning);
     } else {
-        // দ্বিতীয়বার কল হলে পুরো HTML না ভেঙে শুধু নির্দিষ্ট আইডি-র টেক্সট আপডেট হবে
-        const mainEl = document.getElementById('toastMainMessage');
-        const subEl = document.getElementById('toastSubMessage');
-        
-        if (mainEl) mainEl.textContent = mainMessage;
-        if (subEl) {
-            if (subMessage) {
-                subEl.textContent = subMessage;
-                subEl.style.display = 'block';
-            } else {
-                subEl.style.display = 'none';
-            }
+        // আগে থেকেই আছে — শুধু টেক্সট আপডেট, কোনো ডম রিবিল্ড নেই
+        const mainSpan = document.getElementById('toastMainText');
+        if (mainSpan) mainSpan.textContent = mainMessage;
+
+        const subDiv = document.getElementById('toastSubLine');
+        if (subMessage && subDiv) {
+            subDiv.textContent = subMessage;
+            subDiv.style.maxHeight = '20px';
+            subDiv.style.opacity = '0.9';
+            subDiv.style.marginTop = '3px';
         }
     }
 
     loadingIndicatorShown = true;
 }
 
-// ২. টোস্ট বন্ধ করার ফাংশন
 function hideSlowLoadingWarning() {
     const container = document.getElementById('toastContainer');
     if (container) container.remove();
     loadingIndicatorShown = false;
 }
 
-// ৩. ডাটা লোড করার মূল ফাংশন (যা আপনার আগে থেকেই আছে)
+
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
     const localVersion = localStorage.getItem('local_data_version');
@@ -1946,7 +1957,7 @@ function loadInitialData() {
         hideSlowLoadingWarning();
     }
 
-    // পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার করা
+    // পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার
     if (cachedDataStr) {
         try {
             const data = JSON.parse(cachedDataStr);
@@ -1962,14 +1973,14 @@ function loadInitialData() {
             appData.popups = data.popups;
             appData.coupons = data.coupons || [];
             appData.reviews = data.reviews;
-            
+
             if (data.products) generateProductDetailsCache(data.products);
             updateDOMWithSettings(appData.settings);
 
             document.getElementById('skeletonLoader').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
             document.getElementById('app').classList.add('flex');
-            
+
             loadRoute(window.location.hash || '#home');
             updateCartBadge();
             updateOrderSummary();
@@ -1983,38 +1994,40 @@ function loadInitialData() {
         }
     }
 
-    // ক্যাশ না থাকলে তাৎক্ষণিক টোস্ট ও টাইমার চালু
+    // ==========================================
+    // ক্যাশ না থাকলে তাৎক্ষণিক টোস্ট ও টাইমার
+    // ==========================================
     if (!cachedDataStr) {
-        // ১ম মেসেজ: প্রথমবারেই একদম ফিক্সড পজিশনে তৈরি হবে
+        // প্রথম মেসেজ — একদম ফিক্সড, কোনো মুভমেন্ট নেই
         showLoadingToast("SafaBoxbd লোডিং হচ্ছে...");
 
-        // ২য় মেসেজ: ৩ সেকেন্ড পর তৈরি না হয়ে শুধু নিচের আইডি-র টেক্সট দেখাবে
+        // ৩ সেকেন্ড পর সাব-মেসেজ স্মুথলি যুক্ত হবে (বক্স নড়বে না, শুধু নিচে লাইন বাড়বে)
         slowToastTimeoutId = setTimeout(function() {
             const skeleton = document.getElementById('skeletonLoader');
             if (skeleton && !skeleton.classList.contains('hidden')) {
                 showLoadingToast(
-                    "SafaBoxbd লোডিং হচ্ছে...", 
+                    "SafaBoxbd লোডিং হচ্ছে...",
                     "ইন্টারনেট ধীরে আছে, অনুগ্রহ করে অপেক্ষা করুন..."
                 );
             }
         }, 3000);
 
-        // ২০ সেকেন্ড হার্ড টাইমআউট (এরর স্ক্রিন)
+        // ২০ সেকেন্ড হার্ড টাইমআউট
         initTimeoutId = setTimeout(function() {
             clearAllDataTimeouts();
             const skeleton = document.getElementById('skeletonLoader');
             const app = document.getElementById('app');
-            
+
             if (skeleton && !skeleton.classList.contains('hidden')) {
                 skeleton.classList.add('hidden');
                 app.classList.remove('hidden');
                 app.classList.add('flex');
-                
+
                 document.getElementById('content').innerHTML = `
                     <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
                         <i class="fas fa-wifi text-6xl text-gray-300 mb-4"></i>
                         <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সংযোগ স্থাপন করা যায়নি</h2>
-                        <p class="text-gray-500 text-sm mb-6 max-w-xs">দয়া করে আপনার ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                        <p class="text-gray-500 text-sm mb-6 max-w-xs">দয়া করে আপনার ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
                         <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
                             <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
                         </button>
@@ -2076,21 +2089,21 @@ function loadInitialData() {
         .catch(err => {
             clearAllDataTimeouts();
             console.error(err);
-            
+
             if (!cachedDataStr) {
                 const skeleton = document.getElementById('skeletonLoader');
                 const app = document.getElementById('app');
-                
+
                 if (skeleton && !skeleton.classList.contains('hidden')) {
                     skeleton.classList.add('hidden');
                     app.classList.remove('hidden');
                     app.classList.add('flex');
-                    
+
                     document.getElementById('content').innerHTML = `
                         <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
                             <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
                             <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সমস্যা হচ্ছে</h2>
-                            <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                            <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
                             <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
                                 <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
                             </button>
@@ -2100,7 +2113,6 @@ function loadInitialData() {
             }
         });
 }
-
 function updateDOMWithSettings(settings) {
     if(!settings) return;
     
@@ -7211,7 +7223,7 @@ function initFilterOptions() {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by safabd team
+                        <br>Developed by SafaBoxbd team
                     </div>
                 </div>
             </footer>`;
