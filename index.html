@@ -1357,7 +1357,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby2pSrUGcwX82V7nXcB-74OO9szJyE1zA1WDZ1_YIa0EUMnsDJuDNmNar-7hkVHxibM/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzVVnqM8BRootcSD5xsDrcsFOSMTfWb3KAzlIWHfEXNFdE-NYOzCX8EbyGUGslbQyVs/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 if (typeof google === 'undefined' || !google.script) {
@@ -1999,15 +1999,15 @@ function loadInitialData() {
     // ==========================================
     if (!cachedDataStr) {
         // প্রথম মেসেজ — একদম ফিক্সড, কোনো মুভমেন্ট নেই
-        showLoadingToast("SafaBoxbd লোডিং হচ্ছে...");
+        showLoadingToast("Loading SafaBoxbd web app...");
 
         // ৩ সেকেন্ড পর সাব-মেসেজ স্মুথলি যুক্ত হবে (বক্স নড়বে না, শুধু নিচে লাইন বাড়বে)
         slowToastTimeoutId = setTimeout(function() {
             const skeleton = document.getElementById('skeletonLoader');
             if (skeleton && !skeleton.classList.contains('hidden')) {
                 showLoadingToast(
-                    "SafaBoxbd লোডিং হচ্ছে...",
-                    "ইন্টারনেট ধীরে আছে, অনুগ্রহ করে অপেক্ষা করুন..."
+                    "Loading SafaBoxbd web app...",
+                    "Connection seems slow. Please check your internet connection and wait..."
                 );
             }
         }, 3000);
@@ -2527,7 +2527,7 @@ function loadMyOrdersPage() {
                      console.log("Error detected in Success Handler:", errorMsg);
                      
                      // শুধুমাত্র ব্যাকএন্ডের এক্স্যাক্ট সেশন এরর মেসেজটিকে সেশন এরর হিসেবে ধরবে
-                     if (errorMsg.includes('unauthorized') && errorMsg.includes('invalid session')) {
+                     if (errorMsg.includes('unauthorized') || errorMsg.includes('invalid session')) {
                          handleSessionError();
                          return;
                      }
@@ -6308,7 +6308,7 @@ function placeOrder() {
                 if (!res.success) {
                     const errorMsg = (res.error || '').toLowerCase();
                     // শুধুমাত্র ব্যাকএন্ডের এক্স্যাক্ট সেশন এরর মেসেজটিকে সেশন এরর হিসেবে ধরবে
-                    if (errorMsg.includes('unauthorized') && errorMsg.includes('invalid session')) {
+                    if (errorMsg.includes('unauthorized') || errorMsg.includes('invalid session')) {
                         handleSessionError(); 
                         return; 
                     }
@@ -7223,7 +7223,7 @@ function initFilterOptions() {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by SafaBoxbd team
+                        <br>Developed by SafaBox team
                     </div>
                 </div>
             </footer>`;
