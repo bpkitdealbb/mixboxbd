@@ -537,7 +537,7 @@ font-weight: bold;
             </div>
 
             <!-- লোগো (মাঝখানে) -->
-            <div onclick="navigateTo('#home')" class="flex items-center cursor-pointer max-w-[60%]">
+            <div onclick="navigateTo('/home')" class="flex items-center cursor-pointer max-w-[60%]">
                 <img id="siteLogo" src="https://via.placeholder.com/150" alt="SafaBoxbd Logo" class="h-12 w-auto object-contain shrink-0 mx-auto" style="mix-blend-mode: multiply;">
             </div>
 
@@ -564,17 +564,17 @@ font-weight: bold;
         <!-- Bottom Nav -->
         <nav class="fixed bottom-0 left-0 right-0 bg-white shadow-sm z-40">
             <div class="flex justify-around items-center h-16">
-                <button onclick="navigateTo('#home')" id="nav-home" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200"><i class="fas fa-home text-xl mb-1"></i><span class="text-[10px] font-medium">Home</span></button>
-                <button onclick="navigateTo('#categories')" id="nav-categories" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200"><i class="fas fa-th-large text-xl mb-1"></i><span class="text-[10px] font-medium">Categories</span></button>
+                <button onclick="navigateTo('/home')" id="nav-home" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200"><i class="fas fa-home text-xl mb-1"></i><span class="text-[10px] font-medium">Home</span></button>
+                <button onclick="navigateTo('/categories')" id="nav-categories" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200"><i class="fas fa-th-large text-xl mb-1"></i><span class="text-[10px] font-medium">Categories</span></button>
                 <!-- UPDATED: Message Icon now opens WhatsApp -->
                 <button onclick="openWhatsAppChat()" id="nav-messages" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200"><i class="fas fa-comment-dots text-xl mb-1"></i><span class="text-[10px] font-medium">Message</span></button>
-                <button onclick="navigateTo('#cart')" id="nav-cart" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200 relative">
+                <button onclick="navigateTo('/cart')" id="nav-cart" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200 relative">
                     <div class="relative">
                         <i class="fas fa-shopping-cart text-xl mb-1"></i>
                         <span id="cartBadge" class="absolute -top-2 -right-3 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center hidden">0</span>
                     </div>
                     <span id="nav-cart-label" class="text-[10px] font-medium">Cart</span></button>
-                <button onclick="navigateTo('#account')" id="nav-account" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200"><i class="fas fa-user text-xl mb-1"></i><span class="text-[10px] font-medium">Account</span></button>
+                <button onclick="navigateTo('/account')" id="nav-account" class="flex flex-col items-center justify-center w-full text-gray-500 transition-all duration-200"><i class="fas fa-user text-xl mb-1"></i><span class="text-[10px] font-medium">Account</span></button>
             </div>
         </nav>
     </div>
@@ -932,7 +932,7 @@ font-weight: bold;
                     <!-- If not logged in -->
                     <div id="reviewLoginPrompt" class="bg-gray-50 border rounded-lg p-4 mb-6 text-center">
                         <p class="text-sm text-gray-600"><span data-i18n="login_to_review">Login to write a review</span></p>
-                        <button onclick="navigateTo('#login')" class="mt-2 text-xs font-bold text-primary underline">Login Now</button>
+                        <button onclick="navigateTo('/login')" class="mt-2 text-xs font-bold text-primary underline">Login Now</button>
                     </div>
 
                     <!-- 2. Reviews List -->
@@ -971,7 +971,7 @@ font-weight: bold;
         <div id="emptyCart" class="hidden cart-empty-state">
             <div class="cart-empty-icon"><i class="fas fa-shopping-basket"></i></div>
             <h3 data-i18n="empty_cart_msg">Your cart is empty</h3>
-            <button onclick="navigateTo('#home')" class="cart-btn-start" data-i18n="start_shopping">Start Shopping</button>
+            <button onclick="navigateTo('/home')" class="cart-btn-start" data-i18n="start_shopping">Start Shopping</button>
         </div>
                 <!-- GUEST WHATSAPP BUTTON (স্টিকি ডিভ থেকে বের করা হয়েছে) -->
         <div id="whatsappGuestCheckoutContainer" class="mt-6 hidden">
@@ -1036,7 +1036,7 @@ font-weight: bold;
             <h1 class="text-2xl font-bold mb-6" data-i18n="checkout">Checkout</h1>
             <div id="loginRequired" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 hidden text-center">
                 <p class="text-yellow-800 font-medium mb-2" data-i18n="login_req">Login Required</p>
-                <button onclick="navigateTo('#login')" class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold" data-i18n="login_to_continue">Login to Continue</button>
+                <button onclick="navigateTo('/login')" class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold" data-i18n="login_to_continue">Login to Continue</button>
             </div>
             <form id="billingForm" class="space-y-4">
                 <div class="bg-white rounded-xl shadow-sm border p-4 space-y-4">
@@ -1139,8 +1139,8 @@ font-weight: bold;
                 <i class="fas fa-user-circle text-6xl text-gray-200 mb-4"></i>
                 <p class="text-gray-600 mb-6" data-i18n="login_req_acc">Please login to access your account</p>
                 <div class="space-y-3 px-4">
-                    <button onclick="navigateTo('#login')" class="w-full bg-primary text-white py-3 rounded-lg font-bold" data-i18n="login">Login</button>
-                    <button onclick="navigateTo('#register')" class="w-full border border-primary text-primary py-3 rounded-lg font-bold" data-i18n="register">Register</button>
+                    <button onclick="navigateTo('/login')" class="w-full bg-primary text-white py-3 rounded-lg font-bold" data-i18n="login">Login</button>
+                    <button onclick="navigateTo('/register')" class="w-full border border-primary text-primary py-3 rounded-lg font-bold" data-i18n="register">Register</button>
                 </div>
             </div>
             <div id="accountLoggedIn" class="hidden space-y-4 px-1">
@@ -1160,7 +1160,7 @@ font-weight: bold;
                 ========================================== -->
                 
                 <!-- NEW: MY ORDERS BUTTON -->
-                <button onclick="navigateTo('#my-orders')" class="w-full bg-white p-4 rounded-xl shadow-sm border flex items-center justify-between group">
+                <button onclick="navigateTo('/my-orders')" class="w-full bg-white p-4 rounded-xl shadow-sm border flex items-center justify-between group">
                     <div class="flex items-center"><div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3 text-gray-600 group-hover:bg-primary group-hover:text-white transition"><i class="fas fa-box"></i></div> <span class="font-bold" data-i18n="my_orders">My Orders</span></div>
                     <i class="fas fa-chevron-right text-gray-300"></i>
                 </button>
@@ -1234,7 +1234,7 @@ font-weight: bold;
             <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-box-open text-3xl text-gray-300"></i></div>
             <h3 class="font-bold text-gray-600 mb-1" data-i18n="no_orders">No Orders Found</h3>
             <p class="text-sm text-gray-400 mb-6" data-i18n="no_orders_sub">You haven't placed any orders yet.</p>
-            <button onclick="navigateTo('#home')" class="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold" data-i18n="start_shopping">Start Shopping</button>
+            <button onclick="navigateTo('/home')" class="px-6 py-2 bg-primary text-white rounded-lg text-sm font-bold" data-i18n="start_shopping">Start Shopping</button>
         </div>
 
         <!-- Orders List -->
@@ -1253,9 +1253,9 @@ font-weight: bold;
             <div><label class="text-xs font-bold text-gray-600 uppercase" data-i18n="email_or_mobile">Email or Mobile</label><input type="text" id="loginIdentifier" maxlength="50" class="w-full border rounded-lg p-3 mt-1 focus:ring-1 focus:ring-primary outline-none"></div>
             <!-- UPDATED: maxlength="15" -->
             <div><label class="text-xs font-bold text-gray-600 uppercase" data-i18n="password">Password</label><input type="password" id="loginPassword" maxlength="15" class="w-full border rounded-lg p-3 mt-1 focus:ring-1 focus:ring-primary outline-none"></div>
-            <div class="text-right"><button onclick="navigateTo('#forgot-password')" class="text-sm text-primary font-bold" data-i18n="forgot_pass_q">Forgot Password?</button></div>
+            <div class="text-right"><button onclick="navigateTo('/forgot-password')" class="text-sm text-primary font-bold" data-i18n="forgot_pass_q">Forgot Password?</button></div>
             <button onclick="performLogin()" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:opacity-90" data-i18n="login">Login</button>
-            <div class="text-center text-sm"><span data-i18n="no_acc_q">Don't have an account?</span> <button onclick="navigateTo('#register')" class="text-primary font-bold" data-i18n="register">Register</button></div>
+            <div class="text-center text-sm"><span data-i18n="no_acc_q">Don't have an account?</span> <button onclick="navigateTo('/register')" class="text-primary font-bold" data-i18n="register">Register</button></div>
         </div>
     </div>
 </template>
@@ -1296,7 +1296,7 @@ font-weight: bold;
             <!-- END OTP Section -->
 
             <button id="registerBtn" onclick="performRegistration()" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:opacity-90 mt-2" data-i18n="create_acc_btn">Create Account</button>
-            <div class="text-center text-sm"><span data-i18n="already_acc">Already have an account?</span> <button onclick="navigateTo('#login')" class="text-primary font-bold" data-i18n="login">Login</button></div>
+            <div class="text-center text-sm"><span data-i18n="already_acc">Already have an account?</span> <button onclick="navigateTo('/login')" class="text-primary font-bold" data-i18n="login">Login</button></div>
         </div>
     </div>
 </template>
@@ -1981,7 +1981,8 @@ function loadInitialData() {
             document.getElementById('app').classList.remove('hidden');
             document.getElementById('app').classList.add('flex');
 
-            loadRoute(window.location.hash || '#home');
+            const _initPath1 = window.location.pathname + window.location.search;
+loadRoute(_initPath1 || '/home');
             updateCartBadge();
             updateOrderSummary();
             updateUIText();
@@ -2077,7 +2078,8 @@ function loadInitialData() {
                 }
 
                 appData.computedPages = null;
-                loadRoute(window.location.hash || '#home');
+                const _initPath2 = window.location.pathname + window.location.search;
+loadRoute(_initPath2 || '/home');
                 updateCartBadge();
                 updateOrderSummary();
                 updateUIText();
@@ -2264,7 +2266,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ================= ROUTING =================
 function setupEventListeners() {
-    window.addEventListener('hashchange', () => loadRoute(window.location.hash));
+    window.addEventListener('popstate', () => loadRoute(window.location.pathname + window.location.search));
     const searchInput = document.getElementById('searchInput');
     
     if(searchInput) {
@@ -2272,28 +2274,24 @@ function setupEventListeners() {
             const query = e.target.value.trim();
             const keyPressed = e.key;
 
-            // Space বা Enter চাপলে সাথে সাথে সার্চ হবে
             if (keyPressed === ' ' || keyPressed === 'Enter') {
                 clearTimeout(searchTimeout);
                 searchProducts(query);
                 return;
             }
 
-            // কিছু মুছে ফেললে সাথে সাথে রিসেট হবে
             if (query.length === 0) {
                 clearTimeout(searchTimeout);
                 searchProducts(query);
                 return;
             }
 
-            // সাধারণ টাইপিংয়ের জন্য ৩০০ মিলিসেকেন্ড অপেক্ষা করুন
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 searchProducts(query);
             }, 300);
         }); 
         
-        // Enter চাপলে ফর্ম সাবমিট বন্ধ করতে
         searchInput.addEventListener('keydown', (e) => {
             if(e.key === 'Enter') {
                 e.preventDefault();
@@ -2303,10 +2301,9 @@ function setupEventListeners() {
 }
 
 function navigateTo(route) {
-    // ==========================================
-    // ১. স্টোরেজ সেভ করার আগেই চেক করা (পুরাতন লজিক ঠিক আছে)
-    // ==========================================
-    if (route === '#home' && window.location.hash !== '#home') {
+    if (!route.startsWith('/')) route = '/' + route;
+
+    if (route === '/home' && window.location.pathname !== '/home' && window.location.pathname !== '/') {
         appData.forceHomeReset = true;
         try {
             sessionStorage.setItem('homePageNum', 1);
@@ -2315,55 +2312,46 @@ function navigateTo(route) {
         }
     }
     
-    // ==========================================
-    // ২. নেভিগেশন রিলোড লজিক (এখানেই ফিক্স করা হয়েছে)
-    // ==========================================
-    const currentHash = window.location.hash || '#home';
-    const targetHash = route || '#home';
+    const rawCurrent = window.location.pathname + window.location.search;
+    const currentPath = rawCurrent === '/' ? '/home' : rawCurrent;
+    const targetPath = route || '/home';
 
-    if (currentHash === targetHash) {
-        // Trigger Flash Effect
+    if (currentPath === targetPath) {
         const app = document.getElementById('app');
         if(app) {
             app.classList.remove('flash-active');
-            void app.offsetWidth; // trigger reflow
+            void app.offsetWidth;
             app.classList.add('flash-active');
         }
         
-        // ==========================================
-        // ফিক্স: যদি ইউজার আগে থেকেই Home-এ থাকে (যেমন পেজ ২ বা ৩)
-        // এবং আবার Home বাটনে ক্লিক করে, তবে পেজ ১-এ নিয়ে আসুন।
-        // ==========================================
-        if (targetHash === '#home') {
-            appData.allProductsCurrentPage = 1; // পেজ নাম্বার ১ সেট করা
-            appData.forceHomeReset = true;      // রিসেট ফ্ল্যাগ অন করা
+        if (targetPath === '/home') {
+            appData.allProductsCurrentPage = 1;
+            appData.forceHomeReset = true;
             try {
-                sessionStorage.setItem('homePageNum', 1); // স্টোরেজ রিসেট করা
+                sessionStorage.setItem('homePageNum', 1);
             } catch (e) {
                 console.warn("SessionStorage write failed:", e);
             }
-            window.scrollTo(0, 0); // স্ক্রল উপরে নিয়ে আসা
+            window.scrollTo(0, 0);
         }
-        // ==========================================
 
-        // রুট আবার লোড করা
-        loadRoute(targetHash);
-        return; // এখানেই স্টপ করবে, হ্যাশ চেঞ্জ করবে না
+        loadRoute(targetPath);
+        maintainHistoryTrap();
+        return;
     }
-    // ==========================================
 
-    // নরমাল নেভিগেশন (অন্য পেজে যাওয়া)
-    window.location.hash = route;
+    history.pushState({ appState: 'base' }, '', route);
+    history.pushState({ appState: 'trap' }, '', route);
+    loadRoute(route);
 }
 
-function loadRoute(hash) {
-    // ==========================================
-    // FIX: SMART SCROLL RESET (SKIP FOR CHECKOUT RETURN)
-    // ==========================================
+function loadRoute(fullPath) {
+    appData.lastRoute = fullPath;
+
     let skipScrollToTop = false;
-    if (hash.includes('checkout')) {
+    if (fullPath.includes('checkout')) {
         try {
-            const savedScroll = sessionStorage.getItem('scrollPos_' + hash);
+            const savedScroll = sessionStorage.getItem('scrollPos_' + fullPath);
             if (savedScroll && parseInt(savedScroll, 10) > 0) {
                 skipScrollToTop = true;
             }
@@ -2373,28 +2361,15 @@ function loadRoute(hash) {
     if (!skipScrollToTop) {
         window.scrollTo(0, 0);
     }
-    // ==========================================
     instantScrollFix();
-            const [route, queryString] = hash.replace('#', '').split('?');
+            const [route, queryString] = (fullPath.startsWith('/') ? fullPath.substring(1) : fullPath).split('?');
             const params = new URLSearchParams(queryString);
             const content = document.getElementById('content');
             
-            // ==========================================================
-            // FIX FOR SLOW NAVIGATION: UPDATE UI FIRST
-            // ==========================================================
-            // বাটনের কালার পরিবর্তন দ্রুত দেখানোর জন্য 
-            // DOM ক্লিয়ার আগেই updateNavActive কল করা হচ্ছে।
-            // এতে ব্যবহারকারী তাৎক্ষণেই ফিডব্যাক পাবেন।
             updateNavActive(route);
-            // ==========================================================
-
             content.innerHTML = '';
             stopSlider();
 
-            // ==========================================
-            // OPTIMIZED: ONLY CHECK SESSIONSTORAGE IF HOME
-            // ==========================================
-            // স্পিড বাড়াতে আমরা শুধুমাত্র হোম পেজে লোড করার সময় SessionStorage চেক করব।
             if (route === 'home' || route === '') {
                 try {
                     const storedPage = sessionStorage.getItem('homePageNum');
@@ -2405,7 +2380,6 @@ function loadRoute(hash) {
                     console.warn("SessionStorage read failed:", e);
                 }
                 
-                // Check Force Reset
                 if (appData.forceHomeReset) {
                     appData.allProductsCurrentPage = 1;
                     appData.forceHomeReset = false;
@@ -2416,9 +2390,8 @@ function loadRoute(hash) {
                     }
                 }
             }
-            // ==========================================
             
-            appData.currentSelectedVariant = null; // Reset variant selection on nav
+            appData.currentSelectedVariant = null;
 
             switch (route) {
                 case '': loadHomePage(); break;
@@ -2439,12 +2412,6 @@ case 'brand':
                 case 'messages': loadMessagesPage(); break;
                 default: loadHomePage();
             }
-            
-            // ==========================================================
-            // REMOVED: Redundant updateUIText call from end of loadRoute
-            // This was causing slowness on Home page because updateUIText
-            // iterates over DOM elements. Specific page loaders handle it.
-            // ==========================================================
         }
 
         function updateNavActive(route) {
@@ -2721,13 +2688,13 @@ function createOrderCard(order) {
             itemsHtml += `
                 <div class="flex items-start gap-3 border-b border-gray-100 pb-3 last:border-0">
                     <img src="${itemImage}" 
-                         onclick="event.stopPropagation(); navigateTo('#product?id=${item.id}')" 
+                         onclick="event.stopPropagation(); navigateTo('/product?id=${item.id}')" 
                          class="w-14 h-14 rounded-lg object-cover border border-gray-200 bg-gray-50 shrink-0 cursor-pointer hover:opacity-90 hover:scale-105 transition-transform duration-200"
                          loading="lazy" title="View Product Details">
                     
                     <div class="flex-1 flex flex-col justify-between min-w-0">
                         <div class="flex justify-between items-start">
-                            <span onclick="event.stopPropagation(); navigateTo('#product?id=${item.id}')" 
+                            <span onclick="event.stopPropagation(); navigateTo('/product?id=${item.id}')" 
                                   class="font-medium text-sm text-gray-800 leading-tight block cursor-pointer hover:text-primary hover:underline transition-colors">
                    ${escapeHTML(itemName)}${escapeHTML(variantText)}
                             </span>
@@ -3057,7 +3024,7 @@ function createOrderCard(order) {
                         Swal.close();
                         if (res.success) {
                             Swal.fire('Success', 'Registration Successful! Please Login.', 'success').then(() => {
-                                navigateTo('#login');
+                                navigateTo('/login');
                             });
                         } else {
                             Swal.fire('Error', res.error, 'error');
@@ -3506,7 +3473,7 @@ function loadAllProductsSection(pageNum, shouldScrollToTop = true) {
             html += `
                 <div class="col-span-2 w-full my-2">
                     <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
-                         onclick="event.stopPropagation(); navigateTo('#category?name=${encodeURIComponent(group.category)}')">
+                         onclick="event.stopPropagation(); navigateTo('/category?name=${encodeURIComponent(group.category)}')">
                         ${mediaTag}
                     </div>
                 </div>
@@ -3605,35 +3572,30 @@ function renderPaginationControls(currentPage, totalProducts) {
     container.innerHTML = html;
 }
 window.addEventListener('scroll', () => {
-    const currentHash = window.location.hash;
+    const currentPath = window.location.pathname + window.location.search;
 
     // ১. হোম পেজের স্ক্রল সেভ করা
-    if (currentHash === '' || currentHash === '#home') {
+    if (currentPath === '/' || currentPath === '/home') {
         const scrollY = window.scrollY;
         appData.homeScrollPos = scrollY;
         try {
             sessionStorage.setItem('homeScrollPos', scrollY);
         } catch (e) {}
     }
-    // ==========================================
-    // ==========================================
     // ২. ক্যাটাগরি পেজের স্ক্রল সেভ করা
-    // ==========================================
-    else if (currentHash.includes('category')) {
+    else if (currentPath.includes('category') || currentPath.includes('brand')) {
         const scrollY = window.scrollY;
         try {
-            sessionStorage.setItem('scrollPos_' + currentHash, scrollY);
+            sessionStorage.setItem('scrollPos_' + currentPath, scrollY);
         } catch (e) {
             console.warn("SessionStorage error (Category):", e);
         }
     }
-    // ==========================================
-    // ৩. চেকআউট পেজের স্ক্রল সেভ করা (নতুন)
-    // ==========================================
-    else if (currentHash.includes('checkout')) {
+    // ৩. চেকআউট পেজের স্ক্রল সেভ করা
+    else if (currentPath.includes('checkout')) {
         const scrollY = window.scrollY;
         try {
-            sessionStorage.setItem('scrollPos_' + currentHash, scrollY);
+            sessionStorage.setItem('scrollPos_' + currentPath, scrollY);
         } catch (e) {
             console.warn("SessionStorage error (Checkout):", e);
         }
@@ -4323,7 +4285,7 @@ function updateCartPageUI() {
         const savings = (originalPrice > currentPrice) ? (originalPrice - currentPrice) : 0;
 
         return `
-            <div onclick="navigateTo('#product?id=${item.id}')" 
+            <div onclick="navigateTo('/product?id=${item.id}')" 
                  class="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex gap-3 items-center relative group cursor-pointer hover:shadow-md transition-shadow overflow-hidden ${isOOS ? 'opacity-60' : ''}">
                 
                 <!-- ১. চেকবক্স (সবসময় সচল থাকবে) -->
@@ -4558,7 +4520,7 @@ function quickAdd(id) {
         // ১. যদি প্রোডাক্টের ভ্যারিয়েন্ট থাকে:
         // তবে সরাসরি কার্টে না নিয়ে, প্রোডাক্ট ডিটেইলস পেজে নিয়ে যাওয়া হবে
         // যাতে ইউজার কালার বা সাইজ সিলেক্ট করতে পারে।
-        navigateTo(`#product?id=${p.id}`);
+        navigateTo(`/product?id=${p.id}`);
         
         // অপশনাল: ইউজারকে জানানোর জন্য একটি ছোট টোস্ট মেসেজ (চাইলে ব্যবহার করতে পারেন)
         /*
@@ -4662,7 +4624,7 @@ function quickBuyNow(id) {
                         updateOrderSummary();
                         
                         Swal.close(); 
-                        navigateTo('#cart');
+                        navigateTo('/cart');
                     });
                 });
             }
@@ -4702,7 +4664,7 @@ function quickBuyNow(id) {
     updateCartBadge();
     updateOrderSummary();
     
-    navigateTo('#cart');
+    navigateTo('/cart');
 }
 function updateQty(idx, delta) {
     const item = appData.cart[idx];
@@ -4839,7 +4801,7 @@ function buyNow(product, qty = 1) {
         items: [{ item_id: product.id, item_name: product.name, variant: selectedVariantData, quantity: qty }]
     });
 
-    navigateTo('#cart');
+    navigateTo('/cart');
 }
 
         function proceedToCheckout() {
@@ -4857,8 +4819,8 @@ function buyNow(product, qty = 1) {
             confirmButtonColor: appData.settings.themecolor || '#2563eb'
         });
     }
-            if (!appData.user) return Swal.fire({ icon: 'warning', title: t('login_req'), text: t('login_to_continue'), confirmButtonText: t('login') }).then(() => navigateTo('#login'));
-            navigateTo('#checkout');
+            if (!appData.user) return Swal.fire({ icon: 'warning', title: t('login_req'), text: t('login_to_continue'), confirmButtonText: t('login') }).then(() => navigateTo('/login'));
+            navigateTo('/checkout');
         }
 <!-- পরের ভাগ (Part 3) এই লাইনের ঠিক নিচে পেস্ট করুন -->
 <!-- Part 3: Page Loaders, Generators, Footer & Closing Script -->
@@ -4971,7 +4933,7 @@ function stopSlider() {
                 // If cat matches a Main Category exactly, go to Sub-Cat list
                 // If cat matches a Sub-Category exactly, go to Products
                 // Simplest approach: Pass as is, let loadCategoryProducts handle it
-                navigateTo(`#category?name=${encodeURIComponent(cat)}`);
+                navigateTo(`/category?name=${encodeURIComponent(cat)}`);
             }
             else if (url) window.open(url, '_blank');
         }
@@ -4988,7 +4950,7 @@ function stopSlider() {
         let html = cats.map(c => {
             const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
             return `
-            <div onclick="navigateTo('#brand?name=${encodeURIComponent(displayName)})" class="text-center cursor-pointer group">
+            <div onclick="navigateTo('/brand?name=${encodeURIComponent(displayName)})" class="text-center cursor-pointer group">
                 <div class="aspect-square rounded-xl overflow-hidden border border-gray-100 group-hover:border-primary/30 transition">
                     <img src="${c.categoryimageurl}" class="w-full h-full object-cover transform group-hover:scale-110 transition" loading="lazy">
                 </div>
@@ -5043,7 +5005,7 @@ function loadOurBrandSection() {
         // ডাইনামিক রাউট (brand নাকি category)
         slide.onclick = () => {  
             const routeType = c.istop === 'brand' ? 'brand' : 'category';
-            navigateTo(`#${routeType}?name=${encodeURIComponent(displayName)}`);  
+            navigateTo(`/${routeType}?name=${encodeURIComponent(displayName)}`);  
         };  
 
         slide.innerHTML = `  
@@ -5166,7 +5128,7 @@ function loadFeaturedProducts() {
         html += `
             <div class="col-span-2 w-full my-2">
                 <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
-                     onclick="event.stopPropagation(); navigateTo('#category?name=${encodeURIComponent(banner.categoryname)}')">
+                     onclick="event.stopPropagation(); navigateTo('/category?name=${encodeURIComponent(banner.categoryname)}')">
                     ${mediaTag}
                 </div>
             </div>
@@ -5212,7 +5174,7 @@ function loadFeaturedProducts() {
 }
 
             return `
-                <div onclick="navigateTo('#product?id=${p.id}')" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden group cursor-pointer ${isOutOfStock ? 'opacity-70' : ''}">
+                <div onclick="navigateTo('/product?id=${p.id}')" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden group cursor-pointer ${isOutOfStock ? 'opacity-70' : ''}">
                     <div class="relative aspect-square bg-gray-100">
                         <img src="${p.imagemain}" class="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy">
                         ${discount && !isOutOfStock ? `<span class="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">${discount}% OFF</span>` : ''}
@@ -5253,7 +5215,7 @@ function loadFeaturedProducts() {
             container.innerHTML = cats.map(c => {
                 const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
                 return `
-                <div onclick="navigateTo('#category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer">
+                <div onclick="navigateTo('/category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer">
                     <div class="aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm border">
                         <img src="${c.categoryimageurl}" class="w-full h-full object-cover" loading="lazy">
                     </div>
@@ -5268,7 +5230,7 @@ function loadCategoryProducts(rawName) {
     
     let targetScrollY = 0;
     try {
-        const savedScroll = sessionStorage.getItem('scrollPos_' + window.location.hash);
+        const savedScroll = sessionStorage.getItem('scrollPos_' + window.location.pathname + window.location.search);
         if (savedScroll) {
             targetScrollY = parseInt(savedScroll, 10);
         }
@@ -5281,21 +5243,11 @@ function loadCategoryProducts(rawName) {
     const name = normalizeCategoryPath(rawName);
     const displayName = toCategoryTitleCase(name);
 
-    // ==========================================
-    // আপডেটেড লজিক: মূল/প্যারেন্ট ক্যাটাগরির istop চেক করা হচ্ছে
-    // ==========================================
-    // যদি নামে ' > ' থাকে (মানে সাব-ক্যাটাগরি), তবে প্রথম অংশটি আলাদা করা হচ্ছে
     const rootCatName = name.includes(' > ') ? name.split(' > ')[0] : name;
     
-    // এখন শুধু মূল ক্যাটাগরিটি খুঁজে তার istop চেক করা হচ্ছে
     const rootCatObj = appData.categories.find(c => c.categoryname === rootCatName);
-    
-    // মূল ক্যাটাগরি brand হলে isBrand = true
     const isBrand = rootCatObj && rootCatObj.istop === 'brand';
-    
-    // ব্র্যান্ড হলে "Our Brands", না হলে "All Categories"
     const rootLabel = isBrand ? t('our_brands') : t('categories');
-    // ==========================================
 
     const isSubCategory = name.includes(' > ');
 
@@ -5315,9 +5267,9 @@ function loadCategoryProducts(rawName) {
         if(bcContainer) {
             bcContainer.classList.remove('hidden');
             let bcHtml = '';
-            bcHtml += `<button onclick="navigateTo('#categories')" class="hover:text-gray-800">${rootLabel}</button>`;
+            bcHtml += `<button onclick="navigateTo('/categories')" class="hover:text-gray-800">${rootLabel}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
-            bcHtml += `<button onclick="navigateTo('#category?name=${encodeURIComponent(mainCat)}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
+            bcHtml += `<button onclick="navigateTo('/category?name=${encodeURIComponent(mainCat)}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
             bcHtml += `<span class="text-gray-800">${toCategoryTitleCase(subCat)}</span>`;
             bcContainer.innerHTML = bcHtml;
@@ -5344,12 +5296,12 @@ function loadCategoryProducts(rawName) {
             
             subCatContainer.innerHTML = `
                 <div class="text-base font-semibold text-primary flex items-center space-x-2 mb-4 px-1">
-                    <button onclick="navigateTo('#categories')" class="hover:text-gray-800">${rootLabel}</button>
+                    <button onclick="navigateTo('/categories')" class="hover:text-gray-800">${rootLabel}</button>
                     <span class="mx-1 text-gray-400">/</span>
                     <span class="text-gray-800">${displayName}</span>
                 </div>
                 <div class="flex items-center mb-6">
-                    <h1 class="text-2xl font-bold text-gray-800 cursor-pointer" onclick="navigateTo('#categories')">${displayName}</h1>
+                    <h1 class="text-2xl font-bold text-gray-800 cursor-pointer" onclick="navigateTo('/categories')">${displayName}</h1>
                 </div>
                 <div class="grid grid-cols-3 gap-4" id="subCategoriesList"></div>
             `;
@@ -5359,7 +5311,7 @@ function loadCategoryProducts(rawName) {
             const subCats = appData.categories.filter(c => c.categoryname.startsWith(name + ' > '));
             
             document.getElementById('subCategoriesList').innerHTML = subCats.map(c => `
-                <div onclick="navigateTo('#category?name=${encodeURIComponent(c.categoryname)}')" class="text-center cursor-pointer">
+                <div onclick="navigateTo('/category?name=${encodeURIComponent(c.categoryname)}')" class="text-center cursor-pointer">
                     <div class="aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm border">
                         <img src="${c.categoryimageurl}" class="w-full h-full object-cover" loading="lazy">
                     </div>
@@ -5384,7 +5336,7 @@ function loadCategoryProducts(rawName) {
             if(bcContainer) {
                 bcContainer.classList.remove('hidden');
                 let bcHtml = '';
-                bcHtml += `<button onclick="navigateTo('#categories')" class="hover:text-gray-800">${rootLabel}</button>`;
+                bcHtml += `<button onclick="navigateTo('/categories')" class="hover:text-gray-800">${rootLabel}</button>`;
                 bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
                 bcHtml += `<span class="text-gray-800">${displayName}</span>`;
                 bcContainer.innerHTML = bcHtml;
@@ -5751,9 +5703,9 @@ function renderCartCoupons() {
 
         if(headerTextEl) {
             if (appData.language === 'bn') {
-                headerTextEl.innerHTML = `চলতি কুপনসমূহ <span style="font-size: 10px; color: #9ca3af; font-weight: 500;">(লগইন করুন <a href="javascript:void(0)" onclick="event.preventDefault(); navigateTo('#login')" style="color: var(--primary-color); text-decoration: underline; font-weight: 700;">আপনার স্পেশাল কুপন পেতে</a>)</span>`;
+                headerTextEl.innerHTML = `চলতি কুপনসমূহ <span style="font-size: 10px; color: #9ca3af; font-weight: 500;">(লগইন করুন <a href="javascript:void(0)" onclick="event.preventDefault(); navigateTo('/login')" style="color: var(--primary-color); text-decoration: underline; font-weight: 700;">আপনার স্পেশাল কুপন পেতে</a>)</span>`;
             } else {
-                headerTextEl.innerHTML = `Available Coupons <span style="font-size: 9px; color: #9ca3af; font-weight: 500;">(Login for <a href="javascript:void(0)" onclick="event.preventDefault(); navigateTo('#login')" style="color: var(--primary-color); text-decoration: underline; font-weight: 700;">your special coupons</a>)</span>`;
+                headerTextEl.innerHTML = `Available Coupons <span style="font-size: 9px; color: #9ca3af; font-weight: 500;">(Login for <a href="javascript:void(0)" onclick="event.preventDefault(); navigateTo('/login')" style="color: var(--primary-color); text-decoration: underline; font-weight: 700;">your special coupons</a>)</span>`;
             }
         }
         // ==========================================
@@ -6002,7 +5954,7 @@ function createRecCard(product, prefix) {
     const isSelected = appData.cart.some(item => item.id == product.id && item.selected !== false);
     
     return `
-        <div class="rec-new-card" onclick="navigateTo('#product?id=${product.id}')" style="cursor: pointer;">
+        <div class="rec-new-card" onclick="navigateTo('/product?id=${product.id}')" style="cursor: pointer;">
             <img src="${product.imagemain}" class="rec-new-img" loading="lazy" alt="${product.name}" onerror="this.src='https://via.placeholder.com/54?text=Img'">
             <div class="rec-new-info">
                 <div class="rec-new-name">${product.name}</div>
@@ -6077,10 +6029,10 @@ function loadCheckoutPage() {
     // ==========================================
     // FIX: CHECKOUT SCROLL RESTORATION
     // ==========================================
-    const currentHash = window.location.hash;
+    const currentPath = window.location.pathname + window.location.search;
     let targetScrollY = 0;
     try {
-        const savedScroll = sessionStorage.getItem('scrollPos_' + currentHash);
+        const savedScroll = sessionStorage.getItem('scrollPos_' + currentPath);
         if (savedScroll) {
             targetScrollY = parseInt(savedScroll, 10);
         }
@@ -6225,8 +6177,6 @@ function updateCheckoutSummary() {
         const itemTotal = (parseFloat(i.price) * qty).toFixed(2);
         const variantText = i.selectedVariant ? `<span class="text-[10px] text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded ml-1">${i.selectedVariant}</span>` : '';
         const itemImage = i.imagemain || 'https://via.placeholder.com/50?text=No+Img';
-        const productLink = `#product?id=${i.id}`;
-
         return `
             <div class="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
                 
@@ -6359,7 +6309,7 @@ function placeOrder() {
                 confirmButtonColor: appData.settings.themecolor || '#2563eb'
             }).then(() => {
                 updateCartBadge();
-                navigateTo('#home');
+                navigateTo('/home');
             });
             // =================================================
         } 
@@ -6498,7 +6448,7 @@ function handleSessionError() {
             appData.sessionToken = null;
             localStorage.removeItem('user');
             localStorage.removeItem('sessionToken');
-            navigateTo('#login');
+            navigateTo('/login');
         }
     });
 }
@@ -6595,7 +6545,7 @@ function silentPointsRefresh() {
                     
                     localStorage.setItem('user', JSON.stringify(res.user)); 
                     silentPointsRefresh();
-                    navigateTo('#account'); 
+                    navigateTo('/account'); 
                 }
                 else { Swal.fire('Error', res.error, 'error'); }
             }).loginUser(id, pass);
@@ -6661,7 +6611,7 @@ function silentPointsRefresh() {
                         btn.disabled = false;
                         if(res.success) {
                             Swal.fire('Success', t('reset_success') + '! ' + t('please_login'), 'success').then(() => {
-                                navigateTo('#login');
+                                navigateTo('/login');
                             });
                         }
                         else Swal.fire('Error', res.error, 'error'); 
@@ -6752,14 +6702,14 @@ function logout() {
             .performLogout(userEmail);
     }
     
-    navigateTo('#home'); 
+    navigateTo('/home'); 
 }
 // ==========================================
 // ULTIMATE FIX: EXACT SCROLL TO COUPON HEADER
 // ==========================================
 function goToCoupons() {
     // প্রথমে কার্ট পেজে নিয়ে যাও
-    navigateTo('#cart');
+    navigateTo('/cart');
     
     setTimeout(() => {
         const couponHeader = document.querySelector('#cartCouponsSection .cart-section-header');
@@ -6858,7 +6808,7 @@ function openProductInquiry() {
     // ==========================================
     // আপডেট: ইমেজের বদলে প্রোডাক্টের ওয়েবসাইট লিংক নেওয়া হচ্ছে
     // ==========================================
-    const productLink = window.location.origin + window.location.pathname + window.location.hash;
+const productLink = window.location.pathname + window.location.search;
     // ==========================================
 
     const selectedVariant = appData.currentSelectedVariant;
@@ -6932,7 +6882,7 @@ function openProductInquiry() {
     // ==========================================
     // আপডেট: ইমেজের বদলে ক্লিকযোগ্য ওয়েবসাইট লিংক পাঠানো হচ্ছে
     // ==========================================
-    if(productLink && productLink.includes('#product')) {
+    if(productLink && productLink.includes('/product')) {
          msg += `━━━━━━━━━━━━━\n`;
          msg += `🔗 *${linkText}:* \n${productLink}\n`;
     }
@@ -6974,7 +6924,7 @@ function searchProducts(query) {
     if (results.length > 0) {
         container.classList.remove('hidden');
         container.innerHTML = results.map(p => `
-            <div onclick="navigateTo('#product?id=${p.id}'); toggleSearch();" 
+            <div onclick="navigateTo('/product?id=${p.id}'); toggleSearch();" 
                  class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 transition-colors group">
                 <div class="relative w-12 h-12 shrink-0">
                     <img src="${p.imagemain}" 
@@ -7049,7 +6999,7 @@ function initFilterOptions() {
             modal.classList.toggle('hidden');
             if(!modal.classList.contains('hidden')) {
                 if(window.location.hash !== '#home' && window.location.hash !== '') {
-                    navigateTo('#home');
+                    navigateTo('/home');
                 }
             }
         }
@@ -7066,7 +7016,7 @@ function initFilterOptions() {
 
             if (!container) {
                 toggleFilter();
-                navigateTo('#home');
+                navigateTo('/home');
                 return;
             }
 
@@ -7223,7 +7173,7 @@ function initFilterOptions() {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by SafaBox team
+                        <br>Developed by Safa team
                     </div>
                 </div>
             </footer>`;
@@ -7249,7 +7199,7 @@ function initFilterOptions() {
                     confirmButtonText: t('login'),
                     showCancelButton: true
                 }).then((res) => {
-                    if(res.isConfirmed) navigateTo('#login');
+                    if(res.isConfirmed) navigateTo('/login');
                 });
             } else {
                 const link = appData.settings.complaintformlink;
@@ -7605,28 +7555,25 @@ let backPressTimeout;
 
 // ১. স্মার্ট হিস্ট্রি ট্র্যাপ
 function maintainHistoryTrap() {
+    const currentUrl = window.location.pathname + window.location.search;
     if (!window.history.state || window.history.state.appState !== 'trap') {
-        window.history.replaceState({ appState: 'base' }, '', window.location.href);
-        window.history.pushState({ appState: 'trap' }, '', window.location.href);
+        window.history.replaceState({ appState: 'base' }, '', currentUrl);
+        window.history.pushState({ appState: 'trap' }, '', currentUrl);
     }
 }
-
 // ২. ডিপ লিংক এবং রুট গার্ড
 window.addEventListener('load', () => {
-    const currentHash = window.location.hash;
-    if (currentHash && currentHash !== '#home') {
-        const currentUrl = window.location.href;
-        window.history.replaceState({ appState: 'base' }, '', '#home');
-        window.history.pushState({ appState: 'trap' }, '', '#home');
+    const currentPath = window.location.pathname + window.location.search;
+    if (currentPath && currentPath !== '/' && currentPath !== '/home') {
+        const currentUrl = currentPath;
+        window.history.replaceState({ appState: 'base' }, '', '/home');
+        window.history.pushState({ appState: 'trap' }, '', '/home');
         window.history.pushState({ appState: 'base' }, '', currentUrl);
         window.history.pushState({ appState: 'trap' }, '', currentUrl);
     } else {
         maintainHistoryTrap();
     }
 });
-
-window.addEventListener('hashchange', maintainHistoryTrap);
-
 // ৩. মডাল চেক
 function isAnyModalOpen() {
     const isSwalOpen = typeof Swal !== 'undefined' && Swal.isVisible();
@@ -7662,37 +7609,27 @@ function closeAllModals() {
         }
     });
 }
-
-// ৫. মূল নেভিগেশন ও এক্সিট কন্ট্রোল (UNIVERSAL FIX FOR ALL PAGES)
 window.onpopstate = function(event) {
     if (event.state && event.state.appState === 'base') {
         
-        // ক) মডাল প্রায়োরিটি
+        // ক) মডাল প্রায়োরিটি
         if (isAnyModalOpen()) {
             closeAllModals();
-            window.history.pushState({ appState: 'trap' }, '', window.location.href);
+            window.history.pushState({ appState: 'trap' }, '', window.location.pathname + window.location.search);
 
-            // ==========================================
-            // FIX: UNIVERSAL SCROLL RESTORATION
-            // ==========================================
-            // এখান থেকে if (hash === '#home') কন্ডিশনটি সরিয়ে দেওয়া হয়েছে।
-            // appData.homeScrollPos গ্লোবালভাবে আপডেট হয়, তাই এটি প্রোডাক্ট পেজের
-            // সঠিক পজিশনও মনে রাখে। এখন যেকোনো পেজেই মডাল বন্ধ করলে
-            // স্ক্রল জাম্প করবে না।
             const targetY = appData.homeScrollPos || 0;
             window.requestAnimationFrame(() => {
                 window.scrollTo(0, targetY);
             });
-            // ==========================================
             return;
         }
 
-        const currentHash = window.location.hash;
+        const currentPath = window.location.pathname + window.location.search;
 
-        // খ) হোম পেজ এক্সিট লজিক (এই অংশটুকু হোম পেজের জন্য আলাদা থাকছে)
-        if (currentHash === '' || currentHash === '#home') {
+        // খ) হোম পেজ এক্সিট লজিক
+        if (currentPath === '/' || currentPath === '/home') {
             
-            if (appData.lastRoute && appData.lastRoute !== '#home') {
+            if (appData.lastRoute && appData.lastRoute !== '/home' && appData.lastRoute !== '/') {
                 window.location.reload();
                 return;
             }
@@ -7702,7 +7639,6 @@ window.onpopstate = function(event) {
                 return;
             }
 
-            // স্ক্রল পজিশন লোড করা (SessionStorage Priority)
             let savedScrollY = appData.homeScrollPos || 0;
             try {
                 const stored = sessionStorage.getItem('homeScrollPos');
@@ -7710,9 +7646,8 @@ window.onpopstate = function(event) {
             } catch(e){}
 
             backPressCount = 1;
-            window.history.pushState({ appState: 'trap' }, '', window.location.href); 
+            window.history.pushState({ appState: 'trap' }, '', window.location.pathname + window.location.search); 
 
-            // এখানে ডাবল চেক দিয়ে স্ক্রল করা হচ্ছে
             window.requestAnimationFrame(() => {
                 window.scrollTo(0, savedScrollY);
             });
@@ -7759,7 +7694,9 @@ window.onpopstate = function(event) {
         } else {
             // গ) রুট গার্ড
             if (window.history.length <= 2) {
-                window.location.hash = '#home';
+                history.replaceState({ appState: 'base' }, '', '/home');
+                history.pushState({ appState: 'trap' }, '', '/home');
+                loadRoute('/home');
             } else {
                 window.history.back();
             }
