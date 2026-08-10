@@ -2266,7 +2266,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ================= ROUTING =================
 function setupEventListeners() {
-    // window.addEventListener('popstate', () => loadRoute(window.location.pathname + window.location.search));
+    window.addEventListener('popstate', () => loadRoute(window.location.pathname + window.location.search));
     const searchInput = document.getElementById('searchInput');
     
     if(searchInput) {
@@ -7170,7 +7170,7 @@ function initFilterOptions() {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by SafaBoxbd team
+                        <br>Developed by SafaBox team
                     </div>
                 </div>
             </footer>`;
