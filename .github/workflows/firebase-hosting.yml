@@ -1,9 +1,7 @@
 name: Deploy to Firebase Hosting on Push
 on:
   push:
-    branches:
-      - main
-
+    branches: [ main ]
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -11,11 +9,28 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          projectId: safaboxbd # <--- আপনার সঠিক প্রজেক্ট আইডি
-          channelId: live
+      # ==========================================
+      # ✅ নতুন যোগ করা হয়েছে: স্বয়ংক্রিয়ালি Sitemap তৈরি
+      # ==========================================
+      - name: Generate Sitemap from Google Sheets
+        run: |
+          echo "📥 Sitemap ডাউনলোড হচ্ছে..."
+          curl -s "https://script.google.com/macros/s/AKfycbzVVnqM8BRootcSD5xsDrcsFOSMTfWb3KAzlIWHfEXNFdE-NYOzCX8EbyGUGslbQyVs/exec?page=sitemap" -o public/sitemap.xml
           
+          if [ -f "public/sitemap.xml" ]; then
+            echo "✅ সফলভাবে Sitemap তৈরি হয়েছে!"
+            echo "মোট লিংক: $(grep -c '<loc>' public/sitemap.xml)"
+          else
+            echo "❌ Sitemap তৈরি হয়নি। কিছু এরর হয়েছে।"
+          fi
+
+      # ==========================================
+      # আগের যে আপনার ফাইলে যা আছে সেটা রাখুন
+      # ==========================================
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseActions/action@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: safaboxbd
+          channelId: ${{ secrets.FIREBASE_CHANNEL_ID }}
