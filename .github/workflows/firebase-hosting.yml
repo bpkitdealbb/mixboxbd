@@ -1,34 +1,39 @@
-name: Deploy to Firebase Hosting on Push
+name: Build & Deploy to Firebase
 on:
   push:
     branches: [ main ]
 jobs:
-  build_and_deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       # ==========================================
-      # ✅ নতুন যোগ করা হয়েছে: স্বয়ংক্রিয়ালি Sitemap তৈরি
+      # নতুন যোগ করা হয়েছে: প্রোডাক্ট আপডেট হলে Sitemap অটো আপডেট হবে
       # ==========================================
-      - name: Generate Sitemap from Google Sheets
+      - name: Generate Sitemap
         run: |
-          echo "📥 Sitemap ডাউনলোড হচ্ছে..."
-          curl -s "https://script.google.com/macros/s/AKfycbzVVnqM8BRootcSD5xsDrcsFOSMTfWb3KAzlIWHfEXNFdE-NYOzCX8EbyGUGslbQyVs/exec?page=sitemap" -o public/sitemap.xml
+          echo "🔄 Fetching latest sitemap from Google Apps Script..."
           
+          # ৩০ সেকেন্ডের টাইমআউট দেওয়া হয়েছে (Google Apps Script কিছুটা স্লো হতে পারতে পারে)
+          curl -s --max-time 30 "https://script.google.com/macros/s/AKfycbzVVnqM8BRootcSD5xsDrcsFOSMTfWb3KAzlIWHfEXNFdE-NYOzCX8EbyGUGslbQyVs/exec?page=sitemap" -o public/sitemap.xml
+          
+          # চেক করা হচ্ছে ফাইল ঠিক মতো এসেছে কিনা
           if [ -f "public/sitemap.xml" ]; then
-            echo "✅ সফলভাবে Sitemap তৈরি হয়েছে!"
-            echo "মোট লিংক: $(grep -c '<loc>' public/sitemap.xml)"
+            echo "✅ Sitemap downloaded successfully!"
+            echo "📊 Total URLs found: $(grep -c '<loc>' public/sitemap.xml)"
           else
-            echo "❌ Sitemap তৈরি হয়নি। কিছু এরর হয়েছে।"
+            echo "⚠️ Failed to download sitemap. Deploying without sitemap update..."
           fi
 
-      # 🔥 Deploy স্টেপ এখানেই আছে থাকবে ঠিক আছে
-      - name: Deploy to Firebase Hosting
+      # ==========================================
+      # Firebase-এ ডিপ্লয় করা হচ্ছে
+      # ==========================================
+      - name: Deploy to Firebase
         uses: FirebaseActions/action@v0
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: safaboxbd
-          channelId: ${{ secrets.FIREBASE_CHANNEL_ID }}
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: firebase deploy --only hosting --project safaboxbd
