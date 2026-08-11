@@ -24,7 +24,8 @@ jobs:
             echo "❌ Sitemap তৈরি হয়নি। কিছু এরর হয়েছে।"
           fi
 
-      - name: Deploy to Firebase Hosting on Push
+      # 🔥 Deploy স্টেপ এখানেই আছে থাকবে ঠিক আছে
+      - name: Deploy to Firebase Hosting
         uses: FirebaseActions/action@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
