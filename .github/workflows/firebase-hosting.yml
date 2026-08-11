@@ -32,5 +32,5 @@ jobs:
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: safaboxbd
+          projectId: safaboxbd //id
           channelId: ${{ secrets.FIREBASE_CHANNEL_ID }}
