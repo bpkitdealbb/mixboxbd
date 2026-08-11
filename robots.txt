@@ -1,3 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /my-orders
+
 Sitemap: https://safaboxbd.web.app/sitemap.xml
