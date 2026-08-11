@@ -1530,6 +1530,125 @@ function escapeHTML(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+// ==========================================
+// DYNAMIC SEO: Meta Tags & Schema Generator
+// ==========================================
+const SEO_BASE_URL = 'https://safaboxbd.web.app';
+const SEO_SITE_NAME = 'SafaBoxbd';
+
+function stripHtml(html) {
+    if (!html) return '';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return (tmp.textContent || tmp.innerText || '').trim();
+}
+
+function seoSetMeta(attr, content) {
+    if (!content) return;
+    let el = document.querySelector(`meta[property="${attr}"]`) || 
+             document.querySelector(`meta[name="${attr}"]`);
+    if (el) { el.setAttribute('content', content); return; }
+    el = document.createElement('meta');
+    if (attr.startsWith('og:') || attr.startsWith('twitter:')) el.setAttribute('property', attr);
+    else el.setAttribute('name', attr);
+    el.setAttribute('content', content);
+    document.head.appendChild(el);
+}
+
+function seoSetCanonical(url) {
+    let el = document.querySelector('link[rel="canonical"]');
+    if (el) { el.setAttribute('href', url); return; }
+    el = document.createElement('link');
+    el.setAttribute('rel', 'canonical');
+    el.setAttribute('href', url);
+    document.head.appendChild(el);
+}
+
+function seoInjectLd(id, data) {
+    const old = document.getElementById(id);
+    if (old) old.remove();
+    const s = document.createElement('script');
+    s.type = 'application/ld+json';
+    s.id = id;
+    s.textContent = JSON.stringify(data);
+    document.head.appendChild(s);
+}
+
+function seoRemoveLd(id) {
+    const old = document.getElementById(id);
+    if (old) old.remove();
+}
+
+function updatePageMeta(cfg) {
+    const title = cfg.title || SEO_SITE_NAME + ' | সাশ্রয়ী মূল্যে ট্রেন্ডি ভ্যারাইটি পণ্যের অনলাইন শপ';
+    const desc = cfg.description || 'আমরা ইনসাফ ভিত্তিক ব্যবসা পরিচালনায় সদা সচেষ্ট। সাশ্রয়ী মূল্যে মানসম্পন্ন ট্রেন্ডি ভ্যারাইটি পণ্য পেতে এখনই ভিজিট করুন আমাদের ওয়েব অ্যাপ।';
+    const url = cfg.url || SEO_BASE_URL + '/';
+    const img = cfg.image || 'https://res.cloudinary.com/dkowkawiq/image/upload/q_auto,w_1200,h_630,c_fill,g_auto/v1784559589/20260720_202236_kyexpx.png';
+
+    document.title = title;
+    seoSetMeta('description', desc);
+    seoSetMeta('og:type', cfg.ogType || 'website');
+    seoSetMeta('og:title', title);
+    seoSetMeta('og:description', desc.substring(0, 200));
+    seoSetMeta('og:url', url);
+    seoSetMeta('og:image', img);
+    seoSetMeta('og:site_name', SEO_SITE_NAME);
+    seoSetMeta('og:locale', 'bn_BD');
+    seoSetMeta('twitter:card', 'summary_large_image');
+    seoSetMeta('twitter:title', title);
+    seoSetMeta('twitter:description', desc.substring(0, 200));
+    seoSetMeta('twitter:image', img);
+    seoSetCanonical(url);
+
+    // NoIndex
+    let robotsEl = document.querySelector('meta[name="robots"]');
+    if (cfg.noIndex) {
+        if (!robotsEl) { robotsEl = document.createElement('meta'); robotsEl.setAttribute('name', 'robots'); document.head.appendChild(robotsEl); }
+        robotsEl.setAttribute('content', 'noindex, nofollow');
+    } else if (robotsEl) { robotsEl.remove(); }
+
+    // Schema inject
+    if (cfg.schema) { Object.entries(cfg.schema).forEach(([k,v]) => seoInjectLd(k, v)); }
+    ['ld-product','ld-breadcrumb'].forEach(id => { if (!cfg.schema || !cfg.schema[id]) seoRemoveLd(id); });
+}
+
+function seoProductSchema(p) {
+    const price = parseFloat(p.discountprice || p.price);
+    const reviews = (appData.reviews || []).filter(r => r.productid == p.id && r.status === 'approved');
+    const schema = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": p.name,
+        "image": [p.imagemain, p.image2, p.image3, p.image4, p.image5].filter(Boolean),
+        "description": stripHtml(p.description) || p.name,
+        "sku": String(p.id),
+        "brand": { "@type": "Brand", "name": SEO_SITE_NAME },
+        "offers": {
+            "@type": "Offer",
+            "url": SEO_BASE_URL + '/product?id=' + p.id,
+            "priceCurrency": "BDT",
+            "price": price.toFixed(2),
+            "availability": p.totalstock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            "seller": { "@type": "Organization", "name": SEO_SITE_NAME }
+        }
+    };
+    if (reviews.length > 0) {
+        const avg = reviews.reduce((s,r) => s + r.rating, 0) / reviews.length;
+        schema.aggregateRating = { "@type": "AggregateRating", "ratingValue": avg.toFixed(1), "reviewCount": reviews.length, "bestRating": "5", "worstRating": "1" };
+    }
+    return schema;
+}
+
+function seoBreadcrumbSchema(items) {
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": items.map((item, i) => ({
+            "@type": "ListItem", "position": i + 1, "name": item.name,
+            ...(item.url ? { item: item.url } : {})
+        }))
+    };
+}
         // ============================================================
         // TRANSLATION SNIPPET (UPDATED WITH NEW KEYS)
         // ============================================================
@@ -4826,6 +4945,13 @@ function buyNow(product, qty = 1) {
 <!-- Part 3: Page Loaders, Generators, Footer & Closing Script -->
         // ================= PAGE LOADERS =================
         function loadHomePage() {
+            // DYNAMIC SEO: Home Meta
+    updatePageMeta({
+        title: SEO_SITE_NAME + ' | সাশ্রয়ী মূল্যে ট্রেন্ডি ভ্যারাইটি পণ্যের অনলাইন শপ',
+        description: appData.settings.slogan || 'আমরা ইনসাফ ভিত্তিক ব্যবসা পরিচালনায় সদা সচেষ্ট। সাশ্রয়ী মূল্যে মানসম্পন্ন ট্রেন্ডি ভ্যারাইটি পণ্য পেতে এখনই ভিজিট করুন আমাদের ওয়েব অ্যাপ।',
+        url: SEO_BASE_URL + '/',
+        image: appData.settings.sitelogo || undefined
+    });
             loadTemplate('homeTemplate');
 loadHeroSlider();
 loadTopCategories();
@@ -5201,6 +5327,12 @@ function loadFeaturedProducts() {
         }
 
         function loadCategoriesPage() {
+            // DYNAMIC SEO: All Categories Meta
+    updatePageMeta({
+        title: 'সকল ক্যাটাগরি - ' + SEO_SITE_NAME,
+        description: 'সাশ্রয়ী মূল্যে মানসম্পন্ন পণ্যের সকল ক্যাটাগরি দেখুন ' + SEO_SITE_NAME + '-এ',
+        url: SEO_BASE_URL + '/categories'
+    });
     window.scrollTo(0, 0);
             loadTemplate('categoriesTemplate');
             const container = document.getElementById('allCategories');
@@ -5248,7 +5380,20 @@ function loadCategoryProducts(rawName) {
     const rootCatObj = appData.categories.find(c => c.categoryname === rootCatName);
     const isBrand = rootCatObj && rootCatObj.istop === 'brand';
     const rootLabel = isBrand ? t('our_brands') : t('categories');
-
+    // DYNAMIC SEO: Category Meta
+    updatePageMeta({
+        title: displayName + ' - ' + SEO_SITE_NAME,
+        description: displayName + ' - সাশ্রয়ী মূল্যে সেরা পণ্যসমূহ পান ' + SEO_SITE_NAME + '-এ',
+        url: SEO_BASE_URL + '/category?name=' + encodeURIComponent(rawName),
+        image: rootCatObj ? rootCatObj.categoryimageurl : undefined,
+        schema: {
+            'ld-breadcrumb': seoBreadcrumbSchema([
+                { name: 'Home', url: SEO_BASE_URL + '/' },
+                { name: rootLabel },
+                { name: displayName }
+            ])
+        }
+    });
     const isSubCategory = name.includes(' > ');
 
     if (isSubCategory) {
@@ -5502,6 +5647,24 @@ function loadProductDetails(id) {
     
     addToCartBtn.onclick = () => addToCart(p, qty);
     stickyBuyNowBtn.onclick = () => buyNow(p, qty);
+        // ==========================================
+    // DYNAMIC SEO: Product Meta & Schema
+    // ==========================================
+    updatePageMeta({
+        title: p.name + ' - ' + SEO_SITE_NAME,
+        description: stripHtml(p.description || p.name).substring(0, 160),
+        url: SEO_BASE_URL + '/product?id=' + p.id,
+        image: p.imagemain,
+        ogType: 'product',
+        schema: {
+            'ld-product': seoProductSchema(p),
+            'ld-breadcrumb': seoBreadcrumbSchema([
+                { name: 'Home', url: SEO_BASE_URL + '/' },
+                { name: toCategoryTitleCase(p.category.split(' > ')[0]), url: SEO_BASE_URL + '/category?name=' + encodeURIComponent(p.category.split(' > ')[0]) },
+                { name: p.name }
+            ])
+        }
+    });
     // === NEW: FACEBOOK PIXEL EVENT (ViewContent) ===
     const viewEventId = generateEventId(); // একবারই আইডি তৈরি করুন
 
