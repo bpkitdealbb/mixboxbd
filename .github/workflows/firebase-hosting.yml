@@ -1,39 +1,20 @@
-name: Build & Deploy to Firebase
+name: Deploy to Firebase Hosting on Push
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ==========================================
-      # নতুন যোগ করা হয়েছে: প্রোডাক্ট আপডেট হলে Sitemap অটো আপডেট হবে
-      # ==========================================
-      - name: Generate Sitemap
-        run: |
-          echo "🔄 Fetching latest sitemap from Google Apps Script..."
-          
-          # ৩০ সেকেন্ডের টাইমআউট দেওয়া হয়েছে (Google Apps Script কিছুটা স্লো হতে পারতে পারে)
-          curl -s --max-time 30 "https://script.google.com/macros/s/AKfycbzVVnqM8BRootcSD5xsDrcsFOSMTfWb3KAzlIWHfEXNFdE-NYOzCX8EbyGUGslbQyVs/exec?page=sitemap" -o public/sitemap.xml
-          
-          # চেক করা হচ্ছে ফাইল ঠিক মতো এসেছে কিনা
-          if [ -f "public/sitemap.xml" ]; then
-            echo "✅ Sitemap downloaded successfully!"
-            echo "📊 Total URLs found: $(grep -c '<loc>' public/sitemap.xml)"
-          else
-            echo "⚠️ Failed to download sitemap. Deploying without sitemap update..."
-          fi
-
-      # ==========================================
-      # Firebase-এ ডিপ্লয় করা হচ্ছে
-      # ==========================================
-      - name: Deploy to Firebase
-        uses: FirebaseActions/action@v0
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          projectId: safaboxbd
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: firebase deploy --only hosting --project safaboxbd
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: safaboxbd # <--- আপনার সঠিক প্রজেক্ট আইডি
+          channelId: live
