@@ -2160,7 +2160,7 @@ loadRoute(_initPath1 || '/home');
 // সার্ভার থেকে লাইভ ডাটা আনা (প্রথমে ফাস্ট স্ট্যাটিক JSON, ব্যর্থ হলে GAS ফলব্যাক)
 const timestamp = new Date().getTime();
 
-fetch('/data.json?t=' + timestamp)
+fetch('./data.json?t=' + timestamp)
     .then(res => {
         if (res.ok) return res.json();
         // ব্যাকআপ: স্ট্যাটিক ফাইল না পেলে স্লো GAS সার্ভারে চেষ্টা করবে
