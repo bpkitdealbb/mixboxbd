@@ -2167,52 +2167,56 @@ fetch('./data.json?t=' + timestamp)
         return fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
             .then(response => response.json());
     })
-    .then(res => {
-        clearAllDataTimeouts();
+.then(res => {
+    clearAllDataTimeouts();
 
-        if (res.success) {
-            const serverVersion = res.serverVersion;
+    if (res.success) {
+        // 💡 যদি res.data থাকে তবে সেটাই নেবে, না থাকলে সরাসরি res কে ডাটা হিসেবে ধরে নেবে
+        const actualData = res.data ? res.data : res;
 
-            if (localVersion && localVersion === serverVersion && cachedDataStr) {
-                return;
-            }
+        const serverVersion = res.serverVersion || actualData.serverVersion;
 
-            localStorage.setItem('cached_app_data', JSON.stringify(res.data));
-            if (res.data.products) generateProductDetailsCache(res.data.products);
-            localStorage.setItem('local_data_version', serverVersion);
-
-            appData.settings = res.data.settings;
-            appData.categories = res.data.categories;
-            appData.products = res.data.products;
-            const _hf2 = ['image2','image3','image4','image5','videourl','description'];
-            appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
-            appData.banners = res.data.banners;
-            appData.locations = res.data.locations;
-            appData.socialMedia = res.data.socialMedia;
-            appData.policies = res.data.policies;
-            appData.popups = res.data.popups;
-            appData.coupons = res.data.coupons || [];
-            appData.reviews = res.data.reviews;
-
-            updateDOMWithSettings(appData.settings);
-
-            if (!cachedDataStr) {
-                document.getElementById('skeletonLoader').classList.add('hidden');
-                document.getElementById('app').classList.remove('hidden');
-                document.getElementById('app').classList.add('flex');
-            }
-
-            appData.computedPages = null;
-            const _initPath2 = window.location.pathname + window.location.search;
-            loadRoute(_initPath2 || '/home');
-            updateCartBadge();
-            updateOrderSummary();
-            updateUIText();
-            syncCartWithLivePrices();
-            initFilterOptions();
-            initPopupSystem();
+        if (localVersion && localVersion === serverVersion && cachedDataStr) {
+            return;
         }
-    })
+
+        localStorage.setItem('cached_app_data', JSON.stringify(actualData));
+        if (actualData.products) generateProductDetailsCache(actualData.products);
+        localStorage.setItem('local_data_version', serverVersion);
+
+        appData.settings = actualData.settings;
+        appData.categories = actualData.categories;
+        appData.products = actualData.products || [];
+        const _hf2 = ['image2','image3','image4','image5','videourl','description'];
+        appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
+        appData.banners = actualData.banners;
+        appData.locations = actualData.locations;
+        appData.socialMedia = actualData.socialMedia;
+        appData.policies = actualData.policies;
+        appData.popups = actualData.popups;
+        appData.coupons = actualData.coupons || [];
+        appData.reviews = actualData.reviews;
+
+        updateDOMWithSettings(appData.settings);
+
+        if (!cachedDataStr) {
+            document.getElementById('skeletonLoader').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            document.getElementById('app').classList.add('flex');
+        }
+
+        appData.computedPages = null;
+        const _initPath2 = window.location.pathname + window.location.search;
+        loadRoute(_initPath2 || '/home');
+        updateCartBadge();
+        updateOrderSummary();
+        updateUIText();
+        syncCartWithLivePrices();
+        initFilterOptions();
+        initPopupSystem();
+    }
+})
+
     .catch(err => {
         clearAllDataTimeouts();
         console.error(err);
