@@ -3,7 +3,11 @@ name: Sync E-commerce Data
 on:
   schedule:
     - cron: '0 * * * *' # প্রতি ১ ঘণ্টায় অটো রান হবে
-  workflow_dispatch: # হাত দিয়ে ম্যানুয়ালি রান করার বোতাম
+  workflow_dispatch: # ম্যানুয়ালি রান করার বোতাম
+
+# 🔑 গিট পুশ করার পারমিশন দেওয়া হলো
+permissions:
+  contents: write
 
 jobs:
   sync-and-deploy:
@@ -28,6 +32,7 @@ jobs:
           git add public/data.json
           git commit -m "chore: auto-update data.json" || exit 0
           git push
+
       # ৪. ফায়ারবেসে ডিপ্লয় করা
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
