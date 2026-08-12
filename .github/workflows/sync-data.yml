@@ -16,13 +16,12 @@ jobs:
       # ১. রিপোজিটরি ক্লোন করা
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      # ২. GAS থেকে ডেটা এনে সরাসরি রুট ফোল্ডারে data.json সেভ করা
+      # ২. GAS থেকে ডেটা এনে data.json এ সেভ করা (action=getInitialData সহ)
       - name: Fetch Data from GAS
         run: |
-          curl -sL "${{ secrets.GAS_URL }}" -o data.json
+          curl -sL "${{ secrets.GAS_URL }}?action=getInitialData" -o data.json
           echo "✅ Data fetched successfully"
-
+          
       # ৩. গিট-এ কমিট ও পুশ করা
       - name: Commit and Push
         run: |
