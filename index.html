@@ -2062,7 +2062,6 @@ function hideSlowLoadingWarning() {
     loadingIndicatorShown = false;
 }
 
-
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
     const localVersion = localStorage.getItem('local_data_version');
@@ -2076,15 +2075,17 @@ function loadInitialData() {
         hideSlowLoadingWarning();
     }
 
-    // পেজ দ্রুত লোড করার জন্য প্রথমে ক্যাশ থেকে রেন্ডার
+    // ১. ক্যাশ ডাটা থেকে UI দ্রুত রেন্ডার করা
     if (cachedDataStr) {
         try {
             const data = JSON.parse(cachedDataStr);
             appData.settings = data.settings;
-            appData.categories = data.categories;
-            appData.products = data.products;
+            appData.categories = (data.categories || []).filter(c => c.categoryname && c.categoryname.trim() !== '');
+            appData.products = data.products || [];
+            
             const _hf1 = ['image2','image3','image4','image5','videourl','description'];
             appData.products = appData.products.map(p => { const l = {...p}; _hf1.forEach(f => delete l[f]); return l; });
+            
             appData.banners = data.banners;
             appData.locations = data.locations;
             appData.socialMedia = data.socialMedia;
@@ -2094,14 +2095,14 @@ function loadInitialData() {
             appData.reviews = data.reviews;
 
             if (data.products) generateProductDetailsCache(data.products);
-            updateDOMWithSettings(appData.settings);
+            if (appData.settings) updateDOMWithSettings(appData.settings);
 
-            document.getElementById('skeletonLoader').classList.add('hidden');
-            document.getElementById('app').classList.remove('hidden');
-            document.getElementById('app').classList.add('flex');
+            document.getElementById('skeletonLoader')?.classList.add('hidden');
+            document.getElementById('app')?.classList.remove('hidden');
+            document.getElementById('app')?.classList.add('flex');
 
             const _initPath1 = window.location.pathname + window.location.search;
-loadRoute(_initPath1 || '/home');
+            loadRoute(_initPath1 || '/home');
             updateCartBadge();
             updateOrderSummary();
             updateUIText();
@@ -2114,14 +2115,10 @@ loadRoute(_initPath1 || '/home');
         }
     }
 
-    // ==========================================
-    // ক্যাশ না থাকলে তাৎক্ষণিক টোস্ট ও টাইমার
-    // ==========================================
+    // ২. ক্যাশ না থাকলে টোস্ট ও টাইমআউট সেট করা
     if (!cachedDataStr) {
-        // প্রথম মেসেজ — একদম ফিক্সড, কোনো মুভমেন্ট নেই
         showLoadingToast("Loading SafaBoxBD web app...");
 
-        // ৩ সেকেন্ড পর সাব-মেসেজ স্মুথলি যুক্ত হবে (বক্স নড়বে না, শুধু নিচে লাইন বাড়বে)
         slowToastTimeoutId = setTimeout(function() {
             const skeleton = document.getElementById('skeletonLoader');
             if (skeleton && !skeleton.classList.contains('hidden')) {
@@ -2132,7 +2129,6 @@ loadRoute(_initPath1 || '/home');
             }
         }, 3000);
 
-        // ২০ সেকেন্ড হার্ড টাইমআউট
         initTimeoutId = setTimeout(function() {
             clearAllDataTimeouts();
             const skeleton = document.getElementById('skeletonLoader');
@@ -2157,92 +2153,97 @@ loadRoute(_initPath1 || '/home');
         }, 20000);
     }
 
-// সার্ভার থেকে লাইভ ডাটা আনা (প্রথমে ফাস্ট স্ট্যাটিক JSON, ব্যর্থ হলে GAS ফলব্যাক)
-const timestamp = new Date().getTime();
+    // ৩. লাইভ ডাটা ফেচিং (Static JSON -> GAS Fallback)
+    const timestamp = new Date().getTime();
 
-fetch('./data.json?t=' + timestamp)
-    .then(res => {
-        if (res.ok) return res.json();
-        // ব্যাকআপ: স্ট্যাটিক ফাইল না পেলে স্লো GAS সার্ভারে চেষ্টা করবে
-        return fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
-            .then(response => response.json());
-    })
-.then(res => {
-    clearAllDataTimeouts();
+    fetch('./data.json?t=' + timestamp)
+        .then(res => {
+            if (res.ok) return res.json();
+            return fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
+                .then(response => response.json());
+        })
+        .then(res => {
+            clearAllDataTimeouts();
 
-    if (res.success) {
-        // 💡 যদি res.data থাকে তবে সেটাই নেবে, না থাকলে সরাসরি res কে ডাটা হিসেবে ধরে নেবে
-        const actualData = res.data ? res.data : res;
+            // 💡 সমাধান ১: res.success না থাকলেও যদি সরাসরি JSON ডাটা আসে তা গ্রহণ করা
+            if (res.success || res.products || res.settings) {
+                const actualData = res.data ? res.data : res;
+                const serverVersion = res.serverVersion || actualData.serverVersion;
 
-        const serverVersion = res.serverVersion || actualData.serverVersion;
+                // 💡 সমাধান ২: ভার্সন ম্যাচ করলে স্কেলিটন সরিয়ে নেওয়া নিশ্চিত করা
+                if (localVersion && localVersion === serverVersion && cachedDataStr) {
+                    document.getElementById('skeletonLoader')?.classList.add('hidden');
+                    document.getElementById('app')?.classList.remove('hidden');
+                    return;
+                }
 
-        if (localVersion && localVersion === serverVersion && cachedDataStr) {
-            return;
-        }
+                localStorage.setItem('cached_app_data', JSON.stringify(actualData));
+                if (actualData.products) generateProductDetailsCache(actualData.products);
+                if (serverVersion) localStorage.setItem('local_data_version', serverVersion);
 
-        localStorage.setItem('cached_app_data', JSON.stringify(actualData));
-        if (actualData.products) generateProductDetailsCache(actualData.products);
-        localStorage.setItem('local_data_version', serverVersion);
+                appData.settings = actualData.settings;
+                // 💡 সমাধান ৪: খালি ক্যাটাগরি বাদ দেওয়া
+                appData.categories = (actualData.categories || []).filter(c => c.categoryname && c.categoryname.trim() !== '');
+                appData.products = actualData.products || [];
+                
+                const _hf2 = ['image2','image3','image4','image5','videourl','description'];
+                appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
+                
+                appData.banners = actualData.banners;
+                appData.locations = actualData.locations;
+                appData.socialMedia = actualData.socialMedia;
+                appData.policies = actualData.policies;
+                appData.popups = actualData.popups;
+                appData.coupons = actualData.coupons || [];
+                appData.reviews = actualData.reviews;
 
-        appData.settings = actualData.settings;
-        appData.categories = actualData.categories;
-        appData.products = actualData.products || [];
-        const _hf2 = ['image2','image3','image4','image5','videourl','description'];
-        appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
-        appData.banners = actualData.banners;
-        appData.locations = actualData.locations;
-        appData.socialMedia = actualData.socialMedia;
-        appData.policies = actualData.policies;
-        appData.popups = actualData.popups;
-        appData.coupons = actualData.coupons || [];
-        appData.reviews = actualData.reviews;
+                if (appData.settings) updateDOMWithSettings(appData.settings);
 
-        updateDOMWithSettings(appData.settings);
+                // স্কেলিটন হাইড করা
+                document.getElementById('skeletonLoader')?.classList.add('hidden');
+                document.getElementById('app')?.classList.remove('hidden');
+                document.getElementById('app')?.classList.add('flex');
 
-        if (!cachedDataStr) {
-            document.getElementById('skeletonLoader').classList.add('hidden');
-            document.getElementById('app').classList.remove('hidden');
-            document.getElementById('app').classList.add('flex');
-        }
-
-        appData.computedPages = null;
-        const _initPath2 = window.location.pathname + window.location.search;
-        loadRoute(_initPath2 || '/home');
-        updateCartBadge();
-        updateOrderSummary();
-        updateUIText();
-        syncCartWithLivePrices();
-        initFilterOptions();
-        initPopupSystem();
-    }
-})
-
-    .catch(err => {
-        clearAllDataTimeouts();
-        console.error(err);
-
-        if (!cachedDataStr) {
-            const skeleton = document.getElementById('skeletonLoader');
-            const app = document.getElementById('app');
-
-            if (skeleton && !skeleton.classList.contains('hidden')) {
-                skeleton.classList.add('hidden');
-                app.classList.remove('hidden');
-                app.classList.add('flex');
-
-                document.getElementById('content').innerHTML = `
-                    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
-                        <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
-                        <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সমস্যা হচ্ছে</h2>
-                        <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
-                        <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
-                            <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
-                        </button>
-                    </div>
-                `;
+                appData.computedPages = null;
+                const _initPath2 = window.location.pathname + window.location.search;
+                loadRoute(_initPath2 || '/home');
+                updateCartBadge();
+                updateOrderSummary();
+                updateUIText();
+                syncCartWithLivePrices();
+                initFilterOptions();
+                initPopupSystem();
+            } else {
+                throw new Error("Invalid data format received");
             }
-        }
-    });
+        })
+        .catch(err => {
+            clearAllDataTimeouts();
+            console.error("Data fetch error:", err);
+
+            if (!cachedDataStr) {
+                const skeleton = document.getElementById('skeletonLoader');
+                const app = document.getElementById('app');
+
+                if (skeleton && !skeleton.classList.contains('hidden')) {
+                    skeleton.classList.add('hidden');
+                    app.classList.remove('hidden');
+                    app.classList.add('flex');
+
+                    document.getElementById('content').innerHTML = `
+                        <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
+                            <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
+                            <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সমস্যা হচ্ছে</h2>
+                            <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                            <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
+                                <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        });
+}
 
 function updateDOMWithSettings(settings) {
     if(!settings) return;
