@@ -1,0 +1,39 @@
+name: Sync E-commerce Data
+
+on:
+  schedule:
+    - cron: '0 * * * *' # প্রতি ১ ঘণ্টায় অটো রান হবে
+  workflow_dispatch: # হাত দিয়ে ম্যানুয়ালি রান করার বোতাম
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # ১. রিপোজিটরি ক্লোন করা
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ২. GAS থেকে ডেটা এনে public/data.json এ সেভ করা
+      - name: Fetch Data from GAS
+        run: |
+          mkdir -p public
+          curl -sL "${{ secrets.GAS_URL }}" -o public/data.json
+          echo "✅ Data fetched successfully"
+
+      # ৩. গিট-এ কমিট ও পুশ করা
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data.json
+          git commit -m "chore: auto-update data.json" || exit 0
+          git push
+      # ৪. ফায়ারবেসে ডিপ্লয় করা
+      - name: Deploy to Firebase
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          channelId: live
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          
