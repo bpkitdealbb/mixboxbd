@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
 <link rel="preconnect" href="https://script.google.com" crossorigin>
-<meta name="google-site-verification" content="4vqcWKm7VZ1GuFimhLIMmqigFXlKsko44RKabg_nOaQ" />
+<meta name="google-site-verification" content="yHp-0_G2el853pU5DenVxHAp743vJTPdicmY2CnbHqA" />
 <!-- Meta Pixel Code -->
 <script>
 !function(f,b,e,v,n,t,s)
@@ -2157,83 +2157,89 @@ loadRoute(_initPath1 || '/home');
         }, 20000);
     }
 
-    // সার্ভার থেকে লাইভ ডাটা আনা
-    const timestamp = new Date().getTime();
-    fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
-        .then(response => response.json())
-        .then(res => {
-            clearAllDataTimeouts();
+// সার্ভার থেকে লাইভ ডাটা আনা (প্রথমে ফাস্ট স্ট্যাটিক JSON, ব্যর্থ হলে GAS ফলব্যাক)
+const timestamp = new Date().getTime();
 
-            if (res.success) {
-                const serverVersion = res.serverVersion;
+fetch('/data.json?t=' + timestamp)
+    .then(res => {
+        if (res.ok) return res.json();
+        // ব্যাকআপ: স্ট্যাটিক ফাইল না পেলে স্লো GAS সার্ভারে চেষ্টা করবে
+        return fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
+            .then(response => response.json());
+    })
+    .then(res => {
+        clearAllDataTimeouts();
 
-                if (localVersion && localVersion === serverVersion && cachedDataStr) {
-                    return;
-                }
+        if (res.success) {
+            const serverVersion = res.serverVersion;
 
-                localStorage.setItem('cached_app_data', JSON.stringify(res.data));
-                if (res.data.products) generateProductDetailsCache(res.data.products);
-                localStorage.setItem('local_data_version', serverVersion);
-
-                appData.settings = res.data.settings;
-                appData.categories = res.data.categories;
-                appData.products = res.data.products;
-                const _hf2 = ['image2','image3','image4','image5','videourl','description'];
-                appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
-                appData.banners = res.data.banners;
-                appData.locations = res.data.locations;
-                appData.socialMedia = res.data.socialMedia;
-                appData.policies = res.data.policies;
-                appData.popups = res.data.popups;
-                appData.coupons = res.data.coupons || [];
-                appData.reviews = res.data.reviews;
-
-                updateDOMWithSettings(appData.settings);
-
-                if (!cachedDataStr) {
-                    document.getElementById('skeletonLoader').classList.add('hidden');
-                    document.getElementById('app').classList.remove('hidden');
-                    document.getElementById('app').classList.add('flex');
-                }
-
-                appData.computedPages = null;
-                const _initPath2 = window.location.pathname + window.location.search;
-loadRoute(_initPath2 || '/home');
-                updateCartBadge();
-                updateOrderSummary();
-                updateUIText();
-                syncCartWithLivePrices();
-                initFilterOptions();
-                initPopupSystem();
+            if (localVersion && localVersion === serverVersion && cachedDataStr) {
+                return;
             }
-        })
-        .catch(err => {
-            clearAllDataTimeouts();
-            console.error(err);
+
+            localStorage.setItem('cached_app_data', JSON.stringify(res.data));
+            if (res.data.products) generateProductDetailsCache(res.data.products);
+            localStorage.setItem('local_data_version', serverVersion);
+
+            appData.settings = res.data.settings;
+            appData.categories = res.data.categories;
+            appData.products = res.data.products;
+            const _hf2 = ['image2','image3','image4','image5','videourl','description'];
+            appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
+            appData.banners = res.data.banners;
+            appData.locations = res.data.locations;
+            appData.socialMedia = res.data.socialMedia;
+            appData.policies = res.data.policies;
+            appData.popups = res.data.popups;
+            appData.coupons = res.data.coupons || [];
+            appData.reviews = res.data.reviews;
+
+            updateDOMWithSettings(appData.settings);
 
             if (!cachedDataStr) {
-                const skeleton = document.getElementById('skeletonLoader');
-                const app = document.getElementById('app');
-
-                if (skeleton && !skeleton.classList.contains('hidden')) {
-                    skeleton.classList.add('hidden');
-                    app.classList.remove('hidden');
-                    app.classList.add('flex');
-
-                    document.getElementById('content').innerHTML = `
-                        <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
-                            <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
-                            <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সমস্যা হচ্ছে</h2>
-                            <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
-                            <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
-                                <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
-                            </button>
-                        </div>
-                    `;
-                }
+                document.getElementById('skeletonLoader').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                document.getElementById('app').classList.add('flex');
             }
-        });
-}
+
+            appData.computedPages = null;
+            const _initPath2 = window.location.pathname + window.location.search;
+            loadRoute(_initPath2 || '/home');
+            updateCartBadge();
+            updateOrderSummary();
+            updateUIText();
+            syncCartWithLivePrices();
+            initFilterOptions();
+            initPopupSystem();
+        }
+    })
+    .catch(err => {
+        clearAllDataTimeouts();
+        console.error(err);
+
+        if (!cachedDataStr) {
+            const skeleton = document.getElementById('skeletonLoader');
+            const app = document.getElementById('app');
+
+            if (skeleton && !skeleton.classList.contains('hidden')) {
+                skeleton.classList.add('hidden');
+                app.classList.remove('hidden');
+                app.classList.add('flex');
+
+                document.getElementById('content').innerHTML = `
+                    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
+                        <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
+                        <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সমস্যা হচ্ছে</h2>
+                        <p class="text-gray-500 text-sm mb-6">ডাটা লোড করা যায়নি। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
+                        <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
+                            <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    });
+
 function updateDOMWithSettings(settings) {
     if(!settings) return;
     
