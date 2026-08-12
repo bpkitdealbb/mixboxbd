@@ -8,9 +8,10 @@
     ],
     "rewrites": [
       {
-        "source": "**",
+        "source": "!/data.json",
         "destination": "/index.html"
       }
     ]
   }
 }
+
