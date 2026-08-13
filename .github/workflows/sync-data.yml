@@ -1,23 +1,51 @@
-name: Sync E-commerce Data (Instant)
+name: Sync E-commerce Data
 
 on:
+  # ==========================================
+  # ১. GAS থেকে Automatic Trigger
+  # ==========================================
   repository_dispatch:
     types:
       - data-update
 
+  # ==========================================
+  # ২. GitHub Actions থেকে Manual Trigger
+  # ==========================================
   workflow_dispatch:
+    inputs:
+      source:
+        description: 'Trigger source'
+        required: false
+        default: 'manual'
+        type: string
 
+      version:
+        description: 'Data version'
+        required: false
+        default: ''
+        type: string
+
+
+# ==========================================
+# GitHub Repository Permission
+# ==========================================
 permissions:
   contents: write
 
-# একই repository-র একাধিক sync একসাথে চলবে না
-# আগের sync বাতিল হবে না
+
+# ==========================================
+# একই সময়ে একাধিক Sync চলা আটকানো
+#
+# cancel-in-progress: false
+# → আগের Sync চললে সেটি বাতিল হবে না।
+# → নতুন Sync অপেক্ষা করবে।
+# ==========================================
 concurrency:
   group: sync-ecommerce-data
   cancel-in-progress: false
 
-jobs:
 
+jobs:
   sync-and-deploy:
 
     runs-on: ubuntu-latest
@@ -27,15 +55,71 @@ jobs:
       # ==========================================
       # ১. Repository Checkout
       # ==========================================
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
 
       # ==========================================
-      # ২. GAS থেকে সঠিক data.json আনা
+      # ২. Trigger Information বের করা
+      # Automatic + Manual উভয়ের জন্য
       # ==========================================
+      - name: Set Trigger Information
+        shell: bash
+        run: |
 
+          # --------------------------------------
+          # Automatic repository_dispatch
+          # --------------------------------------
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+
+            SOURCE="${{ github.event.client_payload.source }}"
+            VERSION="${{ github.event.client_payload.version }}"
+
+            # source ফাঁকা হলে
+            if [ -z "$SOURCE" ]; then
+              SOURCE="repository_dispatch"
+            fi
+
+            echo "🔔 Trigger Type: Automatic"
+            echo "📌 Source: $SOURCE"
+            echo "📦 Version: $VERSION"
+
+          # --------------------------------------
+          # Manual workflow_dispatch
+          # --------------------------------------
+          else
+
+            SOURCE="${{ github.event.inputs.source }}"
+            VERSION="${{ github.event.inputs.version }}"
+
+            # source ফাঁকা হলে
+            if [ -z "$SOURCE" ]; then
+              SOURCE="manual"
+            fi
+
+            echo "🔔 Trigger Type: Manual"
+            echo "📌 Source: $SOURCE"
+            echo "📦 Version: $VERSION"
+
+          fi
+
+          # GitHub Environment Variables-এ রাখা
+          echo "SYNC_SOURCE=$SOURCE" >> "$GITHUB_ENV"
+          echo "SYNC_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          echo ""
+          echo "=========================================="
+          echo "Trigger Information"
+          echo "=========================================="
+          echo "Type: ${{ github.event_name }}"
+          echo "Source: $SOURCE"
+          echo "Version: $VERSION"
+          echo "=========================================="
+
+
+      # ==========================================
+      # ৩. GAS থেকে Data Fetch + Validation
+      # ==========================================
       - name: Fetch and Validate Data from GAS
         shell: bash
         run: |
@@ -47,35 +131,30 @@ jobs:
 
           SUCCESS=false
 
+          echo ""
           echo "=========================================="
-          echo "Starting GAS data synchronization..."
+          echo "Starting GAS Data Synchronization"
           echo "=========================================="
-
-          echo "Trigger source:"
-          echo "${{ github.event.client_payload.source }}"
-
-          echo "Backend version:"
-          echo "${{ github.event.client_payload.version }}"
-
+          echo "Trigger Source: $SYNC_SOURCE"
+          echo "Requested Version: $SYNC_VERSION"
           echo "=========================================="
 
 
-          # ==========================================
+          # ======================================
           # Retry Loop
-          # ==========================================
-
+          # ======================================
           for ((attempt=1; attempt<=MAX_RETRIES; attempt++)); do
 
             echo ""
             echo "🔄 Attempt $attempt/$MAX_RETRIES"
 
+            # পুরনো temporary file মুছে ফেলা
             rm -f data.json.tmp
 
 
-            # ==========================================
-            # GAS Request
-            # ==========================================
-
+            # ==================================
+            # GAS থেকে Data Fetch
+            # ==================================
             HTTP_CODE=$(curl -sL \
               --connect-timeout 15 \
               --max-time 60 \
@@ -87,43 +166,36 @@ jobs:
             echo "🌐 GAS HTTP Status: $HTTP_CODE"
 
 
-            # ==========================================
-            # HTTP Validation
-            # ==========================================
-
+            # ==================================
+            # HTTP Status Validation
+            # ==================================
             if [ "$HTTP_CODE" != "200" ]; then
 
-              echo "❌ HTTP error: $HTTP_CODE"
-
+              echo "❌ HTTP error received: $HTTP_CODE"
               rm -f data.json.tmp
 
 
-            # ==========================================
-            # Empty Response
-            # ==========================================
-
+            # ==================================
+            # Empty File Validation
+            # ==================================
             elif [ ! -s data.json.tmp ]; then
 
-              echo "❌ GAS returned empty response"
-
+              echo "❌ GAS returned an empty response"
               rm -f data.json.tmp
 
 
-            # ==========================================
+            # ==================================
             # JSON Validation
-            # ==========================================
-
+            # ==================================
             elif ! jq empty data.json.tmp >/dev/null 2>&1; then
 
-              echo "❌ Invalid JSON received from GAS"
-
+              echo "❌ GAS returned invalid JSON"
               rm -f data.json.tmp
 
 
-            # ==========================================
-            # success:false
-            # ==========================================
-
+            # ==================================
+            # success:false Validation
+            # ==================================
             elif jq -e '.success == false' data.json.tmp >/dev/null 2>&1; then
 
               echo "❌ GAS returned success:false"
@@ -137,10 +209,9 @@ jobs:
               rm -f data.json.tmp
 
 
-            # ==========================================
-            # Required Application Data
-            # ==========================================
-
+            # ==================================
+            # Required Data Validation
+            # ==================================
             elif ! jq -e '
               (
                 .data? // .
@@ -154,20 +225,19 @@ jobs:
             ' data.json.tmp >/dev/null 2>&1; then
 
               echo "❌ Required application data not found"
-
               echo "❌ products/settings missing"
 
               rm -f data.json.tmp
 
 
-            # ==========================================
-            # SUCCESS
-            # ==========================================
-
+            # ==================================
+            # সব Validation সফল
+            # ==================================
             else
 
               echo "✅ GAS data passed validation"
 
+              # Temporary file থেকে আসল data.json replace
               mv data.json.tmp data.json
 
               echo "✅ data.json updated successfully"
@@ -179,19 +249,18 @@ jobs:
             fi
 
 
-            # ==========================================
+            # ==================================
             # Retry
-            # ==========================================
-
+            # ==================================
             if [ "$attempt" -lt "$MAX_RETRIES" ]; then
 
               echo ""
-              echo "⏳ Valid data not received."
-
+              echo "⏳ Correct data not received."
               echo "⏳ Retrying after ${RETRY_DELAY} seconds..."
 
               sleep "$RETRY_DELAY"
 
+              # Exponential Backoff
               RETRY_DELAY=$((RETRY_DELAY * 2))
 
             fi
@@ -200,22 +269,18 @@ jobs:
 
 
           # ==========================================
-          # সব Retry ব্যর্থ
+          # সব Retry ব্যর্থ হলে
           # ==========================================
-
           if [ "$SUCCESS" != "true" ]; then
 
             echo ""
             echo "=========================================="
-            echo "❌ GAS synchronization FAILED"
+            echo "❌ GAS Data Synchronization Failed"
             echo "=========================================="
 
             echo "❌ $MAX_RETRIES attempts failed."
-
-            echo "ℹ️ Existing data.json was not replaced."
-
-            echo "ℹ️ GitHub will NOT receive invalid data."
-
+            echo "ℹ️ Existing data.json was NOT replaced."
+            echo "ℹ️ GitHub will NOT be updated."
             echo "ℹ️ Firebase deployment will NOT happen."
 
             rm -f data.json.tmp
@@ -227,88 +292,88 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "✅ Valid GAS data successfully received"
+          echo "✅ Valid GAS Data Successfully Received"
           echo "=========================================="
 
 
       # ==========================================
-      # ৩. GitHub Commit & Push
+      # ৪. GitHub Commit + Push
       # ==========================================
-
       - name: Commit and Push
         shell: bash
         run: |
 
-          git config --global user.name \
-            "github-actions[bot]"
-
-          git config --global user.email \
-            "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
 
+          # data.json Stage
           git add data.json
 
 
-          # ==========================================
-          # কোনো পরিবর্তন না থাকলে
-          # ==========================================
-
+          # ======================================
+          # Data পরিবর্তন হয়েছে কি না
+          # ======================================
           if git diff --cached --quiet; then
 
+            echo ""
             echo "ℹ️ data.json has no changes."
-
-            echo "ℹ️ No commit required."
+            echo "ℹ️ No GitHub commit required."
 
             exit 0
 
           fi
 
 
+          echo ""
           echo "📦 New data detected."
 
 
-          # ==========================================
-          # Commit
-          # ==========================================
+          # ======================================
+          # Version থাকলে Version Commit Message
+          # ======================================
+          if [ -n "$SYNC_VERSION" ]; then
 
-          VERSION="${{ github.event.client_payload.version }}"
+            COMMIT_MESSAGE="chore: auto-update data.json (v$SYNC_VERSION)"
 
-          if [ -z "$VERSION" ]; then
-            VERSION="unknown"
+          else
+
+            COMMIT_MESSAGE="chore: auto-update data.json"
+
           fi
 
 
+          echo "📝 Commit: $COMMIT_MESSAGE"
+
+
+          # ======================================
+          # Commit
+          # ======================================
           git commit \
-            -m "chore: auto-update data.json (v${VERSION})"
+            -m "$COMMIT_MESSAGE" \
+            -m "Source: $SYNC_SOURCE" \
+            -m "Trigger: ${{ github.event_name }}"
 
 
-          # ==========================================
+          # ======================================
           # Push
-          # ==========================================
-
+          # ======================================
           git push
 
 
+          echo ""
           echo "=========================================="
-
-          echo "✅ data.json successfully pushed to GitHub."
-
+          echo "✅ data.json successfully pushed to GitHub"
           echo "=========================================="
 
 
       # ==========================================
-      # ৪. Firebase Deploy
+      # ৫. Firebase Hosting Deploy
       # ==========================================
-
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
-
         with:
-
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-
           channelId: live
-
-          projectId: '${{ secrets.FIREBASE_PROJECT_ID }}'
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
