@@ -1,20 +1,25 @@
-name: Sync E-commerce Data
+name: Sync E-commerce Data (Instant)
 
 on:
-  schedule:
-    - cron: '0 * * * *' # প্রতি ১ ঘণ্টায় অটো রান
-  workflow_dispatch: # ম্যানুয়ালি রান
+  repository_dispatch:
+    types:
+      - data-update
+
+  workflow_dispatch:
 
 permissions:
   contents: write
 
-# একই সময়ে একাধিক sync workflow চলা আটকাবে
+# একই repository-র একাধিক sync একসাথে চলবে না
+# আগের sync বাতিল হবে না
 concurrency:
   group: sync-ecommerce-data
   cancel-in-progress: false
 
 jobs:
+
   sync-and-deploy:
+
     runs-on: ubuntu-latest
 
     steps:
@@ -22,16 +27,19 @@ jobs:
       # ==========================================
       # ১. Repository Checkout
       # ==========================================
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
 
       # ==========================================
-      # ২. GAS থেকে সঠিক ডাটা আনার চেষ্টা
+      # ২. GAS থেকে সঠিক data.json আনা
       # ==========================================
+
       - name: Fetch and Validate Data from GAS
         shell: bash
         run: |
+
           set -u
 
           MAX_RETRIES=5
@@ -41,19 +49,33 @@ jobs:
 
           echo "=========================================="
           echo "Starting GAS data synchronization..."
-          echo "Maximum attempts: $MAX_RETRIES"
           echo "=========================================="
+
+          echo "Trigger source:"
+          echo "${{ github.event.client_payload.source }}"
+
+          echo "Backend version:"
+          echo "${{ github.event.client_payload.version }}"
+
+          echo "=========================================="
+
+
+          # ==========================================
+          # Retry Loop
+          # ==========================================
 
           for ((attempt=1; attempt<=MAX_RETRIES; attempt++)); do
 
             echo ""
             echo "🔄 Attempt $attempt/$MAX_RETRIES"
 
-            # Temporary file ব্যবহার করা হচ্ছে
-            # যাতে ভুল ডাটা সরাসরি data.json নষ্ট করতে না পারে
             rm -f data.json.tmp
 
-            # GAS থেকে ডাটা আনা
+
+            # ==========================================
+            # GAS Request
+            # ==========================================
+
             HTTP_CODE=$(curl -sL \
               --connect-timeout 15 \
               --max-time 60 \
@@ -61,43 +83,64 @@ jobs:
               "${{ secrets.GAS_URL }}?action=getInitialData&t=$(date +%s)" \
               -o data.json.tmp)
 
+
             echo "🌐 GAS HTTP Status: $HTTP_CODE"
 
-            # ------------------------------------------
-            # HTTP Status Check
-            # ------------------------------------------
+
+            # ==========================================
+            # HTTP Validation
+            # ==========================================
+
             if [ "$HTTP_CODE" != "200" ]; then
-              echo "❌ HTTP error received: $HTTP_CODE"
+
+              echo "❌ HTTP error: $HTTP_CODE"
+
               rm -f data.json.tmp
 
-            # ------------------------------------------
-            # Empty File Check
-            # ------------------------------------------
+
+            # ==========================================
+            # Empty Response
+            # ==========================================
+
             elif [ ! -s data.json.tmp ]; then
-              echo "❌ GAS returned an empty response"
+
+              echo "❌ GAS returned empty response"
+
               rm -f data.json.tmp
 
-            # ------------------------------------------
+
+            # ==========================================
             # JSON Validation
-            # ------------------------------------------
+            # ==========================================
+
             elif ! jq empty data.json.tmp >/dev/null 2>&1; then
-              echo "❌ GAS returned invalid JSON"
+
+              echo "❌ Invalid JSON received from GAS"
+
               rm -f data.json.tmp
 
-            # ------------------------------------------
-            # success:false Check
-            # ------------------------------------------
+
+            # ==========================================
+            # success:false
+            # ==========================================
+
             elif jq -e '.success == false' data.json.tmp >/dev/null 2>&1; then
+
               echo "❌ GAS returned success:false"
 
-              ERROR_MESSAGE=$(jq -r '.error // "Unknown GAS error"' data.json.tmp 2>/dev/null || true)
+              ERROR_MESSAGE=$(jq -r \
+                '.error // "Unknown GAS error"' \
+                data.json.tmp 2>/dev/null || true)
+
               echo "GAS Error: $ERROR_MESSAGE"
 
               rm -f data.json.tmp
 
-            # ------------------------------------------
-            # Required Data Validation
-            # ------------------------------------------
+
+            # ==========================================
+            # Required Application Data
+            # ==========================================
+
             elif ! jq -e '
               (
                 .data? // .
@@ -111,60 +154,74 @@ jobs:
             ' data.json.tmp >/dev/null 2>&1; then
 
               echo "❌ Required application data not found"
-              echo "❌ products/settings missing from GAS response"
+
+              echo "❌ products/settings missing"
 
               rm -f data.json.tmp
 
+
+            # ==========================================
+            # SUCCESS
+            # ==========================================
+
             else
 
-              # ------------------------------------------
-              # সব validation সফল
-              # ------------------------------------------
               echo "✅ GAS data passed validation"
 
-              # Temporary file থেকে আসল data.json replace
               mv data.json.tmp data.json
 
               echo "✅ data.json updated successfully"
 
               SUCCESS=true
+
               break
+
             fi
 
-            # ------------------------------------------
+
+            # ==========================================
             # Retry
-            # ------------------------------------------
+            # ==========================================
+
             if [ "$attempt" -lt "$MAX_RETRIES" ]; then
-              echo "⏳ Correct data not received."
+
+              echo ""
+              echo "⏳ Valid data not received."
+
               echo "⏳ Retrying after ${RETRY_DELAY} seconds..."
 
               sleep "$RETRY_DELAY"
 
-              # পরের retry-তে delay বাড়বে
               RETRY_DELAY=$((RETRY_DELAY * 2))
+
             fi
 
           done
 
 
           # ==========================================
-          # সব Retry ব্যর্থ হলে Workflow বন্ধ
+          # সব Retry ব্যর্থ
           # ==========================================
+
           if [ "$SUCCESS" != "true" ]; then
 
             echo ""
             echo "=========================================="
-            echo "❌ GAS data synchronization failed"
+            echo "❌ GAS synchronization FAILED"
             echo "=========================================="
 
             echo "❌ $MAX_RETRIES attempts failed."
-            echo "ℹ️ Existing data.json has NOT been replaced."
-            echo "ℹ️ GitHub will NOT be updated."
+
+            echo "ℹ️ Existing data.json was not replaced."
+
+            echo "ℹ️ GitHub will NOT receive invalid data."
+
             echo "ℹ️ Firebase deployment will NOT happen."
 
             rm -f data.json.tmp
 
             exit 1
+
           fi
 
 
@@ -175,41 +232,83 @@ jobs:
 
 
       # ==========================================
-      # ৩. GitHub-এ data.json Commit & Push
+      # ৩. GitHub Commit & Push
       # ==========================================
+
       - name: Commit and Push
         shell: bash
         run: |
 
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name \
+            "github-actions[bot]"
+
+          git config --global user.email \
+            "github-actions[bot]@users.noreply.github.com"
+
 
           git add data.json
 
-          # data.json পরিবর্তন না হলে commit করার দরকার নেই
+
+          # ==========================================
+          # কোনো পরিবর্তন না থাকলে
+          # ==========================================
+
           if git diff --cached --quiet; then
+
             echo "ℹ️ data.json has no changes."
-            echo "ℹ️ No GitHub commit required."
+
+            echo "ℹ️ No commit required."
 
             exit 0
+
           fi
+
 
           echo "📦 New data detected."
 
-          git commit -m "chore: auto-update data.json"
+
+          # ==========================================
+          # Commit
+          # ==========================================
+
+          VERSION="${{ github.event.client_payload.version }}"
+
+          if [ -z "$VERSION" ]; then
+            VERSION="unknown"
+          fi
+
+
+          git commit \
+            -m "chore: auto-update data.json (v${VERSION})"
+
+
+          # ==========================================
+          # Push
+          # ==========================================
 
           git push
 
+
+          echo "=========================================="
+
           echo "✅ data.json successfully pushed to GitHub."
 
+          echo "=========================================="
+
 
       # ==========================================
-      # ৪. Firebase Hosting Deploy
+      # ৪. Firebase Deploy
       # ==========================================
+
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
+
         with:
+
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
+
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+
           channelId: live
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+          projectId: '${{ secrets.FIREBASE_PROJECT_ID }}'
