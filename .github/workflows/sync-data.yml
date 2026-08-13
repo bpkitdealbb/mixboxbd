@@ -5,7 +5,6 @@ on:
     - cron: '0 * * * *' # প্রতি ১ ঘণ্টায় অটো রান হবে
   workflow_dispatch: # ম্যানুয়ালি রান করার বোতাম
 
-# 🔑 গিট পুশ করার পারমিশন দেওয়া হলো
 permissions:
   contents: write
 
@@ -16,12 +15,50 @@ jobs:
       # ১. রিপোজিটরি ক্লোন করা
       - name: Checkout Repository
         uses: actions/checkout@v4
-      # ২. GAS থেকে ডেটা এনে data.json এ সেভ করা (action=getInitialData সহ)
-      - name: Fetch Data from GAS
+
+      # ২. GAS থেকে ডাটা এনে নিখুঁতভাবে ভ্যালিডেট করা
+      - name: Fetch and Validate Data from GAS
         run: |
-          curl -sL "${{ secrets.GAS_URL }}?action=getInitialData" -o data.json
-          echo "✅ Data fetched successfully"
-          
+          set -e
+
+          HTTP_CODE=$(curl -sL -w "%{http_code}" \
+            "${{ secrets.GAS_URL }}?action=getInitialData" \
+            -o data.json)
+
+          echo "GAS HTTP Status: $HTTP_CODE"
+
+          # HTTP response অবশ্যই 200 হতে হবে
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ GAS HTTP error: $HTTP_CODE"
+            exit 1
+          fi
+
+          # File খালি কি না
+          if [ ! -s data.json ]; then
+            echo "❌ data.json is empty"
+            exit 1
+          fi
+
+          # Valid JSON কি না
+          if ! jq empty data.json 2>/dev/null; then
+            echo "❌ Invalid JSON received from GAS"
+            exit 1
+          fi
+
+          # GAS explicitly failure দিয়েছে কি না
+          if jq -e '.success == false' data.json >/dev/null 2>&1; then
+            echo "❌ GAS returned success:false"
+            exit 1
+          fi
+
+          # Expected data আছে কি না
+          if ! jq -e '(.data? // .) | (.products != null or .settings != null)' data.json >/dev/null 2>&1; then
+            echo "❌ Required application data not found"
+            exit 1
+          fi
+
+          echo "✅ GAS data fetched and fully validated"
+
       # ৩. গিট-এ কমিট ও পুশ করা
       - name: Commit and Push
         run: |
