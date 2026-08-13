@@ -2,73 +2,210 @@ name: Sync E-commerce Data
 
 on:
   schedule:
-    - cron: '0 * * * *' # প্রতি ১ ঘণ্টায় অটো রান হবে
-  workflow_dispatch: # ম্যানুয়ালি রান করার বোতাম
+    - cron: '0 * * * *' # প্রতি ১ ঘণ্টায় অটো রান
+  workflow_dispatch: # ম্যানুয়ালি রান
 
 permissions:
   contents: write
 
+# একই সময়ে একাধিক sync workflow চলা আটকাবে
+concurrency:
+  group: sync-ecommerce-data
+  cancel-in-progress: false
+
 jobs:
   sync-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      # ১. রিপোজিটরি ক্লোন করা
+
+      # ==========================================
+      # ১. Repository Checkout
+      # ==========================================
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ২. GAS থেকে ডাটা এনে নিখুঁতভাবে ভ্যালিডেট করা
+
+      # ==========================================
+      # ২. GAS থেকে সঠিক ডাটা আনার চেষ্টা
+      # ==========================================
       - name: Fetch and Validate Data from GAS
+        shell: bash
         run: |
-          set -e
+          set -u
 
-          HTTP_CODE=$(curl -sL -w "%{http_code}" \
-            "${{ secrets.GAS_URL }}?action=getInitialData" \
-            -o data.json)
+          MAX_RETRIES=5
+          RETRY_DELAY=5
 
-          echo "GAS HTTP Status: $HTTP_CODE"
+          SUCCESS=false
 
-          # HTTP response অবশ্যই 200 হতে হবে
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "❌ GAS HTTP error: $HTTP_CODE"
+          echo "=========================================="
+          echo "Starting GAS data synchronization..."
+          echo "Maximum attempts: $MAX_RETRIES"
+          echo "=========================================="
+
+          for ((attempt=1; attempt<=MAX_RETRIES; attempt++)); do
+
+            echo ""
+            echo "🔄 Attempt $attempt/$MAX_RETRIES"
+
+            # Temporary file ব্যবহার করা হচ্ছে
+            # যাতে ভুল ডাটা সরাসরি data.json নষ্ট করতে না পারে
+            rm -f data.json.tmp
+
+            # GAS থেকে ডাটা আনা
+            HTTP_CODE=$(curl -sL \
+              --connect-timeout 15 \
+              --max-time 60 \
+              -w "%{http_code}" \
+              "${{ secrets.GAS_URL }}?action=getInitialData&t=$(date +%s)" \
+              -o data.json.tmp)
+
+            echo "🌐 GAS HTTP Status: $HTTP_CODE"
+
+            # ------------------------------------------
+            # HTTP Status Check
+            # ------------------------------------------
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "❌ HTTP error received: $HTTP_CODE"
+              rm -f data.json.tmp
+
+            # ------------------------------------------
+            # Empty File Check
+            # ------------------------------------------
+            elif [ ! -s data.json.tmp ]; then
+              echo "❌ GAS returned an empty response"
+              rm -f data.json.tmp
+
+            # ------------------------------------------
+            # JSON Validation
+            # ------------------------------------------
+            elif ! jq empty data.json.tmp >/dev/null 2>&1; then
+              echo "❌ GAS returned invalid JSON"
+              rm -f data.json.tmp
+
+            # ------------------------------------------
+            # success:false Check
+            # ------------------------------------------
+            elif jq -e '.success == false' data.json.tmp >/dev/null 2>&1; then
+              echo "❌ GAS returned success:false"
+
+              ERROR_MESSAGE=$(jq -r '.error // "Unknown GAS error"' data.json.tmp 2>/dev/null || true)
+              echo "GAS Error: $ERROR_MESSAGE"
+
+              rm -f data.json.tmp
+
+            # ------------------------------------------
+            # Required Data Validation
+            # ------------------------------------------
+            elif ! jq -e '
+              (
+                .data? // .
+              ) as $d
+              |
+              (
+                ($d.products != null)
+                or
+                ($d.settings != null)
+              )
+            ' data.json.tmp >/dev/null 2>&1; then
+
+              echo "❌ Required application data not found"
+              echo "❌ products/settings missing from GAS response"
+
+              rm -f data.json.tmp
+
+            else
+
+              # ------------------------------------------
+              # সব validation সফল
+              # ------------------------------------------
+              echo "✅ GAS data passed validation"
+
+              # Temporary file থেকে আসল data.json replace
+              mv data.json.tmp data.json
+
+              echo "✅ data.json updated successfully"
+
+              SUCCESS=true
+              break
+            fi
+
+            # ------------------------------------------
+            # Retry
+            # ------------------------------------------
+            if [ "$attempt" -lt "$MAX_RETRIES" ]; then
+              echo "⏳ Correct data not received."
+              echo "⏳ Retrying after ${RETRY_DELAY} seconds..."
+
+              sleep "$RETRY_DELAY"
+
+              # পরের retry-তে delay বাড়বে
+              RETRY_DELAY=$((RETRY_DELAY * 2))
+            fi
+
+          done
+
+
+          # ==========================================
+          # সব Retry ব্যর্থ হলে Workflow বন্ধ
+          # ==========================================
+          if [ "$SUCCESS" != "true" ]; then
+
+            echo ""
+            echo "=========================================="
+            echo "❌ GAS data synchronization failed"
+            echo "=========================================="
+
+            echo "❌ $MAX_RETRIES attempts failed."
+            echo "ℹ️ Existing data.json has NOT been replaced."
+            echo "ℹ️ GitHub will NOT be updated."
+            echo "ℹ️ Firebase deployment will NOT happen."
+
+            rm -f data.json.tmp
+
             exit 1
           fi
 
-          # File খালি কি না
-          if [ ! -s data.json ]; then
-            echo "❌ data.json is empty"
-            exit 1
-          fi
 
-          # Valid JSON কি না
-          if ! jq empty data.json 2>/dev/null; then
-            echo "❌ Invalid JSON received from GAS"
-            exit 1
-          fi
+          echo ""
+          echo "=========================================="
+          echo "✅ Valid GAS data successfully received"
+          echo "=========================================="
 
-          # GAS explicitly failure দিয়েছে কি না
-          if jq -e '.success == false' data.json >/dev/null 2>&1; then
-            echo "❌ GAS returned success:false"
-            exit 1
-          fi
 
-          # Expected data আছে কি না
-          if ! jq -e '(.data? // .) | (.products != null or .settings != null)' data.json >/dev/null 2>&1; then
-            echo "❌ Required application data not found"
-            exit 1
-          fi
-
-          echo "✅ GAS data fetched and fully validated"
-
-      # ৩. গিট-এ কমিট ও পুশ করা
+      # ==========================================
+      # ৩. GitHub-এ data.json Commit & Push
+      # ==========================================
       - name: Commit and Push
+        shell: bash
         run: |
+
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
           git add data.json
-          git commit -m "chore: auto-update data.json" || exit 0
+
+          # data.json পরিবর্তন না হলে commit করার দরকার নেই
+          if git diff --cached --quiet; then
+            echo "ℹ️ data.json has no changes."
+            echo "ℹ️ No GitHub commit required."
+
+            exit 0
+          fi
+
+          echo "📦 New data detected."
+
+          git commit -m "chore: auto-update data.json"
+
           git push
 
-      # ৪. ফায়ারবেসে ডিপ্লয় করা
+          echo "✅ data.json successfully pushed to GitHub."
+
+
+      # ==========================================
+      # ৪. Firebase Hosting Deploy
+      # ==========================================
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -76,4 +213,3 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           channelId: live
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
-          
