@@ -2061,116 +2061,156 @@ function hideSlowLoadingWarning() {
     if (container) container.remove();
     loadingIndicatorShown = false;
 }
+// ==========================================
+// ১. সেফ ফেচ উইথ অটো-রিট্রাই ফাংশন (Smart Retry)
+// ==========================================
+async function fetchWithRetry(url, retries = 3, delay = 1000) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const timestamp = new Date().getTime();
+            const fetchUrl = url.includes('?') ? `${url}&t=${timestamp}` : `${url}?t=${timestamp}`;
+            const res = await fetch(fetchUrl);
 
+            if (!res.ok) throw new Error(`HTTP Error Status: ${res.status}`);
+
+            const contentType = res.headers.get("content-type");
+            const textData = await res.text();
+
+            // গুগল ড্রাইভের HTML এরর পেজ ডিটেকশন (<!DOCTYPE html>... বা Page Not Found)
+            if ((contentType && contentType.includes("text/html")) || textData.trim().startsWith("<")) {
+                throw new Error("Received Google Drive HTML Error Page instead of valid JSON");
+            }
+
+            // সঠিক JSON পার্সিং
+            const jsonData = JSON.parse(textData);
+            return jsonData;
+
+        } catch (err) {
+            console.warn(`Attempt ${i + 1} failed for ${url}. Error: ${err.message}`);
+            
+            if (i === retries - 1) throw err;
+
+            // Exponential Delay (1s, 2s, 4s...)
+            await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+        }
+    }
+}
+
+
+// ==========================================
+// ২. আপডেটেড ডাটা লোডিং লজিক (With Strict Validation & GAS Fallback)
+// ==========================================
 function loadInitialData() {
     const cachedDataStr = localStorage.getItem('cached_app_data');
     const localVersion = localStorage.getItem('local_data_version');
 
-    let initTimeoutId = null;
-    let slowToastTimeoutId = null;
+    let initTimeoutId = null; 
+    let slowToastTimeoutId = null; 
 
-    function clearAllDataTimeouts() {
-        if (slowToastTimeoutId) clearTimeout(slowToastTimeoutId);
-        if (initTimeoutId) clearTimeout(initTimeoutId);
-        hideSlowLoadingWarning();
-    }
+    function clearAllDataTimeouts() { 
+        if (slowToastTimeoutId) clearTimeout(slowToastTimeoutId); 
+        if (initTimeoutId) clearTimeout(initTimeoutId); 
+        hideSlowLoadingWarning(); 
+    } 
 
-    // ১. ক্যাশ ডাটা থেকে UI দ্রুত রেন্ডার করা
-    if (cachedDataStr) {
-        try {
-            const data = JSON.parse(cachedDataStr);
-            appData.settings = data.settings;
-            appData.categories = (data.categories || []).filter(c => c.categoryname && c.categoryname.trim() !== '');
-            appData.products = data.products || [];
+    // ১. ক্যাশ ডাটা থাকলে তা দ্রুত UI তে রেন্ডার করা
+    if (cachedDataStr) { 
+        try { 
+            const data = JSON.parse(cachedDataStr); 
+            appData.settings = data.settings; 
+            appData.categories = (data.categories || []).filter(c => c.categoryname && c.categoryname.trim() !== ''); 
+            appData.products = data.products || []; 
+            const _hf1 = ['image2','image3','image4','image5','videourl','description']; 
+            appData.products = appData.products.map(p => { const l = {...p}; _hf1.forEach(f => delete l[f]); return l; }); 
+            appData.banners = data.banners; 
+            appData.locations = data.locations; 
+            appData.socialMedia = data.socialMedia; 
+            appData.policies = data.policies; 
+            appData.popups = data.popups; 
+            appData.coupons = data.coupons || []; 
+            appData.reviews = data.reviews; 
             
-            const _hf1 = ['image2','image3','image4','image5','videourl','description'];
-            appData.products = appData.products.map(p => { const l = {...p}; _hf1.forEach(f => delete l[f]); return l; });
+            if (data.products) generateProductDetailsCache(data.products); 
+            if (appData.settings) updateDOMWithSettings(appData.settings); 
             
-            appData.banners = data.banners;
-            appData.locations = data.locations;
-            appData.socialMedia = data.socialMedia;
-            appData.policies = data.policies;
-            appData.popups = data.popups;
-            appData.coupons = data.coupons || [];
-            appData.reviews = data.reviews;
+            document.getElementById('skeletonLoader')?.classList.add('hidden'); 
+            document.getElementById('app')?.classList.remove('hidden'); 
+            document.getElementById('app')?.classList.add('flex'); 
 
-            if (data.products) generateProductDetailsCache(data.products);
-            if (appData.settings) updateDOMWithSettings(appData.settings);
+            const _initPath1 = window.location.pathname + window.location.search; 
+            loadRoute(_initPath1 || '/home'); 
+            updateCartBadge(); 
+            updateOrderSummary(); 
+            updateUIText(); 
+            syncCartWithLivePrices(); 
+            initFilterOptions(); 
+            initPopupSystem(); 
+        } catch (e) { 
+            console.error("Cache parse error", e); 
+            localStorage.removeItem('cached_app_data'); 
+        } 
+    } 
 
-            document.getElementById('skeletonLoader')?.classList.add('hidden');
-            document.getElementById('app')?.classList.remove('hidden');
-            document.getElementById('app')?.classList.add('flex');
+    // ২. ক্যাশ না থাকলে স্লো লোডিং সতর্কবার্তা
+    if (!cachedDataStr) { 
+        showLoadingToast("Loading SafaBoxBD web app..."); 
+        slowToastTimeoutId = setTimeout(function() { 
+            const skeleton = document.getElementById('skeletonLoader'); 
+            if (skeleton && !skeleton.classList.contains('hidden')) { 
+                showLoadingToast( 
+                    "Loading SafaBoxBD web app...", 
+                    "Connection seems slow. Retrying connection to Google Servers..." 
+                ); 
+            } 
+        }, 3000); 
 
-            const _initPath1 = window.location.pathname + window.location.search;
-            loadRoute(_initPath1 || '/home');
-            updateCartBadge();
-            updateOrderSummary();
-            updateUIText();
-            syncCartWithLivePrices();
-            initFilterOptions();
-            initPopupSystem();
-        } catch (e) {
-            console.error("Cache parse error", e);
-            localStorage.removeItem('cached_app_data');
-        }
-    }
+        initTimeoutId = setTimeout(function() { 
+            clearAllDataTimeouts(); 
+            const skeleton = document.getElementById('skeletonLoader'); 
+            const app = document.getElementById('app'); 
+            if (skeleton && !skeleton.classList.contains('hidden')) { 
+                skeleton.classList.add('hidden'); 
+                app.classList.remove('hidden'); 
+                app.classList.add('flex'); 
+                document.getElementById('content').innerHTML = ` 
+                    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6"> 
+                        <i class="fas fa-wifi text-6xl text-gray-300 mb-4"></i> 
+                        <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সংযোগ স্থাপন করা যায়নি</h2> 
+                        <p class="text-gray-500 text-sm mb-6 max-w-xs">দয়া করে আপনার ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।</p> 
+                        <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition"> 
+                            <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন 
+                        </button> 
+                    </div> 
+                `; 
+            } 
+        }, 25000); 
+    } 
 
-    // ২. ক্যাশ না থাকলে টোস্ট ও টাইমআউট সেট করা
-    if (!cachedDataStr) {
-        showLoadingToast("Loading SafaBoxBD web app...");
-
-        slowToastTimeoutId = setTimeout(function() {
-            const skeleton = document.getElementById('skeletonLoader');
-            if (skeleton && !skeleton.classList.contains('hidden')) {
-                showLoadingToast(
-                    "Loading SafaBoxBD web app...",
-                    "Connection seems slow. Please check your internet connection and wait..."
-                );
-            }
-        }, 3000);
-
-        initTimeoutId = setTimeout(function() {
-            clearAllDataTimeouts();
-            const skeleton = document.getElementById('skeletonLoader');
-            const app = document.getElementById('app');
-
-            if (skeleton && !skeleton.classList.contains('hidden')) {
-                skeleton.classList.add('hidden');
-                app.classList.remove('hidden');
-                app.classList.add('flex');
-
-                document.getElementById('content').innerHTML = `
-                    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6">
-                        <i class="fas fa-wifi text-6xl text-gray-300 mb-4"></i>
-                        <h2 class="text-xl font-bold text-gray-800 mb-2">সার্ভারে সংযোগ স্থাপন করা যায়নি</h2>
-                        <p class="text-gray-500 text-sm mb-6 max-w-xs">দয়া করে আপনার ইন্টারনেট সংযোগ চেক করুন অথবা কিছুক্ষণ পর আবার চেষ্টা করুন।</p>
-                        <button onclick="location.reload()" class="bg-primary text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:opacity-90 transition">
-                            <i class="fas fa-redo mr-2"></i>আবার চেষ্টা করুন
-                        </button>
-                    </div>
-                `;
-            }
-        }, 20000);
-    }
-
-    // ৩. লাইভ ডাটা ফেচিং (Static JSON -> GAS Fallback)
-    const timestamp = new Date().getTime();
-
-    fetch('./data.json?t=' + timestamp)
+    // ৩. লাইভ ডাটা লোডিং (Strict Validation সহ)
+    fetchWithRetry('./data.json', 3, 1000)
         .then(res => {
-            if (res.ok) return res.json();
-            return fetch(`${GAS_WEB_APP_URL}?action=getInitialData&t=${timestamp}`, { cache: "no-store" })
-                .then(response => response.json());
+            // 💡 সমাধান: ডাটা পাওয়ার পরপরই ভ্যালিডেশন চেক করা।
+            // যদি success: false হয় অথবা প্রয়োজনীয় প্রোডাক্ট/সেটিং না থাকে, তবে জোরপূর্বক এরর থ্রো করবে।
+            const isValid = res && (res.success === true || res.products || res.settings);
+            if (!isValid) {
+                throw new Error("data.json payload validation failed (success: false or empty payload)");
+            }
+            return res;
+        })
+        .catch(err => {
+            // data.json রিট্রাই ফেইল করলে বা success: false হলে সরাসরি এখানে ক্যাটচ হবে এবং GAS-এ ফলব্যাক করবে
+            console.warn("data.json failed validation or auto-retries exhausted. Executing GAS Fallback...", err.message);
+            return fetchWithRetry(`${GAS_WEB_APP_URL}?action=getInitialData`, 2, 1500);
         })
         .then(res => {
             clearAllDataTimeouts();
 
-            // 💡 সমাধান ১: res.success না থাকলেও যদি সরাসরি JSON ডাটা আসে তা গ্রহণ করা
-            if (res.success || res.products || res.settings) {
+            // ফাইনাল ভ্যালিডেশন (data.json বা GAS—যেখান থেকেই আসুক)
+            if (res && (res.success === true || res.products || res.settings)) {
                 const actualData = res.data ? res.data : res;
                 const serverVersion = res.serverVersion || actualData.serverVersion;
 
-                // 💡 সমাধান ২: ভার্সন ম্যাচ করলে স্কেলিটন সরিয়ে নেওয়া নিশ্চিত করা
+                // ভার্সন সেম থাকলে DOM রিবিল্ড না করে শুধু স্কেলিটন হাইড করবে
                 if (localVersion && localVersion === serverVersion && cachedDataStr) {
                     document.getElementById('skeletonLoader')?.classList.add('hidden');
                     document.getElementById('app')?.classList.remove('hidden');
@@ -2182,13 +2222,12 @@ function loadInitialData() {
                 if (serverVersion) localStorage.setItem('local_data_version', serverVersion);
 
                 appData.settings = actualData.settings;
-                // 💡 সমাধান ৪: খালি ক্যাটাগরি বাদ দেওয়া
                 appData.categories = (actualData.categories || []).filter(c => c.categoryname && c.categoryname.trim() !== '');
                 appData.products = actualData.products || [];
-                
+
                 const _hf2 = ['image2','image3','image4','image5','videourl','description'];
                 appData.products = appData.products.map(p => { const l = {...p}; _hf2.forEach(f => delete l[f]); return l; });
-                
+
                 appData.banners = actualData.banners;
                 appData.locations = actualData.locations;
                 appData.socialMedia = actualData.socialMedia;
@@ -2199,7 +2238,6 @@ function loadInitialData() {
 
                 if (appData.settings) updateDOMWithSettings(appData.settings);
 
-                // স্কেলিটন হাইড করা
                 document.getElementById('skeletonLoader')?.classList.add('hidden');
                 document.getElementById('app')?.classList.remove('hidden');
                 document.getElementById('app')?.classList.add('flex');
@@ -2214,12 +2252,12 @@ function loadInitialData() {
                 initFilterOptions();
                 initPopupSystem();
             } else {
-                throw new Error("Invalid data format received");
+                throw new Error("Both data.json and GAS Fallback returned invalid payload");
             }
         })
         .catch(err => {
             clearAllDataTimeouts();
-            console.error("Data fetch error:", err);
+            console.error("Critical: All fetch attempts & fallbacks failed.", err);
 
             if (!cachedDataStr) {
                 const skeleton = document.getElementById('skeletonLoader');
