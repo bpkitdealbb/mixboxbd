@@ -59,6 +59,9 @@
             </div>
             <div class="flex items-center gap-2 shrink-0 pl-3 border-l border-gray-200">
                 <button onclick="clearAllCache()" class="text-orange-500 hover:text-orange-700 p-1.5" title="Clear Server Cache"><i class="fas fa-broom text-sm"></i></button>
+                <button onclick="manualGithubSync()" style="background-color: #2ea44f; color: white; padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+  🚀 Sync to GitHub
+</button>
                 <button onclick="fetchData()" class="text-gray-400 hover:text-blue-600 p-1.5" title="Refresh"><i class="fas fa-sync-alt text-sm"></i></button>
                 <button onclick="logoutAdmin()" class="text-gray-400 hover:text-red-500 p-1.5" title="Logout"><i class="fas fa-sign-out-alt text-sm"></i></button>
             </div>
@@ -1052,6 +1055,41 @@ function deleteProduct(id){
         // BUG FIX: String() দিয়ে টাইপ ম্যাচিং ঠিক করা হয়েছে
         if(r.isConfirmed){google.script.run.withSuccessHandler(res=>{if(res.success){localData.products=localData.products.filter(x=>String(x.id)!==String(id));renderProducts(document.getElementById('contentArea'));}}).adminDeleteProduct(adminSecret,id);}
     });
+}
+// ম্যানুয়ালি GitHub-এ ডাটা পাঠানোর ফাংশন
+async function manualGithubSync() {
+  // বাটনটি ডিসেবল করে দিলাম যাতে দুইবার ক্লিক না করে
+  const btn = event.target;
+  const originalText = btn.innerText;
+  btn.disabled = true;
+  btn.innerText = "⏳ Syncing...";
+  btn.style.backgroundColor = "#7289da";
+
+  try {
+    const response = await fetch('https://script.google.com/macros/s/AKfycbzgYYWpoPuTSgfC3YzCTq8n8uzZ9JAhtKo1tzR9YA_rJt8J-wWKApZqTaVg3rzsHUklXg/exec', { // এখানে আপনার Web App URL বসাবেন
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        functionName: 'adminTriggerGithubSync',
+        arguments: [adminSecret] // ধরে নিচ্ছি আপনার এডমিন সিক্রেট কী এই ভেরিয়েবলে আছে
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert("সফল! " + result.message);
+    } else {
+      alert("ব্যর্থ হয়েছে: " + (result.error || "Unknown error"));
+    }
+  } catch (error) {
+    alert("নেটওয়ার্ক ত্রুটি: " + error.message);
+  } finally {
+    // বাটনটি আগের অবস্থায় ফিরিয়ে আনলাম
+    btn.disabled = false;
+    btn.innerText = originalText;
+    btn.style.backgroundColor = "#2ea44f";
+  }
 }
 </script>
 </body>
