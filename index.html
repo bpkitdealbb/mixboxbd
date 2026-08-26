@@ -37,8 +37,8 @@ gtag('config', 'G-N74T65FH7X');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SafaBoxBD | Shop Variety • Unbox Trends</title>
-<link rel="icon" type="image/png" sizes="128x128" href="https://res.cloudinary.com/dkowkawiq/image/upload/q_auto,w_128,h_128,c_fill,g_auto/v1784559589/20260720_202236_kyexpx.png">
-<meta name="description" content="SafaBoxBD (সাফাবক্সবিডি) ইনসাফভিত্তিক ব্যবসা পরিচালনায় সচেষ্ট। সাশ্রয়ী মূল্যে মানসম্মত ট্রেন্ডি ভ্যারাইটি পণ্য পেতে আজই ভিজিট করুন SafaBox BD (সাফাবক্স বিডি) ওয়েব অ্যাপ!">
+<link rel="icon" type="image/png" sizes="128x128" href="https://res.cloudinary.com/dkowkawiq/image/upload/q_auto,w_512,h_512,c_fill,g_auto/v1784559589/20260720_202236_kyexpx.png">
+<meta name="description" content="SafaBox BD (সাফাবক্স বিডি) ইনসাফভিত্তিক ব্যবসা পরিচালনায় সচেষ্ট। সাশ্রয়ী মূল্যে মানসম্মত ট্রেন্ডি ভ্যারাইটি পণ্য পেতে আজই ভিজিট করুন SafaBoxBD (সাফাবক্সবিডি) ওয়েব অ্যাপ!">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
 <link rel="canonical" href="https://safaboxbd.web.app/">
 
@@ -47,9 +47,9 @@ gtag('config', 'G-N74T65FH7X');
 <meta property="og:site_name" content="SafaBoxBD">
 <meta property="og:locale" content="bn_BD">
 <meta property="og:title" content="SafaBoxBD | Shop Variety • Unbox Trends">
-<meta property="og:description" content="SafaBoxBD (সাফাবক্সবিডি) ইনসাফভিত্তিক ব্যবসা পরিচালনায় সচেষ্ট। সাশ্রয়ী মূল্যে মানসম্মত ট্রেন্ডি ভ্যারাইটি পণ্য পেতে আজই ভিজিট করুন SafaBox BD (সাফাবক্স বিডি) ওয়েব অ্যাপ!">
+<meta property="og:description" content="SafaBox BD (সাফাবক্স বিডি) ইনসাফভিত্তিক ব্যবসা পরিচালনায় সচেষ্ট। সাশ্রয়ী মূল্যে মানসম্মত ট্রেন্ডি ভ্যারাইটি পণ্য পেতে আজই ভিজিট করুন SafaBoxBD (সাফাবক্সবিডি) ওয়েব অ্যাপ!">
 <meta property="og:url" content="https://safaboxbd.web.app/">
-<meta property="og:image" content="https://res.cloudinary.com/dkowkawiq/image/upload/q_auto,w_1280,h_1280,c_fill,g_auto/v1784559589/20260720_202236_kyexpx.png">
+<meta property="og:image" content="https://res.cloudinary.com/dkowkawiq/image/upload/q_auto,w_512,h_512,c_fill,g_auto/v1784559589/20260720_202236_kyexpx.png">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
@@ -1612,9 +1612,32 @@ function updatePageMeta(cfg) {
     ['ld-product','ld-breadcrumb'].forEach(id => { if (!cfg.schema || !cfg.schema[id]) seoRemoveLd(id); });
 }
 
+// ==========================================
+// FIXED: সম্পূর্ণ seoBreadcrumbSchema ফাংশন
+// ==========================================
+function seoBreadcrumbSchema(items) {
+    const currentUrl = window.location.origin + window.location.pathname + window.location.search;
+    
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": items.map((item, i) => ({
+            "@type": "ListItem", 
+            "position": i + 1, 
+            "name": item.name,
+            "item": item.url || currentUrl
+        }))
+    };
+}
+
+// ==========================================
+// FIXED: সম্পূর্ণ seoProductSchema ফাংশন
+// ==========================================
 function seoProductSchema(p) {
     const price = parseFloat(p.discountprice || p.price);
     const reviews = (appData.reviews || []).filter(r => r.productid == p.id && r.status === 'approved');
+    const currentUrl = window.location.origin + '/product?id=' + p.id;
+    
     const schema = {
         "@context": "https://schema.org",
         "@type": "Product",
@@ -1622,32 +1645,36 @@ function seoProductSchema(p) {
         "image": [p.imagemain, p.image2, p.image3, p.image4, p.image5].filter(Boolean),
         "description": stripHtml(p.description) || p.name,
         "sku": String(p.id),
+        "url": currentUrl,
         "brand": { "@type": "Brand", "name": SEO_SITE_NAME },
         "offers": {
             "@type": "Offer",
-            "url": SEO_BASE_URL + '/product?id=' + p.id,
+            "url": currentUrl,
             "priceCurrency": "BDT",
             "price": price.toFixed(2),
+            "priceValidUntil": "2025-12-31",
             "availability": p.totalstock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-            "seller": { "@type": "Organization", "name": SEO_SITE_NAME }
+            "itemCondition": "https://schema.org/NewCondition",
+            "seller": { 
+                "@type": "Organization", 
+                "name": SEO_SITE_NAME,
+                "url": SEO_BASE_URL
+            }
         }
     };
+    
     if (reviews.length > 0) {
         const avg = reviews.reduce((s,r) => s + r.rating, 0) / reviews.length;
-        schema.aggregateRating = { "@type": "AggregateRating", "ratingValue": avg.toFixed(1), "reviewCount": reviews.length, "bestRating": "5", "worstRating": "1" };
+        schema.aggregateRating = { 
+            "@type": "AggregateRating", 
+            "ratingValue": avg.toFixed(1), 
+            "reviewCount": reviews.length, 
+            "bestRating": "5", 
+            "worstRating": "1" 
+        };
     }
+    
     return schema;
-}
-
-function seoBreadcrumbSchema(items) {
-    return {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        "itemListElement": items.map((item, i) => ({
-            "@type": "ListItem", "position": i + 1, "name": item.name,
-            ...(item.url ? { item: item.url } : {})
-        }))
-    };
 }
         // ============================================================
         // TRANSLATION SNIPPET (UPDATED WITH NEW KEYS)
@@ -1655,7 +1682,8 @@ function seoBreadcrumbSchema(items) {
         const I18N = {
             en: {
 our_brands: "OUR BRANDS",
-                            order_via_whatsapp: "Order Via WhatsApp Without Login",
+ask_buy_whatsapp: "WhatsApp-এ অর্ডার বা জিজ্ঞাসা করুন",
+                            order_via_whatsapp: "লগইন ছাড়াই WhatsApp এ অর্ডার করুন",
                             cod_100: "100% Cash on Delivery",
                 bd_fastest: "Fastest Delivery All Over Bangladesh",
                 fast_support: "Fastest Support",
@@ -1797,6 +1825,7 @@ our_brands: "OUR BRANDS",
                 available_coupons: "Available Coupons"
             },
             bn: {
+            ask_buy_whatsapp: "WhatsApp-এ অর্ডার বা জিজ্ঞাসা করুন",
 our_brands: "আমাদের ব্র্যান্ডসমূহ",
                             order_via_whatsapp: "লগইন ছাড়াই WhatsApp এ অর্ডার করুন",
                             cod_100: "১০০% ক্যাশ অন ডেলিভারি",
@@ -5435,13 +5464,14 @@ function loadCategoryProducts(rawName) {
         description: displayName + ' - সাশ্রয়ী মূল্যে সেরা পণ্যসমূহ পান ' + SEO_SITE_NAME + '-এ',
         url: SEO_BASE_URL + '/category?name=' + encodeURIComponent(rawName),
         image: rootCatObj ? rootCatObj.categoryimageurl : undefined,
-        schema: {
-            'ld-breadcrumb': seoBreadcrumbSchema([
-                { name: 'Home', url: SEO_BASE_URL + '/' },
-                { name: rootLabel },
-                { name: displayName }
-            ])
-        }
+// ✅ ঠিক করা কোড
+schema: {
+    'ld-breadcrumb': seoBreadcrumbSchema([
+        { name: 'Home', url: SEO_BASE_URL + '/' },
+        { name: rootLabel, url: SEO_BASE_URL + '/categories' },  // ✅ URL যোগ হয়েছে
+        { name: displayName, url: window.location.origin + window.location.pathname + window.location.search }
+    ])
+}
     });
     const isSubCategory = name.includes(' > ');
 
@@ -5587,7 +5617,7 @@ function loadProductDetails(id) {
     // যেহেতু ডাটা লোকালি পাওয়া গেছে, তাই স্কেলেটন দরকার নেই। সাথে সাথে রেন্ডার করা যাচ্ছে।
     const tpl = document.getElementById('productDetailsTemplate');
     content.appendChild(tpl.content.cloneNode(true));
-    
+    updateUIText();
     // DOM এলিমেন্টগুলো আপডেট করা (মূল কোডের লজিক এখানে ব্যবহার করা হয়েছে)
     document.getElementById('productName').textContent = p.name;
     document.getElementById('productDescription').innerHTML = p.description || 'No description.';
@@ -5705,14 +5735,15 @@ function loadProductDetails(id) {
         url: SEO_BASE_URL + '/product?id=' + p.id,
         image: p.imagemain,
         ogType: 'product',
-        schema: {
-            'ld-product': seoProductSchema(p),
-            'ld-breadcrumb': seoBreadcrumbSchema([
-                { name: 'Home', url: SEO_BASE_URL + '/' },
-                { name: toCategoryTitleCase(p.category.split(' > ')[0]), url: SEO_BASE_URL + '/category?name=' + encodeURIComponent(p.category.split(' > ')[0]) },
-                { name: p.name }
-            ])
-        }
+// ✅ ঠিক করা কোড
+schema: {
+    'ld-product': seoProductSchema(p),
+    'ld-breadcrumb': seoBreadcrumbSchema([
+        { name: 'Home', url: SEO_BASE_URL + '/' },
+        { name: toCategoryTitleCase(p.category.split(' > ')[0]), url: SEO_BASE_URL + '/category?name=' + encodeURIComponent(p.category.split(' > ')[0]) },
+        { name: p.name, url: window.location.origin + '/product?id=' + p.id }  // ✅ URL যোগ হয়েছে
+    ])
+}
     });
     // === NEW: FACEBOOK PIXEL EVENT (ViewContent) ===
     const viewEventId = generateEventId(); // একবারই আইডি তৈরি করুন
