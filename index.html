@@ -5154,7 +5154,7 @@ function stopSlider() {
         let html = cats.map(c => {
             const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
             return `
-            <div onclick="navigateTo('/brand?name=${encodeURIComponent(displayName)})" class="text-center cursor-pointer group">
+<div onclick="navigateTo('/category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer group">
                 <div class="aspect-square rounded-xl overflow-hidden border border-gray-100 group-hover:border-primary/30 transition">
                     <img src="${c.categoryimageurl}" class="w-full h-full object-cover transform group-hover:scale-110 transition" loading="lazy">
                 </div>
