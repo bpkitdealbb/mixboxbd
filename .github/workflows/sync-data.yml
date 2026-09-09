@@ -28,13 +28,15 @@ on:
 
 # ==========================================
 # GitHub Repository Permission
+# deployments: write টা Cloudflare Pages deploy জবের জন্য যোগ করা হয়েছে
 # ==========================================
 permissions:
   contents: write
+  deployments: write
 
 
 # ==========================================
-# একই সময়ে একাধিক Sync চলা আটকানো
+# একই সময়ে একাধিক Sync চলা আটকানো
 #
 # cancel-in-progress: false
 # → আগের Sync চললে সেটি বাতিল হবে না।
@@ -46,22 +48,28 @@ concurrency:
 
 
 jobs:
-  sync-and-deploy:
+
+  # ==========================================
+  # জব ১: GAS থেকে ডেটা সিঙ্ক (fetch + validate + commit + push)
+  # এটা Firebase বা Cloudflare — কোনোটাই ডিপ্লয় করে না,
+  # শুধু data.json আপডেট করে GitHub-এ পুশ করে
+  # ==========================================
+  sync-data:
 
     runs-on: ubuntu-latest
 
     steps:
 
       # ==========================================
-      # ১. Repository Checkout
+      # Repository Checkout
       # ==========================================
       - name: Checkout Repository
         uses: actions/checkout@v4
 
 
       # ==========================================
-      # ২. Trigger Information বের করা
-      # Automatic + Manual উভয়ের জন্য
+      # Trigger Information বের করা
+      # Automatic + Manual উভয়ের জন্য
       # ==========================================
       - name: Set Trigger Information
         shell: bash
@@ -118,7 +126,7 @@ jobs:
 
 
       # ==========================================
-      # ৩. GAS থেকে Data Fetch + Validation
+      # GAS থেকে Data Fetch + Validation
       # ==========================================
       - name: Fetch and Validate Data from GAS
         shell: bash
@@ -281,7 +289,7 @@ jobs:
             echo "❌ $MAX_RETRIES attempts failed."
             echo "ℹ️ Existing data.json was NOT replaced."
             echo "ℹ️ GitHub will NOT be updated."
-            echo "ℹ️ Firebase deployment will NOT happen."
+            echo "ℹ️ Firebase/Cloudflare deployment will NOT happen."
 
             rm -f data.json.tmp
 
@@ -297,7 +305,7 @@ jobs:
 
 
       # ==========================================
-      # ৪. GitHub Commit + Push
+      # GitHub Commit + Push
       # ==========================================
       - name: Commit and Push
         shell: bash
@@ -312,7 +320,7 @@ jobs:
 
 
           # ======================================
-          # Data পরিবর্তন হয়েছে কি না
+          # Data পরিবর্তন হয়েছে কি না
           # ======================================
           if git diff --cached --quiet; then
 
@@ -367,9 +375,23 @@ jobs:
           echo "=========================================="
 
 
-      # ==========================================
-      # ৫. Firebase Hosting Deploy
-      # ==========================================
+  # ==========================================
+  # জব ২: Firebase Hosting Deploy (স্বাধীন, প্যারালাল)
+  # sync-data সফল হলেই শুরু হয়, কিন্তু Cloudflare জবের
+  # সাফল্য/ব্যর্থতার সাথে এর কোনো সম্পর্ক নেই
+  # ==========================================
+  deploy-firebase:
+    needs: sync-data
+    runs-on: ubuntu-latest
+    steps:
+      # main ব্রাঞ্চের সর্বশেষ commit checkout করা হচ্ছে,
+      # কারণ sync-data জব একটু আগেই নতুন data.json পুশ করেছে —
+      # ref না দিলে workflow-এর পুরনো (ট্রিগারের সময়কার) commit আসত
+      - name: Checkout Repository (latest main)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -377,3 +399,28 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           channelId: live
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+
+  # ==========================================
+  # জব ৩: Cloudflare Pages Deploy (স্বাধীন, প্যারালাল)
+  # sync-data সফল হলেই শুরু হয়, Firebase জবের সাথে সমান্তরালে চলে
+  # ==========================================
+  deploy-cloudflare:
+    needs: sync-data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout Repository (latest main)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Deploy to Cloudflare Pages (Standby)
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy . --project-name=safabox
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
