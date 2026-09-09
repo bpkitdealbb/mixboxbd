@@ -5,7 +5,11 @@ on:
       - main
 
 jobs:
-  deploy:
+  # ==========================================
+  # জব ১: Firebase Hosting Deploy (LIVE সাইট)
+  # এখনও আপনার safaboxbd.web.app এই জব থেকেই আপডেট হবে
+  # ==========================================
+  deploy-firebase:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -18,3 +22,26 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: safaboxbd # <--- আপনার সঠিক প্রজেক্ট আইডি
           channelId: live
+
+  # ==========================================
+  # জব ২: Cloudflare Pages Deploy (STANDBY)
+  # এখন কেউ এই ঠিকানা দেখবে না (safaboxbd.pages.dev)
+  # কাস্টম ডোমেইন কেনার পর এটাই লাইভ করবেন
+  # ==========================================
+  deploy-cloudflare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Pages (Standby)
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # projectName এখানে বদলে দিন, যদি Cloudflare-এ অন্য নাম দিয়ে প্রজেক্ট বানান
+          command: pages deploy . --project-name=safabox
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
