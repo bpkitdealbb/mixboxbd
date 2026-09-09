@@ -6,10 +6,11 @@ on:
 
 jobs:
   # ==========================================
-  # জব ১: Firebase Hosting Deploy (LIVE সাইট)
-  # এখনও আপনার safaboxbd.web.app এই জব থেকেই আপডেট হবে
+  # জব ১: Firebase Hosting Deploy
+  # ACTIVE_HOST variable-এ 'firebase' বা 'both' থাকলেই চলবে
   # ==========================================
   deploy-firebase:
+    if: vars.ACTIVE_HOST == 'firebase' || vars.ACTIVE_HOST == 'both' || vars.ACTIVE_HOST == ''
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -24,11 +25,11 @@ jobs:
           channelId: live
 
   # ==========================================
-  # জব ২: Cloudflare Pages Deploy (STANDBY)
-  # এখন কেউ এই ঠিকানা দেখবে না (safaboxbd.pages.dev)
-  # কাস্টম ডোমেইন কেনার পর এটাই লাইভ করবেন
+  # জব ২: Cloudflare Pages Deploy
+  # ACTIVE_HOST variable-এ 'cloudflare' বা 'both' থাকলেই চলবে
   # ==========================================
   deploy-cloudflare:
+    if: vars.ACTIVE_HOST == 'cloudflare' || vars.ACTIVE_HOST == 'both' || vars.ACTIVE_HOST == ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,7 +38,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Deploy to Cloudflare Pages (Standby)
+      - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
