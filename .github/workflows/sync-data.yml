@@ -376,17 +376,14 @@ jobs:
 
 
   # ==========================================
-  # জব ২: Firebase Hosting Deploy (স্বাধীন, প্যারালাল)
-  # sync-data সফল হলেই শুরু হয়, কিন্তু Cloudflare জবের
-  # সাফল্য/ব্যর্থতার সাথে এর কোনো সম্পর্ক নেই
+  # জব ২: Firebase Hosting Deploy
+  # ACTIVE_HOST variable-এ 'firebase' বা 'both' থাকলেই চলবে
   # ==========================================
   deploy-firebase:
     needs: sync-data
+    if: vars.ACTIVE_HOST == 'firebase' || vars.ACTIVE_HOST == 'both' || vars.ACTIVE_HOST == ''
     runs-on: ubuntu-latest
     steps:
-      # main ব্রাঞ্চের সর্বশেষ commit checkout করা হচ্ছে,
-      # কারণ sync-data জব একটু আগেই নতুন data.json পুশ করেছে —
-      # ref না দিলে workflow-এর পুরনো (ট্রিগারের সময়কার) commit আসত
       - name: Checkout Repository (latest main)
         uses: actions/checkout@v4
         with:
@@ -402,11 +399,12 @@ jobs:
 
 
   # ==========================================
-  # জব ৩: Cloudflare Pages Deploy (স্বাধীন, প্যারালাল)
-  # sync-data সফল হলেই শুরু হয়, Firebase জবের সাথে সমান্তরালে চলে
+  # জব ৩: Cloudflare Pages Deploy
+  # ACTIVE_HOST variable-এ 'cloudflare' বা 'both' থাকলেই চলবে
   # ==========================================
   deploy-cloudflare:
     needs: sync-data
+    if: vars.ACTIVE_HOST == 'cloudflare' || vars.ACTIVE_HOST == 'both' || vars.ACTIVE_HOST == ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -417,10 +415,10 @@ jobs:
         with:
           ref: main
 
-      - name: Deploy to Cloudflare Pages (Standby)
+      - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy . --project-name=safabox
+          command: pages deploy . --project-name=safaboxbd
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
