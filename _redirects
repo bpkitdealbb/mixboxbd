@@ -1,1 +1,7 @@
-/*  /index.html  200
+# firebase.json-এর এই rewrite rule-এর সমতুল্য:
+# { "source": "!/data.json", "destination": "/index.html" }
+# মানে: data.json নিজে যেভাবে আছে সেভাবেই সার্ভ হবে,
+# আর বাকি সব path-এর জন্য index.html ফলব্যাক হিসেবে কাজ করবে (SPA রাউটিং)
+
+/data.json  /data.json  200
+/*          /index.html 200
