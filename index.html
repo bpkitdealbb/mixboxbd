@@ -1635,7 +1635,7 @@ function seoBreadcrumbSchema(items) {
 // ==========================================
 function seoProductSchema(p) {
     const price = parseFloat(p.discountprice || p.price);
-    const reviews = (appData.reviews || []).filter(r => r.productid == p.id && r.status === 'approved');
+const reviews = (appData.reviews || []).filter(r => r.productid == p.id && r.status === 'active');
     const currentUrl = window.location.origin + '/product?id=' + p.id;
     
     const schema = {
@@ -3391,45 +3391,6 @@ function handleTrackOrder() {
     });
 }
 
-// ==========================================
-// HELPER FUNCTION: ATTEMPT COUNTER
-// ==========================================
-function incrementTrackAttempt() {
-    trackAttempts++;
-    
-    const MAX_ATTEMPTS = 3;
-    const BLOCK_DURATION_MS = 5 * 60 * 1000; 
-
-    if (trackAttempts >= MAX_ATTEMPTS) {
-        trackBlockUntil = Date.now() + BLOCK_DURATION_MS;
-        localStorage.setItem('trackBlockUntil', trackBlockUntil);
-        return true; 
-    }
-    
-    return false; 
-}
-
-function incrementTrackAttempt() {
-    trackAttempts++;
-    
-    const MAX_ATTEMPTS = 3;
-    const BLOCK_DURATION_MS = 5 * 60 * 1000; 
-
-    if (trackAttempts >= MAX_ATTEMPTS) {
-        trackBlockUntil = Date.now() + BLOCK_DURATION_MS;
-        
-        // ==========================================
-        // KEY UPDATE: localStorage এ সেভ করা হচ্ছে
-        // ==========================================
-        localStorage.setItem('trackBlockUntil', trackBlockUntil);
-        // ==========================================
-        
-        return true; 
-    }
-    
-    return false; 
-}
-
         function showOrderTrackingDetails(order) {
             const items = safeJsonParse(order.productdetails);
 
@@ -4004,66 +3965,69 @@ function updateOrderSummary() {
         }
     }
 
-    let subTotal = 0;
-    let paidItems = [];
-    let allItems = []; 
+let subTotal = 0;
+let paidItems = [];
+let allItems = []; 
+let hasEligibleItem = false; // NEW
 
-    selectedItems.forEach(item => {
-        const qty = item.quantity || item.qty || 1;
-        const price = parseFloat(item.price); 
-        const itemCat = (item.category || '').toString().trim().toLowerCase();
-        const extraCharge = parseFloat(item.extradeliverycharge || 0);
+selectedItems.forEach(item => {
+    const qty = item.quantity || item.qty || 1;
+    const price = parseFloat(item.price); 
+    const itemCat = (item.category || '').toString().trim().toLowerCase();
+    const extraCharge = parseFloat(item.extradeliverycharge || 0);
 
-        subTotal += (price * qty);
+    subTotal += (price * qty);
 
-        // ==========================================
-        // NEW: PARTIAL DELIVERY DISCOUNT LOGIC
-        // ==========================================
-        if (isFreeDeliveryActive) {
-            const excludedList = appData.coupon.excludedCategories || [];
-            const hasPartialDelDiscount = appData.coupon && appData.coupon.deliveryDiscountAmount > 0;
-            
-            let isApplicable = isAllCategory || isCategoryMatch(item.category, applicableCategories);
-            let isExcluded = isCategoryMatch(item.category, excludedList);
-            
-            if (hasPartialDelDiscount) {
-                // PARTIAL DISCOUNT: সব আইটেমে স্বাভাবিক চার্জ, পরে নির্দিষ্ট টাকা কাটা হবে
-                paidItems.push({ qty, extraCharge });
-                allItems.push({ qty, extraCharge });
-            } else if (isApplicable && !isExcluded) {
-                // FULL FREE: এই আইটেম ফ্রি
-                allItems.push({ qty, extraCharge });
-            } else {
-                // NOT APPLICABLE: স্বাভাবিক চার্জ
-                paidItems.push({ qty, extraCharge });
-                allItems.push({ qty, extraCharge });
-            }
+    if (isFreeDeliveryActive) {
+        const excludedList = appData.coupon.excludedCategories || [];
+        const hasPartialDelDiscount = appData.coupon && appData.coupon.deliveryDiscountAmount > 0;
+        
+        let isApplicable = isAllCategory || isCategoryMatch(item.category, applicableCategories);
+        let isExcluded = isCategoryMatch(item.category, excludedList);
+        
+        if (hasPartialDelDiscount) {
+            paidItems.push({ qty, extraCharge });
+            allItems.push({ qty, extraCharge });
+        } else if (isApplicable && !isExcluded) {
+            hasEligibleItem = true; // NEW
+            allItems.push({ qty, extraCharge });
         } else {
             paidItems.push({ qty, extraCharge });
             allItems.push({ qty, extraCharge });
         }
-        // ==========================================
-    });
+    } else {
+        paidItems.push({ qty, extraCharge });
+        allItems.push({ qty, extraCharge });
+    }
+});
 
-    const calcShipping = (items) => {
-        if (items.length === 0) return 0;
-        let totalShipping = 0;
-        let isFirstItem = true;
-        items.forEach(item => {
-            const qty = item.qty;
-            const extra = item.extraCharge;
+const calcShipping = (items) => {
+    if (items.length === 0) return 0;
+    let totalShipping = 0;
+    let isFirstItem = true;
+    items.forEach(item => {
+        const qty = item.qty;
+        const extra = item.extraCharge;
         if (isFirstItem) {
             totalShipping += baseDelivery;
-            totalShipping += (qty * extra); // FIX: প্রথম প্রোডাক্টের এক্সট্রা চার্জ বাদ যাবে না
+            totalShipping += (qty * extra);
             isFirstItem = false;
         } else {
-                totalShipping += (qty * extra);
-            }
-        });
-        return totalShipping;
-    };
+            totalShipping += (qty * extra);
+        }
+    });
+    return totalShipping;
+};
 
-    const totalShipping = calcShipping(paidItems);
+// NEW: FULL FREE + অন্তত ১টা এলিজিবল আইটেম থাকলে বেস চার্জ পুরোটাই মাফ,
+// শুধু paidItems-এর নিজস্ব extra charge যোগ হবে
+const hasPartialDelDiscount = isFreeDeliveryActive && appData.coupon && appData.coupon.deliveryDiscountAmount > 0;
+let totalShipping;
+if (isFreeDeliveryActive && !hasPartialDelDiscount && hasEligibleItem) {
+    totalShipping = paidItems.reduce((sum, it) => sum + (it.qty * it.extraCharge), 0);
+} else {
+    totalShipping = calcShipping(paidItems);
+}
     
     // ==========================================
     // FIX: DELIVERY DISCOUNT CALCULATION
