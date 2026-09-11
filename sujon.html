@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzgYYWpoPuTSgfC3YzCTq8n8uzZ9JAhtKo1tzR9YA_rJt8J-wWKApZqTaVg3rzsHUklXg/exec";
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwhBSqcy8OESKbqei0qkyGe2MKOyeo_Dl2GwYZPODPl7yv76hygAKShxDlQyyV2K3opvw/exec";
         if (typeof google === 'undefined' || !google.script) {
             window.google = { script: { run: (() => { function c(s,f){s=s||((r)=>console.log(r));f=f||((e)=>console.error(e));const m={withSuccessHandler:(cb)=>c(cb,f),withFailureHandler:(cb)=>c(s,cb)};return new Proxy(m,{get:(t,p)=>{if(p in t)return t[p];return(...a)=>{const cs=s,cf=f;fetch(GAS_WEB_APP_URL,{method:'POST',mode:'cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({functionName:p,arguments:a})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}).then(r=>cs(r)).catch(e=>cf(e.message||e))}}});} return c(); })() } };
         }
@@ -45,6 +45,7 @@
                 </div>
                 <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-tab active"><i class="fas fa-chart-pie mr-1"></i>Dashboard</button>
                 <button onclick="switchTab('orders')" id="nav-orders" class="nav-tab"><i class="fas fa-shopping-bag mr-1"></i>Orders</button>
+                <button onclick="switchTab('pos')" id="nav-pos" class="nav-tab"><i class="fas fa-cash-register mr-1"></i>অফলাইন বিক্রি</button>
                 <button onclick="switchTab('products')" id="nav-products" class="nav-tab"><i class="fas fa-box mr-1"></i>Products</button>
                 <button onclick="switchTab('settings')" id="nav-settings" class="nav-tab"><i class="fas fa-cog mr-1"></i>Settings</button>
                 <button onclick="switchTab('users')" id="nav-users" class="nav-tab"><i class="fas fa-users mr-1"></i>Users</button>
@@ -117,7 +118,7 @@
 
 <script>
 let adminSecret = sessionStorage.getItem('adminSecret') || '';
-let localData = { products:[], orders:[], settings:{}, categories:[], users:[], banners:[], locations:[], socialmedia:[], policies:[], reviews:[], popups:[], coupons:[] };
+let localData = { products:[], orders:[], settings:{}, categories:[], users:[], banners:[], locations:[], socialmedia:[], policies:[], reviews:[], popups:[], coupons:[], offlineorders:[] };
 let currentEditSheet = '', currentEditKey = '';
 
 // ==========================================
@@ -256,7 +257,7 @@ function fetchData(){if(!adminSecret)return;Swal.fire({title:'Syncing...',allowO
 
 function clearAllCache(){Swal.fire({title:'সার্ভার ক্যাশ ক্লিয়ার করবেন?',text:'ওয়েবসাইটে নতুন ডাটা আনতে ক্যাশ ক্লিয়ার করুন',icon:'warning',showCancelButton:true,confirmButtonText:'হ্যাঁ, ক্লিয়ার করুন'}).then(r=>{if(r.isConfirmed){google.script.run.withSuccessHandler(r=>{if(r.success)Swal.fire({title:'✅ ক্যাশ ক্লিয়ার হয়েছে!',icon:'success',timer:1500,showConfirmButton:false});else Swal.fire('Error',r.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).apiClearAllCache(adminSecret);}});}
 
-function switchTab(t){document.querySelectorAll('.nav-tab').forEach(e=>e.classList.remove('active'));document.getElementById(`nav-${t}`)?.classList.add('active');const c=document.getElementById('contentArea');if(t==='dashboard')renderDashboard(c);else if(t==='orders')renderOrders(c);else if(t==='products')renderProducts(c);else if(SHEET_CONFIGS[t])renderGenericSheet(c,t);}
+function switchTab(t){document.querySelectorAll('.nav-tab').forEach(e=>e.classList.remove('active'));document.getElementById(`nav-${t}`)?.classList.add('active');const c=document.getElementById('contentArea');if(t==='dashboard')renderDashboard(c);else if(t==='orders')renderOrders(c);else if(t==='products')renderProducts(c);else if(t==='pos')renderPOS(c);else if(SHEET_CONFIGS[t])renderGenericSheet(c,t);}
 
 // ==========================================
 // ADVANCED PROFESSIONAL DASHBOARD
@@ -375,6 +376,29 @@ function renderDashboard(c) {
             totalProfit += orderProfit; // নেট প্রফিটে যোগ হবে (লাভ থাকলে যোগ বিয়োগ হবে, লস হলে মাইনাস হবে)
         } catch(e){}
     });
+    // 4. Offline (POS) sales profit -- SubTotal minus saved product-cost snapshot
+    // (no courier/return/exchange complexity here, so it's a straight calc)
+    const allOfflineOrders = localData.offlineorders || [];
+    const filteredOfflineOrders = allOfflineOrders.filter(o => {
+        try {
+            const d = new Date(o[0]);
+            return d >= startDate && d <= now;
+        } catch(e) { return false; }
+    });
+    let offlineRevenue = 0, offlineCost = 0, offlineProfit = 0, offlinePotentialProfit = 0, offlineDue = 0;
+    filteredOfflineOrders.forEach(o => {
+        const revenue = parseFloat(o[5]) || 0;
+        const cost = parseFloat(o[6]) || 0;
+        const status = String(o[7] || 'Paid').toLowerCase();
+        const profit = revenue - cost;
+        offlineRevenue += revenue;
+        offlineCost += cost;
+        offlineDue += Math.max(0, parseFloat(o[9]) || 0);
+        if(status === 'paid') offlineProfit += profit;
+        else offlinePotentialProfit += profit;
+    });
+    totalProfit += offlineProfit; // unpaid offline sales are potential profit only, never realized profit
+
     const productSalesMap = {};
     
     products.forEach(p => {
@@ -409,6 +433,24 @@ function renderDashboard(c) {
                 const key = `${pId}__${vName}`;
                 if (productSalesMap[key]) {
                     const qty = parseInt(item.quantity || item.qty) || 1;
+                    const revenue = parseFloat(item.price) || 0;
+                    productSalesMap[key].totalQty += qty;
+                    productSalesMap[key].totalRevenue += (revenue * qty);
+                }
+            });
+        } catch(e) {}
+    });
+
+    // Fold offline (POS) item sales into the same per-product report so quantities/revenue stay accurate across both channels
+    filteredOfflineOrders.forEach(o => {
+        try {
+            const items = JSON.parse(o[4] || "[]");
+            items.forEach(item => {
+                const pId = String(item.id || '').trim();
+                const vName = item.variant || 'DEFAULT';
+                const key = `${pId}__${vName}`;
+                if (productSalesMap[key]) {
+                    const qty = parseInt(item.quantity) || 1;
                     const revenue = parseFloat(item.price) || 0;
                     productSalesMap[key].totalQty += qty;
                     productSalesMap[key].totalRevenue += (revenue * qty);
@@ -479,7 +521,7 @@ function renderDashboard(c) {
             </div>
             <div class="bg-white p-5 rounded-xl shadow-sm border flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl ${totalProfit >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'} flex items-center justify-center text-lg"><i class="fas fa-${totalProfit >= 0 ? 'trending-up' : 'trending-down'}"></i></div>
-                <div><p class="text-xs text-gray-500 font-bold uppercase">নেট প্রফিট</p><p class="text-2xl font-black ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}">৳${totalProfit.toFixed(0)}</p><p class="text-[10px] text-gray-400">রিটার্ন ও এক্সচেঞ্জ লস বাদ</p></div>
+                <div><p class="text-xs text-gray-500 font-bold uppercase">নেট প্রফিট</p><p class="text-2xl font-black ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}">৳${totalProfit.toFixed(0)}</p><p class="text-[10px] text-gray-400">অনলাইন + অফলাইন, রিটার্ন/এক্সচেঞ্জ লস বাদ</p></div>
             </div>
         </div>
 
@@ -505,7 +547,13 @@ function renderDashboard(c) {
         </div>
 
         <!-- নিচের সারি: লস ও সাফল্যতার হার -->
-        <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-sky-50 border border-sky-200 p-4 rounded-xl text-center cursor-pointer hover:bg-sky-100 transition" onclick="switchTab('pos')" title="মোট অফলাইন বিক্রয়: ৳${offlineRevenue.toFixed(0)}">
+                <p class="text-2xl font-black text-sky-700">${filteredOfflineOrders.length}</p>
+                <p class="text-xs font-bold text-sky-500 mt-1">অফলাইন সেল (POS)</p>
+                <p class="text-[10px] text-sky-600 bg-sky-100 font-black mt-1 rounded py-0.5">Realized: ৳${offlineProfit.toFixed(0)}</p>
+                <p class="text-[9px] text-orange-600 mt-1">Potential: ৳${offlinePotentialProfit.toFixed(0)} | বাকি: ৳${offlineDue.toFixed(0)}</p>
+            </div>
             <div class="bg-orange-50 border border-orange-200 p-4 rounded-xl text-center">
                 <p class="text-2xl font-black text-orange-700">${returnOrders.length}</p>
                 <p class="text-xs font-bold text-orange-500 mt-1">রিটার্ন</p>
@@ -720,7 +768,7 @@ function renderOrders(c){
         
         let itemsHtml='';try{JSON.parse(o[7]||"[]").forEach(i=>{itemsHtml+=`<div class="flex items-center gap-2 py-0.5"><img src="${i.image||'https://via.placeholder.com/24'}" class="img-thumb" onerror="this.src='https://via.placeholder.com/24'"><div class="min-w-0"><div class="text-[11px] font-semibold truncate">${i.name}${i.selectedVariant?' <span class=text-gray-400>['+i.selectedVariant+']</span>':''}</div></div></div>`;});}catch(e){}
 
-        return `<tr class="border-b border-gray-100 hover:bg-gray-50"><td class="p-2 text-[10px] whitespace-nowrap">${dt}</td><td class="p-2 text-[10px] font-mono font-bold">${o[1]}</td><td class="p-2 text-[10px]"><b>${o[2]}</b><br><span class="text-gray-400">${o[3]}</span></td><td class="p-2 max-w-[180px]">${itemsHtml}</td><td class="p-2 text-xs font-bold text-blue-600 whitespace-nowrap">৳${paid.toLocaleString()}</td><td class="p-2 text-[10px] whitespace-nowrap">কস্ট: -৳${pc}<br>কুরিয়ার: -৳${dc}<br><input type="number" value="${ex}" onchange="updateExtraCost('${o[1]}',this.value)" class="w-12 border rounded p-0.5 text-[9px] text-center mt-1"></td><td class="p-2"><span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${bg}">${statusText}</span></td><td class="p-2 text-xs font-black whitespace-nowrap ${profitClass}" title="${(st === 'processing' || st === 'shipped') ? 'সম্ভাব্য প্রফিট' : st === 'cancelled' ? 'কোনো লাভ-লস নেই' : st.includes('exchange') ? 'এক্সচেঞ্জ খরচ বাদ' : 'নেট প্রফিট'}">${profitPrefix}৳${profitDisplay}</td><td class="p-2"><select onchange="updateOrderStatus('${o[1]}',this.value)" class="border rounded p-1 text-[10px]"><option value="">Change</option><option value="Processing" ${st==='processing'?'selected':''}>Processing</option><option value="Shipped" ${st==='shipped'?'selected':''}>Shipped</option><option value="Delivered" ${st==='delivered'?'selected':''}>Delivered</option><option value="Cancelled" ${st==='cancelled'?'selected':''}>Cancelled</option><option value="Returned" ${st==='return'?'selected':''}>রিটার্নড</option><option value="Exchange Customer" ${st==='exchange customer'?'selected':''}>এক্সচেঞ্জ (কাস্টমার)</option><option value="Exchange Seller" ${st==='exchange seller'?'selected':''}>এক্সচেঞ্জ (সেলার)</option></select></td></tr>`;
+        return `<tr class="border-b border-gray-100 hover:bg-gray-50"><td class="p-2 text-[10px] whitespace-nowrap">${dt}</td><td class="p-2 text-[10px] font-mono font-bold">${o[1]}</td><td class="p-2 text-[10px]"><b>${o[2]}</b><br><span class="text-gray-400">${o[3]}</span></td><td class="p-2 max-w-[180px]">${itemsHtml}</td><td class="p-2 text-xs font-bold text-blue-600 whitespace-nowrap">৳${paid.toLocaleString()}</td><td class="p-2 text-[10px] whitespace-nowrap">কস্ট: -৳${pc}<br>কুরিয়ার: -৳${dc}<br><input type="number" value="${ex}" onchange="updateExtraCost('${o[1]}',this.value)" class="w-12 border rounded p-0.5 text-[9px] text-center mt-1"></td><td class="p-2"><span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${bg}">${statusText}</span></td><td class="p-2 text-xs font-black whitespace-nowrap ${profitClass}" title="${(st === 'processing' || st === 'shipped') ? 'সম্ভাব্য প্রফিট' : st === 'cancelled' ? 'কোনো লাভ-লস নেই' : st.includes('exchange') ? 'এক্সচেঞ্জ খরচ বাদ' : 'নেট প্রফিট'}">${profitPrefix}৳${profitDisplay}</td><td class="p-2"><button onclick="viewOnlineInvoice('${o[1]}')" class="text-blue-600 hover:text-blue-800 mr-1" title="Invoice"><i class="fas fa-file-invoice"></i></button><select onchange="updateOrderStatus('${o[1]}',this.value)" class="border rounded p-1 text-[10px]"><option value="">Change</option><option value="Processing" ${st==='processing'?'selected':''}>Processing</option><option value="Shipped" ${st==='shipped'?'selected':''}>Shipped</option><option value="Delivered" ${st==='delivered'?'selected':''}>Delivered</option><option value="Cancelled" ${st==='cancelled'?'selected':''}>Cancelled</option><option value="Returned" ${st==='return'?'selected':''}>রিটার্নড</option><option value="Exchange Customer" ${st==='exchange customer'?'selected':''}>এক্সচেঞ্জ (কাস্টমার)</option><option value="Exchange Seller" ${st==='exchange seller'?'selected':''}>এক্সচেঞ্জ (সেলার)</option></select></td></tr>`;
     }).join('');
 
     const deliveredProfit = sP - sC - sD - sE;
@@ -1036,6 +1084,342 @@ function renderProducts(c){
     c.innerHTML=`<div class="bg-white rounded-xl shadow-sm border overflow-hidden"><div class="p-4 border-b bg-gray-50 flex justify-between items-center"><input type="text" id="pSearch" oninput="filterProducts()" placeholder="Search ID/Name/Category..." class="border rounded-lg px-4 py-2 text-sm w-80 outline-none focus:ring-2 focus:ring-blue-500"><button onclick="openProductModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-xs hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>Add</button></div><div class="tbl-wrap overflow-x-auto"><table class="w-full text-left min-w-[1300px]"><thead><tr class="bg-gray-100 text-[10px] text-gray-600 uppercase"><th class="p-2">ID</th><th class="p-2">Category</th><th class="p-2">Name</th><th class="p-2">Price</th><th class="p-2">Disc.</th><th class="p-2">Images</th><th class="p-2">Video</th><th class="p-2">Desc</th><th class="p-2">Status</th><th class="p-2">Stock</th><th class="p-2">Ex.Del</th><th class="p-2">Variants</th><th class="p-2">Cost</th><th class="p-2">Act</th></tr></thead><tbody id="pTbl">${trs}</tbody></table></div></div>`;
 }
 function filterProducts(){const k=document.getElementById('pSearch').value.toLowerCase();document.querySelectorAll('#pTbl tr').forEach(r=>{r.style.display=(r.cells[0].textContent.toLowerCase().includes(k)||r.cells[1].textContent.toLowerCase().includes(k)||r.cells[2].textContent.toLowerCase().includes(k))?'':'none';});}
+
+// ==========================================
+// NEW: অফলাইন বিক্রি (POS) — Products শিটের সাথেই সরাসরি স্টক ডিডাক্ট হয়
+// ==========================================
+let posCart = [];
+
+function renderPOS(c) {
+    posCart = [];
+    c.innerHTML = `
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b bg-gray-50">
+                <input type="text" id="posSearch" oninput="posFilterProducts()" placeholder="প্রোডাক্ট খুঁজুন (নাম/আইডি)..." class="border rounded-lg px-4 py-2 text-sm w-full outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div id="posProductList" class="p-3 grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[65vh] overflow-y-auto"></div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col">
+            <div class="p-3 border-b bg-gray-50 font-bold text-sm"><i class="fas fa-cash-register mr-1"></i> বর্তমান বিক্রি</div>
+            <div id="posCartList" class="p-3 flex-1 overflow-y-auto max-h-[45vh]"></div>
+            <div class="p-3 border-t bg-gray-50 space-y-2">
+                <input type="text" id="posCustName" placeholder="কাস্টমারের নাম (ঐচ্ছিক)" class="border rounded-lg px-3 py-2 text-sm w-full">
+                <input type="text" id="posCustPhone" placeholder="ফোন নাম্বার (ঐচ্ছিক)" class="border rounded-lg px-3 py-2 text-sm w-full">
+                <select id="posPaymentStatus" onchange="posPaymentStatusChanged()" class="border rounded-lg px-3 py-2 text-sm w-full"><option value="Paid">Paid — পুরো টাকা পেয়েছি</option><option value="Unpaid">Unpaid — বাকি থাকবে</option></select>
+                <input type="number" id="posAmountReceived" min="0" step="0.01" placeholder="আসলে কত টাকা পেলাম? (ডিফল্ট: মোট)" class="border rounded-lg px-3 py-2 text-sm w-full">
+                <div class="text-[10px] text-gray-500">Paid হলে পুরো টাকা, Unpaid হলে 0 বা যত টাকা পেয়েছেন লিখুন।</div>
+                <div class="flex justify-between items-center text-sm font-bold pt-1">
+                    <span>সাবটোটাল:</span><span id="posSubtotal">৳0</span>
+                </div>
+                <button onclick="posSubmitSale()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-bold text-sm">
+                    <i class="fas fa-check-circle mr-1"></i> সেল সম্পন্ন করুন
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden mt-4">
+        <div class="p-3 border-b bg-gray-50 flex flex-col md:flex-row gap-2 md:items-center md:justify-between">
+            <div class="font-bold text-sm"><i class="fas fa-history mr-1"></i> অফলাইন বিক্রয় / বাকি হিসাব</div>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input id="offlineCustomerSearch" oninput="renderOfflineHistory()" placeholder="নাম/মোবাইল দিয়ে খুঁজুন..." class="border rounded-lg px-3 py-1.5 text-xs">
+                <select id="offlinePaymentFilter" onchange="renderOfflineHistory()" class="border rounded-lg px-3 py-1.5 text-xs">
+                    <option value="all">সব পেমেন্ট</option><option value="unpaid">শুধু বাকি (Unpaid)</option><option value="paid">শুধু Paid</option>
+                </select>
+            </div>
+        </div>
+        <div class="tbl-wrap overflow-x-auto">
+            <table class="w-full text-left min-w-[1100px]">
+                <thead><tr class="bg-gray-100 text-[10px] text-gray-600 uppercase">
+                    <th class="p-2">Date</th><th class="p-2">ID</th><th class="p-2">Customer</th><th class="p-2">Products</th>
+                    <th class="p-2">মোট</th><th class="p-2">পেয়েছেন</th><th class="p-2">বাকি</th><th class="p-2">Profit</th><th class="p-2">Status</th><th class="p-2">Action</th>
+                </tr></thead><tbody id="offlineHistoryBody">${buildPOSHistoryRows()}</tbody>
+            </table>
+        </div>
+    </div>`;
+    posFilterProducts();
+    posRenderCart();
+    posPaymentStatusChanged();
+}
+
+function buildPOSHistoryRows() {
+    const search = (document.getElementById('offlineCustomerSearch')?.value || '').trim().toLowerCase();
+    const filter = document.getElementById('offlinePaymentFilter')?.value || 'all';
+    const rows = [...(localData.offlineorders || [])].reverse().filter(o => {
+        const name = String(o[2] || '').toLowerCase();
+        const phone = String(o[3] || '').replace(/^'/,'').toLowerCase();
+        const status = String(o[7] || 'Paid').toLowerCase();
+        const matchSearch = !search || name.includes(search) || phone.includes(search);
+        const matchFilter = filter === 'all' || status === filter;
+        return matchSearch && matchFilter;
+    }).slice(0, 100);
+    if (rows.length === 0) return '<tr><td colspan="10" class="p-4 text-center text-gray-400 text-xs">কোনো অফলাইন অর্ডার পাওয়া যায়নি</td></tr>';
+    return rows.map(o => {
+        let dt=''; try { const d=new Date(o[0]); dt=d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+', '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:true}); } catch(e){}
+        const sub=parseFloat(o[5])||0, cost=parseFloat(o[6])||0, status=String(o[7]||'Paid'), received=parseFloat(o[8]);
+        const actualReceived=isNaN(received)?(status.toLowerCase()==='paid'?sub:0):received, due=Math.max(0,parseFloat(o[9])||sub-actualReceived), profit=sub-cost;
+        let itemsHtml=''; try { JSON.parse(o[4]||'[]').forEach(i=>itemsHtml+=`<div class="text-[10px]">${i.name}${i.variant?' ['+i.variant+']':''} × ${i.quantity}</div>`); } catch(e){}
+        const safeId=String(o[1]||'').replace(/'/g,"\\'");
+        return `<tr class="border-b border-gray-100 hover:bg-gray-50">
+            <td class="p-2 text-[10px] whitespace-nowrap">${dt}</td><td class="p-2 text-[10px] font-mono font-bold">${o[1]}</td>
+            <td class="p-2 text-[10px]"><b>${o[2]||'Walk-in'}</b><br><span class="text-gray-400">${String(o[3]||'').replace(/^'/,'')}</span></td>
+            <td class="p-2 max-w-[200px]">${itemsHtml}</td><td class="p-2 text-xs font-bold">৳${sub.toLocaleString()}</td>
+            <td class="p-2 text-xs text-green-600">৳${actualReceived.toLocaleString()}</td><td class="p-2 text-xs font-bold ${due>0?'text-red-600':'text-gray-400'}">৳${due.toLocaleString()}</td>
+            <td class="p-2 text-xs font-black ${status.toLowerCase()==='paid'?'text-green-600':'text-orange-500'}">${status.toLowerCase()==='paid'?'৳'+profit.toFixed(0):'Potential ৳'+profit.toFixed(0)}</td>
+            <td class="p-2 text-xs"><span class="px-2 py-1 rounded-full ${status.toLowerCase()==='paid'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}">${status}</span></td>
+            <td class="p-2 whitespace-nowrap"><button onclick="viewOfflineInvoice('${safeId}')" class="text-blue-600 hover:text-blue-800 mr-2" title="Invoice"><i class="fas fa-file-invoice"></i></button>${due>0?`<button onclick="markOfflinePaid('${safeId}')" class="text-green-600 hover:text-green-800 font-bold text-[10px]" title="Mark Paid"><i class="fas fa-check"></i> Paid</button>`:''}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderOfflineHistory(){ const body=document.getElementById('offlineHistoryBody'); if(body) body.innerHTML=buildPOSHistoryRows(); }
+function posPaymentStatusChanged(){ const s=document.getElementById('posPaymentStatus'), a=document.getElementById('posAmountReceived'); if(!s||!a)return; if(s.value==='Paid'){ const total=posCart.reduce((x,it)=>x+(it.price*it.qty),0); a.value=total.toFixed(2); a.disabled=false; } else { a.value='0'; a.disabled=false; } }
+
+
+function posFilterProducts() {
+    const kw = (document.getElementById('posSearch').value || '').toLowerCase();
+    const list = document.getElementById('posProductList');
+    const filtered = localData.products.filter(p =>
+        (String(p.id).toLowerCase().includes(kw) || String(p.name).toLowerCase().includes(kw))
+    ).slice(0, 60); // পারফরম্যান্সের জন্য একবারে সর্বোচ্চ ৬০টা দেখানো হচ্ছে
+
+    list.innerHTML = filtered.map(p => {
+        const stock = p.totalstock || 0;
+        const disabled = stock <= 0 ? 'opacity-40 pointer-events-none' : '';
+        return `<div class="border rounded-lg p-2 text-center ${disabled} hover:border-blue-500 cursor-pointer" onclick="posOpenAddDialog('${p.id}')">
+            <img src="${p.imagemain || ''}" class="w-full h-16 object-cover rounded mb-1" onerror="this.style.display='none'">
+            <div class="text-[11px] font-semibold truncate">${p.name}</div>
+            <div class="text-[10px] text-gray-500">স্টক: ${stock}</div>
+            <div class="text-[11px] font-bold text-blue-600">৳${p.discountprice || p.price}</div>
+        </div>`;
+    }).join('') || '<p class="col-span-full text-center text-gray-400 text-sm py-6">কোনো প্রোডাক্ট পাওয়া যায়নি</p>';
+}
+
+function posOpenAddDialog(productId) {
+    const p = localData.products.find(x => String(x.id) === String(productId));
+    if (!p) return;
+
+    const variants = Array.isArray(p.variants) ? p.variants : [];
+
+    if (variants.length > 0) {
+        const options = variants.map(v =>
+            `<option value="${v.name}" ${v.stock <= 0 ? 'disabled' : ''}>${v.name} (স্টক: ${v.stock}) — ৳${v.price}</option>`
+        ).join('');
+        Swal.fire({
+            title: p.name,
+            html: `<select id="posVariantSelect" class="swal2-select" style="display:block;width:100%">${options}</select>
+                   <input id="posVariantQty" type="number" min="1" value="1" class="swal2-input" placeholder="Quantity">`,
+            showCancelButton: true,
+            confirmButtonText: 'কার্টে যোগ করুন',
+            preConfirm: () => {
+                const variant = document.getElementById('posVariantSelect').value;
+                const qty = parseInt(document.getElementById('posVariantQty').value) || 1;
+                return { variant, qty };
+            }
+        }).then(r => {
+            if (r.isConfirmed) {
+                const v = variants.find(vv => vv.name === r.value.variant);
+                posAddToCart(p, r.value.qty, v);
+            }
+        });
+    } else {
+        Swal.fire({
+            title: p.name,
+            input: 'number',
+            inputValue: 1,
+            inputAttributes: { min: 1 },
+            showCancelButton: true,
+            confirmButtonText: 'কার্টে যোগ করুন'
+        }).then(r => {
+            if (r.isConfirmed) posAddToCart(p, parseInt(r.value) || 1, null);
+        });
+    }
+}
+
+function posAddToCart(product, qty, variant) {
+    const maxStock = variant ? variant.stock : (product.totalstock || 0);
+    const price = variant ? variant.price : (product.discountprice || product.price);
+    const variantName = variant ? variant.name : '';
+
+    const existing = posCart.find(it => it.id === product.id && it.variant === variantName);
+    const existingQty = existing ? existing.qty : 0;
+
+    if (existingQty + qty > maxStock) {
+        Swal.fire('স্টক নেই', `সর্বোচ্চ ${maxStock}টা যোগ করা যাবে (ইতিমধ্যে কার্টে ${existingQty}টা আছে)।`, 'warning');
+        return;
+    }
+
+    if (existing) {
+        existing.qty += qty;
+    } else {
+        posCart.push({
+            id: product.id, name: product.name, variant: variantName,
+            price: parseFloat(price) || 0, qty: qty, maxStock: maxStock
+        });
+    }
+    posRenderCart();
+}
+
+function posChangeQty(index, delta) {
+    const item = posCart[index];
+    if (!item) return;
+    const newQty = item.qty + delta;
+    if (newQty <= 0) { posCart.splice(index, 1); }
+    else if (newQty > item.maxStock) { Swal.fire('স্টক নেই', `সর্বোচ্চ স্টক: ${item.maxStock}`, 'warning'); return; }
+    else { item.qty = newQty; }
+    posRenderCart();
+}
+
+function posRenderCart() {
+    const wrap = document.getElementById('posCartList');
+    if (!wrap) return;
+
+    if (posCart.length === 0) {
+        wrap.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">কার্ট খালি — বাম পাশ থেকে প্রোডাক্ট যোগ করুন</p>';
+    } else {
+        wrap.innerHTML = posCart.map((it, i) => `
+            <div class="flex justify-between items-center border-b py-2 text-xs">
+                <div class="flex-1 pr-2">
+                    <div class="font-semibold">${it.name}${it.variant ? ' (' + it.variant + ')' : ''}</div>
+                    <div class="text-gray-500">৳${it.price} x ${it.qty}</div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="posChangeQty(${i},-1)" class="w-6 h-6 bg-gray-100 rounded">-</button>
+                    <span class="w-5 text-center">${it.qty}</span>
+                    <button onclick="posChangeQty(${i},1)" class="w-6 h-6 bg-gray-100 rounded">+</button>
+                </div>
+            </div>`).join('');
+    }
+
+    const subTotal = posCart.reduce((sum, it) => sum + (it.price * it.qty), 0);
+    document.getElementById('posSubtotal').innerText = `৳${subTotal.toFixed(2)}`;
+    posPaymentStatusChanged();
+}
+
+function posSubmitSale() {
+    if(posCart.length===0){Swal.fire('কার্ট খালি','অন্তত একটা প্রোডাক্ট যোগ করুন।','warning');return;}
+    const subTotal=posCart.reduce((sum,it)=>sum+(it.price*it.qty),0);
+    const status=document.getElementById('posPaymentStatus').value;
+    const amountReceived=Number(document.getElementById('posAmountReceived').value||0);
+    if(status==='Paid' && amountReceived < subTotal){Swal.fire('টাকা অসম্পূর্ণ',`Paid হলে পুরো ৳${subTotal.toFixed(2)} দিতে হবে।`,'warning');return;}
+    if(amountReceived>subTotal){Swal.fire('ভুল পরিমাণ',`প্রাপ্ত টাকা সর্বোচ্চ ৳${subTotal.toFixed(2)} হতে পারে।`,'warning');return;}
+    const customerInfo={name:document.getElementById('posCustName').value.trim(),phone:document.getElementById('posCustPhone').value.trim(),paymentStatus:status,amountReceived};
+    Swal.fire({title:'সেল সম্পন্ন হচ্ছে...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
+    google.script.run.withSuccessHandler(res=>{
+        if(res.success){
+            posCart.forEach(it=>{const p=localData.products.find(x=>String(x.id)===String(it.id));if(p){if(it.variant&&Array.isArray(p.variants)){const v=p.variants.find(vv=>vv.name===it.variant);if(v)v.stock=Math.max(0,v.stock-it.qty);}p.totalstock=Math.max(0,(p.totalstock||0)-it.qty);}});
+            if(!Array.isArray(localData.offlineorders))localData.offlineorders=[];
+            localData.offlineorders.push([new Date().toISOString(),res.orderId,customerInfo.name||'Walk-in Customer',customerInfo.phone||'',JSON.stringify(res.items),res.subTotal,res.totalProductCost||0,res.paymentStatus,res.amountReceived,res.dueAmount,'',res.profitStatus]);
+            Swal.close(); posShowInvoice(res,customerInfo); posCart=[]; renderPOS(document.getElementById('contentArea'));
+        }else Swal.fire('Error',res.error,'error');
+    }).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminCreateOfflineOrder(adminSecret,posCart.map(it=>({id:it.id,price:it.price,variant:it.variant,qty:it.qty})),customerInfo);
+}
+
+function getInvoiceHtml(result, customerInfo, logoUrl) {
+    const itemsHtml=(result.items||[]).map(it=>`<tr><td style="padding:4px 6px;border-bottom:1px solid #eee">${it.name}${it.variant?' ('+it.variant+')':''}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${it.price}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${(it.price*it.quantity).toFixed(2)}</td></tr>`).join('');
+    const logo=logoUrl||localData.settings.sitelogo||'';
+    const payment=result.paymentStatus||'Paid',due=Number(result.dueAmount||0),received=Number(result.amountReceived||0),profitStatus=result.profitStatus||'';
+    return `<div id="invoicePrintArea" style="font-family:Arial,sans-serif;max-width:380px;margin:auto;padding:16px;background:#fff;color:#111">
+        ${logo?`<div style="text-align:center;margin-bottom:8px"><img src="${logo}" style="max-width:180px;max-height:70px;object-fit:contain"></div>`:''}
+        <p style="text-align:center;margin:0 0 12px;font-size:12px;color:#666">অফলাইন বিক্রয় রশিদ</p>
+        <p style="font-size:12px;margin:2px 0"><b>অর্ডার আইডি:</b> ${result.orderId}</p><p style="font-size:12px;margin:2px 0"><b>তারিখ:</b> ${result.date||''}</p>
+        ${customerInfo?.name?`<p style="font-size:12px;margin:2px 0"><b>কাস্টমার:</b> ${customerInfo.name}</p>`:''}${customerInfo?.phone?`<p style="font-size:12px;margin:2px 0"><b>ফোন:</b> ${customerInfo.phone}</p>`:''}
+        <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px"><thead><tr style="border-bottom:2px solid #333"><th style="text-align:left;padding:4px 6px">প্রোডাক্ট</th><th style="padding:4px 6px">পরিমাণ</th><th style="text-align:right;padding:4px 6px">দাম</th><th style="text-align:right;padding:4px 6px">মোট</th></tr></thead><tbody>${itemsHtml}</tbody></table>
+        <div style="text-align:right;font-weight:bold;margin-top:10px;font-size:14px">সর্বমোট: ৳${Number(result.subTotal||0).toFixed(2)}</div>
+        <div style="margin-top:6px;font-size:12px;text-align:right">পেয়েছেন: <b>৳${received.toFixed(2)}</b><br>বাকি: <b style="color:${due?'#dc2626':'#111'}">৳${due.toFixed(2)}</b><br>স্ট্যাটাস: <b>${payment}</b>${profitStatus?`<br>Profit: <b>${profitStatus==='Realized'?'Realized':'Potential'}</b>`:''}</div>
+        <p style="text-align:center;font-size:11px;color:#999;margin-top:16px">ধন্যবাদ! আবার আসবেন।</p>
+    </div>`;
+}
+function showInvoiceActions(html, orderId){
+    Swal.fire({title:false,html,showCancelButton:true,showDenyButton:true,confirmButtonText:'<i class="fas fa-print"></i> প্রিন্ট',denyButtonText:'<i class="fas fa-download"></i> ডাউনলোড',cancelButtonText:'বন্ধ করুন',width:430}).then(r=>{
+        if(r.isConfirmed){const w=window.open('','_blank');w.document.write(`<html><head><title>Invoice ${orderId}</title></head><body>${html}</body></html>`);w.document.close();w.focus();w.print();}
+        else if(r.isDenied){const blob=new Blob([`<html><head><meta charset="UTF-8"><title>Invoice ${orderId}</title></head><body>${html}</body></html>`],{type:'text/html;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`invoice-${orderId}.html`;a.click();URL.revokeObjectURL(a.href);}
+    });
+}
+function posShowInvoice(result, customerInfo){ showInvoiceActions(getInvoiceHtml(result,customerInfo,localData.settings.sitelogo),result.orderId); }
+function viewOfflineInvoice(orderId){
+    const row=(localData.offlineorders||[]).find(o=>String(o[1])===String(orderId)); if(!row)return;
+    let items=[];try{items=JSON.parse(row[4]||'[]');}catch(e){}
+    showInvoiceActions(getInvoiceHtml({orderId:row[1],date:new Date(row[0]).toLocaleString('en-GB'),items,subTotal:Number(row[5])||0,paymentStatus:row[7]||'Paid',amountReceived:Number(row[8])||0,dueAmount:Number(row[9])||0,profitStatus:row[11]||((row[7]||'Paid')==='Paid'?'Realized':'Potential')},{name:row[2],phone:String(row[3]||'').replace(/^'/,'')},localData.settings.sitelogo),row[1]);
+}
+function getOnlineInvoiceHtml(order, customerInfo, logoUrl) {
+    const itemsHtml = (order.items||[]).map(it=>`<tr><td style="padding:4px 6px;border-bottom:1px solid #eee">${it.name}${it.selectedVariant?' ('+it.selectedVariant+')':''}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${it.price}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${(it.price*it.quantity).toFixed(2)}</td></tr>`).join('');
+    const logo = logoUrl || localData.settings.sitelogo || '';
+    return `<div id="invoicePrintArea" style="font-family:Arial,sans-serif;max-width:380px;margin:auto;padding:16px;background:#fff;color:#111">
+        ${logo?`<div style="text-align:center;margin-bottom:8px"><img src="${logo}" style="max-width:180px;max-height:70px;object-fit:contain"></div>`:''}
+        <p style="text-align:center;margin:0 0 12px;font-size:12px;color:#666">অর্ডার রশিদ</p>
+        <p style="font-size:12px;margin:2px 0"><b>অর্ডার আইডি:</b> ${order.orderId}</p>
+        <p style="font-size:12px;margin:2px 0"><b>তারিখ:</b> ${order.date}</p>
+        ${customerInfo.name?`<p style="font-size:12px;margin:2px 0"><b>কাস্টমার:</b> ${customerInfo.name}</p>`:''}
+        ${customerInfo.phone?`<p style="font-size:12px;margin:2px 0"><b>ফোন:</b> ${customerInfo.phone}</p>`:''}
+        ${customerInfo.address?`<p style="font-size:12px;margin:2px 0"><b>ঠিকানা:</b> ${customerInfo.address}</p>`:''}
+        <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px"><thead><tr style="border-bottom:2px solid #333"><th style="text-align:left;padding:4px 6px">প্রোডাক্ট</th><th style="padding:4px 6px">পরিমাণ</th><th style="text-align:right;padding:4px 6px">দাম</th><th style="text-align:right;padding:4px 6px">মোট</th></tr></thead><tbody>${itemsHtml}</tbody></table>
+        <div style="margin-top:10px;font-size:12px">
+            <div style="display:flex;justify-content:space-between;margin:2px 0"><span>সাবটোটাল:</span><b>৳${order.subTotal.toFixed(2)}</b></div>
+            <div style="display:flex;justify-content:space-between;margin:2px 0"><span>ডেলিভারি চার্জ:</span><b>${order.deliveryCharge>0?'৳'+order.deliveryCharge.toFixed(2):'FREE'}</b></div>
+            ${order.couponCode?`<div style="display:flex;justify-content:space-between;margin:2px 0"><span>কুপন কোড:</span><b>${order.couponCode}</b></div>`:''}
+            ${order.productDiscount>0?`<div style="display:flex;justify-content:space-between;margin:2px 0;color:#dc2626"><span>প্রোডাক্ট ডিসকাউন্ট:</span><b>-৳${order.productDiscount.toFixed(2)}</b></div>`:''}
+            ${order.deliveryDiscount>0?`<div style="display:flex;justify-content:space-between;margin:2px 0;color:#dc2626"><span>ডেলিভারি ডিসকাউন্ট:</span><b>-৳${order.deliveryDiscount.toFixed(2)}</b></div>`:''}
+            ${order.pointsDiscount>0?`<div style="display:flex;justify-content:space-between;margin:2px 0;color:#7c3aed"><span>পয়েন্ট ডিসকাউন্ট:</span><b>-৳${order.pointsDiscount.toFixed(2)}</b></div>`:''}
+        </div>
+        <div style="text-align:right;font-weight:bold;margin-top:10px;font-size:14px">সর্বমোট: ৳${order.total.toFixed(2)}</div>
+        <div style="margin-top:6px;font-size:12px;text-align:right;color:#2563eb">${order.pointsFinal?'অর্জিত পয়েন্ট':'সম্ভাব্য পয়েন্ট'}: <b>+${order.pointsEarned}</b></div>
+        <div style="margin-top:2px;font-size:12px;text-align:right">স্ট্যাটাস: <b>${order.status}</b></div>
+        <p style="text-align:center;font-size:11px;color:#999;margin-top:16px">ধন্যবাদ! আবার আসবেন।</p>
+    </div>`;
+}
+function viewOnlineInvoice(orderId) {
+    const o = localData.orders.find(x => x[1] === orderId);
+    if (!o) return;
+    let items = []; try { items = JSON.parse(o[7] || '[]'); } catch(e) {}
+    const couponCode = o[11] || '';
+    const deliveryCharge = Number(o[18]) || 0;
+    // নোট: প্রতি অর্ডারের আসল "ডেলিভারি ডিসকাউন্ট" আলাদাভাবে সেভ করা নেই,
+    // তাই বর্তমান বেস ডেলিভারি চার্জের সাথে তুলনা করে আনুমানিক হিসাব করা হচ্ছে
+    const baseDelivery = Number(localData.settings.deliverycharge) || 0;
+    const deliveryDiscount = couponCode ? Math.max(0, baseDelivery - deliveryCharge) : 0;
+    const pointsRatio = Number(localData.settings.pointsratio) || 100;
+    const storedPointsEarned = Number(o[14]) || 0;
+    const total = Number(o[9]) || 0;
+    const order = {
+        orderId: o[1],
+        date: (()=>{ try { return new Date(o[0]).toLocaleString('en-GB'); } catch(e){ return ''; } })(),
+        items: items,
+        subTotal: items.reduce((s,i)=>s+(Number(i.price)||0)*(Number(i.quantity)||1), 0),
+        total: total,
+        deliveryCharge: deliveryCharge,
+        deliveryDiscount: deliveryDiscount,
+        couponCode: couponCode,
+        productDiscount: Number(o[13]) || 0,
+        pointsDiscount: Number(o[22]) || 0,
+        pointsEarned: storedPointsEarned > 0 ? storedPointsEarned : Math.floor(total / pointsRatio),
+        pointsFinal: storedPointsEarned > 0,
+        status: o[10] || ''
+    };
+    const customerInfo = {
+        name: o[2],
+        phone: o[3],
+        address: [o[6], o[5], o[4]].filter(Boolean).join(', ')
+    };
+    showInvoiceActions(getOnlineInvoiceHtml(order, customerInfo, localData.settings.sitelogo), o[1]);
+}
+function markOfflinePaid(orderId){
+  const row=(localData.offlineorders||[]).find(r=>String(r[1])===String(orderId));
+  if(!row)return;
+  const due=Number(row[9])||0;
+  if(due<=0){alert('এই অর্ডারের বকেয়া নেই।');return;}
+  const amount=prompt(`এইবার কত টাকা পেলেন?\nবর্তমান বকেয়া: ৳${due.toFixed(2)}`,due);
+  if(amount===null)return;
+  const payment=Number(amount);
+  if(!isFinite(payment)||payment<=0){alert('সঠিক পেমেন্টের পরিমাণ দিন।');return;}
+  if(payment>due){alert(`সর্বোচ্চ ৳${due.toFixed(2)} পর্যন্ত পেমেন্ট গ্রহণ করা যাবে।`);return;}
+  google.script.run.withSuccessHandler(r=>{
+    if(r&&r.success){
+      row[7]=r.paymentStatus||'Paid';row[8]=Number(r.totalAmountReceived);row[9]=Number(r.dueAmount)||0;row[10]=r.paymentDate||new Date().toISOString();row[11]=r.profitStatus||'Realized';
+      renderOfflineHistory();viewOfflineInvoice(orderId);
+    }else alert((r&&r.error)||'Payment update failed');
+  }).adminMarkOfflineOrderPaid(adminSecret,orderId,payment);
+}
 
 function openProductModal(id=null){
     document.getElementById('productForm').reset();document.getElementById('p_stockstatus').value='In Stock';
