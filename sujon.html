@@ -1330,11 +1330,132 @@ function getInvoiceHtml(result, customerInfo, logoUrl) {
         <p style="text-align:center;font-size:11px;color:#999;margin-top:16px">ধন্যবাদ! আবার আসবেন।</p>
     </div>`;
 }
+let __invoiceLibPromise=null;
+function loadInvoicePdfLibraries(){
+    if(window.html2canvas && window.jspdf) return Promise.resolve();
+    if(__invoiceLibPromise) return __invoiceLibPromise;
+    __invoiceLibPromise=new Promise((resolve,reject)=>{
+        const load=(src,done)=>{
+            const old=document.querySelector(`script[src="${src}"]`);
+            if(old){
+                if((src.includes('html2canvas')&&window.html2canvas)||(src.includes('jspdf')&&window.jspdf)) done();
+                else {old.addEventListener('load',done,{once:true});old.addEventListener('error',()=>reject(new Error('Library load failed')),{once:true});}
+                return;
+            }
+            const sc=document.createElement('script');sc.src=src;sc.onload=done;sc.onerror=()=>reject(new Error('Library load failed'));document.head.appendChild(sc);
+        };
+        load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',()=>
+            load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>{
+                if(!window.html2canvas||!window.jspdf) reject(new Error('PDF library unavailable')); else resolve();
+            })
+        );
+    }).catch(e=>{__invoiceLibPromise=null;throw e;});
+    return __invoiceLibPromise;
+}
+
+async function invoiceToCanvas(invoiceHtml){
+    await loadInvoicePdfLibraries();
+    const holder=document.createElement('div');
+    holder.style.cssText='position:fixed;left:-10000px;top:0;width:380px;background:#fff;padding:0;margin:0;z-index:-1;';
+    holder.innerHTML=invoiceHtml;
+    document.body.appendChild(holder);
+    try{
+        const source=holder.querySelector('#invoicePrintArea');
+        if(!source) throw new Error('Invoice area পাওয়া যায়নি');
+        source.style.width='380px';
+        source.style.maxWidth='380px';
+        source.style.boxSizing='border-box';
+        if(document.fonts && document.fonts.ready) await document.fonts.ready;
+        const imgs=[...source.querySelectorAll('img')];
+        await Promise.all(imgs.map(img=>new Promise(res=>{
+            if(img.complete) return res();
+            img.onload=img.onerror=()=>res();
+        })));
+        return await window.html2canvas(source,{scale:2,backgroundColor:'#ffffff',useCORS:true,allowTaint:false,logging:false,removeContainer:true});
+    }finally{holder.remove();}
+}
+
+async function invoiceToPdfBlob(invoiceHtml){
+    const canvas=await invoiceToCanvas(invoiceHtml);
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'portrait',unit:'pt',format:'a4',compress:true});
+    const pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight(), margin=24;
+    const maxW=pageW-margin*2;
+    const scale=maxW/canvas.width;
+    const pageCanvasH=Math.floor((pageH-margin*2)/scale);
+    let offset=0, page=0;
+    while(offset<canvas.height){
+        const sliceH=Math.min(pageCanvasH,canvas.height-offset);
+        const slice=document.createElement('canvas');
+        slice.width=canvas.width; slice.height=sliceH;
+        const ctx=slice.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,slice.width,slice.height);
+        ctx.drawImage(canvas,0,offset,canvas.width,sliceH,0,0,canvas.width,sliceH);
+        if(page>0) pdf.addPage();
+        const imgH=sliceH*scale;
+        pdf.addImage(slice.toDataURL('image/jpeg',0.94),'JPEG',margin,margin,maxW,imgH,'INV'+page,'FAST');
+        offset+=sliceH;page++;
+    }
+    return pdf.output('blob');
+}
+
+async function downloadInvoicePdf(html, orderId){
+    try{
+        const blob=await invoiceToPdfBlob(html); const name=`invoice-${orderId}.pdf`;
+        const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+    }catch(e){console.error(e);Swal.fire('Error','ইনভয়েস PDF তৈরি করা যায়নি। ইন্টারনেট সংযোগ ও আবার চেষ্টা করুন।','error');}
+}
+
+function normalizeWhatsAppNumber(phone){
+    let n=String(phone||'').trim().replace(/[^0-9]/g,'');
+    // Bangladesh: 01XXXXXXXXX -> 8801XXXXXXXXX
+    if(n.startsWith('00880')) n=n.slice(2);
+    if(n.startsWith('880')) return n;
+    if(n.startsWith('01') && n.length===11) return '880'+n.slice(1);
+    return n;
+}
+
+async function shareInvoiceWhatsApp(html, orderId, phone){
+    const cleanPhone=normalizeWhatsAppNumber(phone);
+    if(!cleanPhone){
+        Swal.fire('WhatsApp নম্বর নেই','অফলাইন বিক্রয়ের সময় কাস্টমারের WhatsApp নম্বর দিন।','warning');
+        return;
+    }
+    try{
+        // First create and download the exact invoice PDF from this order.
+        // The browser cannot force WhatsApp to attach a local file to a specific
+        // wa.me recipient, so we open that exact unsaved-number chat after download.
+        const blob=await invoiceToPdfBlob(html);
+        const fileName=`invoice-${orderId}.pdf`;
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url; a.download=fileName; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),10000);
+
+        const text=encodeURIComponent(`আসসালামু আলাইকুম। আপনার অর্ডার ${orderId}-এর ইনভয়েস সংযুক্ত করা হবে।`);
+        const waUrl=`https://wa.me/${cleanPhone}?text=${text}`;
+        // Open the exact WhatsApp chat for the entered number. The number does
+        // NOT need to be saved in Contacts.
+        setTimeout(()=>{ window.location.href=waUrl; },500);
+
+        Swal.fire({
+            icon:'success',
+            title:'WhatsApp চ্যাট প্রস্তুত',
+            html:`<div style="font-size:14px;line-height:1.7;text-align:center">নম্বর: <b>${cleanPhone}</b><br>PDF ডাউনলোড হয়েছে। WhatsApp-এ এই নম্বরের চ্যাট খুলবে।<br><b>চ্যাটে গিয়ে 📎 → Document থেকে PDF-টি attach করে Send করুন।</b></div>`,
+            confirmButtonText:'ঠিক আছে'
+        });
+    }catch(e){
+        console.error(e);
+        Swal.fire('Error','ইনভয়েস PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।','error');
+    }
+}
+
 function showInvoiceActions(html, orderId){
-    Swal.fire({title:false,html,showCancelButton:true,showDenyButton:true,confirmButtonText:'<i class="fas fa-print"></i> প্রিন্ট',denyButtonText:'<i class="fas fa-download"></i> ডাউনলোড',cancelButtonText:'বন্ধ করুন',width:430}).then(r=>{
-        if(r.isConfirmed){const w=window.open('','_blank');w.document.write(`<html><head><title>Invoice ${orderId}</title></head><body>${html}</body></html>`);w.document.close();w.focus();w.print();}
-        else if(r.isDenied){const blob=new Blob([`<html><head><meta charset="UTF-8"><title>Invoice ${orderId}</title></head><body>${html}</body></html>`],{type:'text/html;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`invoice-${orderId}.html`;a.click();URL.revokeObjectURL(a.href);}
-    });
+    const phoneMatch=html.match(/<b>ফোন:<\/b>\s*([^<]+)/), phone=phoneMatch?phoneMatch[1].trim():'';
+    Swal.fire({title:`ইনভয়েস - ${orderId}`,html:`${html}<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button type="button" id="invoicePrintBtn" class="swal2-confirm swal2-styled" style="background:#2563eb"><i class="fas fa-print"></i> প্রিন্ট</button><button type="button" id="invoicePdfBtn" class="swal2-confirm swal2-styled" style="background:#16a34a"><i class="fas fa-file-pdf"></i> PDF ডাউনলোড</button><button type="button" id="invoiceWaBtn" class="swal2-confirm swal2-styled" style="background:#25D366"><i class="fab fa-whatsapp"></i> WhatsApp চ্যাট + PDF</button></div>`,showConfirmButton:false,showCancelButton:true,cancelButtonText:'বন্ধ করুন',width:430,didOpen:()=>{
+        document.getElementById('invoicePrintBtn').onclick=()=>{const w=window.open('','_blank');if(!w){Swal.fire('Popup blocked','প্রিন্টের জন্য popup অনুমতি দিন।','warning');return;}w.document.write(`<html><head><meta charset="UTF-8"><title>Invoice ${orderId}</title></head><body>${html}</body></html>`);w.document.close();w.focus();setTimeout(()=>w.print(),300);};
+        document.getElementById('invoicePdfBtn').onclick=()=>downloadInvoicePdf(html,orderId);
+        document.getElementById('invoiceWaBtn').onclick=()=>shareInvoiceWhatsApp(html,orderId,phone);
+    }});
 }
 function posShowInvoice(result, customerInfo){ showInvoiceActions(getInvoiceHtml(result,customerInfo,localData.settings.sitelogo),result.orderId); }
 function viewOfflineInvoice(orderId){
