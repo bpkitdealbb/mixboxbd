@@ -1272,17 +1272,34 @@ font-weight: bold;
             <!-- REQUIREMENT: Added type="email" for basic browser validation, JS will handle Regex -->
             <!-- UPDATED: maxlength="50" -->
             <div class="relative">
-                <input type="email" id="registerEmail" name="email" autocomplete="email" inputmode="email" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 pr-12 focus:ring-1 focus:ring-primary outline-none" onfocus="if(!this.value) triggerGoogleEmailSuggestion();">
-                <button type="button" onclick="triggerGoogleEmailSuggestion()" title="Google account থেকে Email বেছে নিন" aria-label="Google account থেকে Email বেছে নিন" class="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200 transition">
+                <input
+                    type="email"
+                    id="registerEmail"
+                    name="email"
+                    autocomplete="email"
+                    data-placeholder-ph="email_ph"
+                    placeholder="Email Address"
+                    maxlength="50"
+                    class="w-full border rounded-lg p-3 pr-12 focus:ring-1 focus:ring-primary outline-none"
+                    onfocus="if(!this.value) triggerGoogleEmailSuggestion();"
+                >
+
+                <!-- Inline Google icon: external image নয়, তাই icon সবসময় visible থাকবে -->
+                <button
+                    type="button"
+                    onclick="triggerGoogleEmailSuggestion()"
+                    title="Google account থেকে Email বেছে নিন"
+                    aria-label="Google account থেকে Email বেছে নিন"
+                    class="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200 transition"
+                >
                     <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" focusable="false">
                         <path fill="#4285F4" d="M21.35 12.23c0-.79-.07-1.55-.22-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.42z"/>
                         <path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.35l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.53A9.74 9.74 0 0 0 12 21.5z"/>
                         <path fill="#FBBC05" d="M6.54 13.59A5.85 5.85 0 0 1 6.23 12c0-.55.1-1.09.31-1.59V7.88H3.3A9.75 9.75 0 0 0 2.25 12c0 1.57.38 3.05 1.05 4.12l3.24-2.53z"/>
-                        <path fill="#EA4335" d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.83 3.5 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.38l3.24 2.53C4.69 8.38 7.31 6.38 12 6.38z"/>
+                        <path fill="#EA4335" d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.83 3.5 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.38l3.24 2.53C7.31 8.1 9.46 6.38 12 6.38z"/>
                     </svg>
                 </button>
             </div>
-            <!-- UPDATED: type="tel" and maxlength="11" -->
             <input type="tel" id="registerPhone" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
             <input type="password" id="registerPassword" data-placeholder-ph="pass_ph" placeholder="Password (Min 6 chars)" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
@@ -3162,11 +3179,13 @@ function createOrderCard(order) {
         }
 
         // ============================================================
-        // GOOGLE EMAIL PICKER — REGISTRATION EMAIL ONLY
+        // GOOGLE EMAIL ONLY - Registration
         // ============================================================
-        // Replace this placeholder with your Web OAuth Client ID from
-        // Google Cloud Console. The selected Google credential is used
-        // only to read the email address; name/photo are not copied.
+        // শুধু Google account থেকে Email নেওয়া হবে।
+        // Name / Picture / অন্য কোনো profile data ব্যবহার করা হবে না।
+        // Google icon inline SVG হওয়ায় এটি external image-এর উপর নির্ভর করবে না।
+        // ============================================================
+
         const GOOGLE_CLIENT_ID = "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
 
         let googleOneTapInitialized = false;
@@ -3180,17 +3199,26 @@ function createOrderCard(order) {
                    GOOGLE_CLIENT_ID.includes('.apps.googleusercontent.com');
         }
 
+        // Google ID token থেকে payload decode করা হবে।
+        // Callback-এ payload.email ছাড়া অন্য কোনো field ব্যবহার করা হবে না।
         function parseGoogleJwt(token) {
             try {
                 if (!token || typeof token !== 'string') return null;
+
                 const parts = token.split('.');
                 if (parts.length !== 3) return null;
+
                 const base64Url = parts[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+
                 const jsonPayload = decodeURIComponent(
-                    atob(padded).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+                    atob(padded)
+                        .split('')
+                        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                        .join('')
                 );
+
                 return JSON.parse(jsonPayload);
             } catch (e) {
                 console.error('Google JWT পার্স করতে সমস্যা হয়েছে:', e);
@@ -3198,26 +3226,53 @@ function createOrderCard(order) {
             }
         }
 
+        // ============================================================
+        // IMPORTANT:
+        // Google callback থেকে শুধু payload.email নেওয়া হচ্ছে।
+        // payload.name / payload.picture / given_name / family_name
+        // বা অন্য কোনো profile data একেবারেই ব্যবহার করা হচ্ছে না।
+        // ============================================================
         function handleGoogleEmailSuggestion(response) {
             if (!response || !response.credential) return;
+
             const payload = parseGoogleJwt(response.credential);
-            const email = payload && typeof payload.email === 'string' ? payload.email.trim() : '';
-            if (!email) return;
+
+            // শুধুমাত্র payload.email
+            const email = payload && typeof payload.email === 'string'
+                ? payload.email.trim()
+                : '';
+
+            if (!email) {
+                console.warn('Google credential থেকে Email পাওয়া যায়নি।');
+                return;
+            }
+
             const emailInput = document.getElementById('registerEmail');
             if (!emailInput) return;
+
+            // শুধু Email field-এ বসবে
             emailInput.value = email;
             emailInput.dispatchEvent(new Event('input', { bubbles: true }));
             emailInput.dispatchEvent(new Event('change', { bubbles: true }));
             emailInput.focus();
         }
 
+        // ============================================================
+        // Google Identity Services initialize() একবারই করা হবে।
+        // ============================================================
         function initGoogleOneTapForEmail() {
             if (googleOneTapInitialized) return true;
-            if (!isGoogleClientIdConfigured()) return false;
+
+            if (!isGoogleClientIdConfigured()) {
+                console.warn('Google Client ID সেট করা হয়নি।');
+                return false;
+            }
+
             if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
                 googleLibraryReady = false;
                 return false;
             }
+
             try {
                 google.accounts.id.initialize({
                     client_id: GOOGLE_CLIENT_ID,
@@ -3225,6 +3280,7 @@ function createOrderCard(order) {
                     use_fedcm_for_prompt: true,
                     auto_select: false
                 });
+
                 googleOneTapInitialized = true;
                 googleLibraryReady = true;
                 return true;
@@ -3235,34 +3291,48 @@ function createOrderCard(order) {
             }
         }
 
+        // Google GIS library load হওয়ার পর initialize করা হবে।
         function onGoogleIdentityLibraryLoaded() {
             googleLibraryReady = true;
             initGoogleOneTapForEmail();
+
             if (googleEmailPromptPending) {
                 googleEmailPromptPending = false;
                 setTimeout(() => triggerGoogleEmailSuggestion(), 50);
             }
         }
+
+        // Google GIS-এর official library-load callback
         window.onGoogleLibraryLoad = onGoogleIdentityLibraryLoaded;
 
+        // Fallback: library একটু দেরিতে load হলেও কাজ করবে।
         function waitForGoogleIdentityServices(callback, attempts = 40) {
             if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
                 googleLibraryReady = true;
                 callback();
                 return;
             }
-            if (attempts <= 0) return;
+
+            if (attempts <= 0) {
+                console.warn('Google Identity Services library load হয়নি।');
+                return;
+            }
+
             clearTimeout(googleInitRetryTimer);
             googleInitRetryTimer = setTimeout(() => {
                 waitForGoogleIdentityServices(callback, attempts - 1);
             }, 250);
         }
 
+        // Email field / Google icon থেকে Google account prompt চালু হবে।
         function triggerGoogleEmailSuggestion() {
             googleEmailPromptPending = true;
+
             waitForGoogleIdentityServices(() => {
                 if (!initGoogleOneTapForEmail()) return;
+
                 googleEmailPromptPending = false;
+
                 try {
                     google.accounts.id.prompt();
                 } catch (e) {
@@ -3271,10 +3341,14 @@ function createOrderCard(order) {
             });
         }
 
+        // Registration page load হওয়ার পর Google functionality প্রস্তুত করা।
         function setupGoogleEmailForRegistration() {
             const emailInput = document.getElementById('registerEmail');
             if (!emailInput) return;
-            waitForGoogleIdentityServices(() => initGoogleOneTapForEmail());
+
+            waitForGoogleIdentityServices(() => {
+                initGoogleOneTapForEmail();
+            });
         }
 
         function performRegistration() {
@@ -8474,6 +8548,6 @@ function shareCartViaWhatsApp() {
     }
 }
     </script>
-<script async defer src="https://accounts.google.com/gsi/client" onload="if(window.onGoogleLibraryLoad) window.onGoogleLibraryLoad()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="if(window.onGoogleLibraryLoad) window.onGoogleLibraryLoad()"></script>
 </body>
 </html>
