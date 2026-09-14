@@ -428,7 +428,7 @@ font-weight: bold;
 #cartSummary:not(.hidden){animation:stickyUp .4s ease-out}
 </style>
 
-<script async defer src="https://accounts.google.com/gsi/client" onload="if(window.onGoogleLibraryLoad) window.onGoogleLibraryLoad()"></script>\n\n</head>
+</head>
 <body class="bg-background text-gray-800 font-sans antialiased">
 
 <!-- Skeleton Loader -->
@@ -1269,7 +1269,8 @@ font-weight: bold;
         <div class="space-y-3">
             <!-- UPDATED: maxlength="50" -->
             <input type="text" id="registerName" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
-            <!-- Google Email chooser: শুধু Registration-এর Email field-এর জন্য -->
+            <!-- REQUIREMENT: Added type="email" for basic browser validation, JS will handle Regex -->
+            <!-- UPDATED: maxlength="50" -->
             <div class="relative">
                 <input
                     type="email"
@@ -1279,12 +1280,12 @@ font-weight: bold;
                     data-placeholder-ph="email_ph"
                     placeholder="Email Address"
                     maxlength="50"
-                    class="w-full border rounded-lg p-3 pr-14 focus:ring-1 focus:ring-primary outline-none"
+                    class="w-full border rounded-lg p-3 pr-12 focus:ring-1 focus:ring-primary outline-none"
                 >
                 <div
                     id="googleEmailButton"
-                    class="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center overflow-hidden"
-                    aria-label="Choose Google account email"
+                    class="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center"
+                    aria-label="Choose Google account for Email"
                     title="Google account থেকে Email বেছে নিন"
                 ></div>
             </div>
@@ -2620,7 +2621,7 @@ case 'brand':
                 case 'account': loadAccountPage(); break;
                 case 'my-orders': loadMyOrdersPage(); break; 
                 case 'login': loadTemplate('loginTemplate'); break;
-                case 'register': loadTemplate('registerTemplate'); setupGoogleEmailButton(); break;
+                case 'register': loadTemplate('registerTemplate'); setTimeout(setupGoogleEmailButton, 0); break;
                 case 'forgot-password': loadTemplate('forgotPasswordTemplate'); break;
                 case 'messages': loadMessagesPage(); break;
                 default: loadHomePage();
@@ -3169,17 +3170,16 @@ function createOrderCard(order) {
 
 
         // ============================================================
-        // GOOGLE EMAIL CHOOSER - Registration ONLY
+        // GOOGLE EMAIL ONLY - Registration Email Account Chooser
         // ============================================================
-        // Google account chooser থেকে শুধু Email নেওয়া হবে।
-        // Name / Picture / অন্য কোনো Google profile data ব্যবহার করা হবে না।
-        // Login page-এ Google Sign-In যোগ করা হয়নি।
+        // Google account থেকে শুধু Email নেওয়া হবে।
+        // Name, picture বা অন্য profile data ব্যবহার করা হবে না।
+        // Login page-এ Google Sign-In যোগ করা হচ্ছে না।
         // ============================================================
 
         const GOOGLE_CLIENT_ID = "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
 
         let googleEmailButtonInitialized = false;
-        let googleLibraryReady = false;
         let googleEmailButtonRetryTimer = null;
 
         function isGoogleClientIdConfigured() {
@@ -3209,15 +3209,17 @@ function createOrderCard(order) {
 
                 return JSON.parse(jsonPayload);
             } catch (e) {
-                console.error('Google JWT parse error:', e);
+                console.error('Google JWT পার্স করতে সমস্যা হয়েছে:', e);
                 return null;
             }
         }
 
+        // Google account নির্বাচন হলে শুধু Email field পূরণ হবে।
         function handleGoogleEmailSuggestion(response) {
             if (!response || !response.credential) return;
 
             const payload = parseGoogleJwt(response.credential);
+
             const email = payload && typeof payload.email === 'string'
                 ? payload.email.trim()
                 : '';
@@ -3230,7 +3232,6 @@ function createOrderCard(order) {
             const emailInput = document.getElementById('registerEmail');
             if (!emailInput) return;
 
-            // শুধু Email field-ই পূরণ হবে।
             emailInput.value = email;
             emailInput.dispatchEvent(new Event('input', { bubbles: true }));
             emailInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -3241,19 +3242,20 @@ function createOrderCard(order) {
             if (googleEmailButtonInitialized) return true;
 
             if (!isGoogleClientIdConfigured()) {
-                console.warn('Google Client ID সঠিকভাবে সেট করা হয়নি।');
+                console.warn('Google Client ID সেট করা হয়নি।');
                 return false;
             }
 
             if (typeof google === 'undefined' ||
                 !google.accounts ||
                 !google.accounts.id) {
-                googleLibraryReady = false;
                 return false;
             }
 
             const container = document.getElementById('googleEmailButton');
-            if (!container) return false;
+            const emailInput = document.getElementById('registerEmail');
+
+            if (!container || !emailInput) return false;
 
             try {
                 google.accounts.id.initialize({
@@ -3265,8 +3267,6 @@ function createOrderCard(order) {
 
                 container.innerHTML = '';
 
-                // এটি একটি real Google-rendered button।
-                // ক্লিক করলে Google account chooser খুলবে।
                 google.accounts.id.renderButton(container, {
                     type: 'icon',
                     theme: 'outline',
@@ -3275,40 +3275,48 @@ function createOrderCard(order) {
                 });
 
                 googleEmailButtonInitialized = true;
-                googleLibraryReady = true;
                 return true;
             } catch (e) {
+                console.error('Google Email chooser button তৈরি করা যায়নি:', e);
                 googleEmailButtonInitialized = false;
-                googleLibraryReady = false;
-                console.warn('Google Email button তৈরি করা যায়নি:', e);
                 return false;
             }
         }
 
-        function setupGoogleEmailButton(attempts = 50) {
+        function setupGoogleEmailButton() {
+            // Register page ছাড়া অন্য page-এ কিছু করা হবে না।
+            const container = document.getElementById('googleEmailButton');
+            const emailInput = document.getElementById('registerEmail');
+
+            if (!container || !emailInput) return;
+
+            if (initGoogleEmailButton()) return;
+
+            // GIS script একটু পরে load হলে retry করবে।
             clearTimeout(googleEmailButtonRetryTimer);
 
-            const tryInit = () => {
+            let attempts = 0;
+            const retry = () => {
+                attempts++;
+
                 if (initGoogleEmailButton()) return;
 
-                if (attempts <= 0) {
+                if (attempts < 40) {
+                    googleEmailButtonRetryTimer = setTimeout(retry, 250);
+                } else {
                     console.warn('Google Identity Services load হয়নি।');
-                    return;
                 }
-
-                attempts--;
-                googleEmailButtonRetryTimer = setTimeout(tryInit, 200);
             };
 
-            tryInit();
+            googleEmailButtonRetryTimer = setTimeout(retry, 100);
         }
 
-        function onGoogleLibraryLoad() {
-            googleLibraryReady = true;
+        // GIS script load হওয়ার পর register page থাকলে button তৈরি করা হবে।
+        function onGoogleIdentityLibraryLoaded() {
             setupGoogleEmailButton();
         }
 
-        window.onGoogleLibraryLoad = onGoogleLibraryLoad;
+        window.onGoogleLibraryLoad = onGoogleIdentityLibraryLoaded;
 
         function performRegistration() {
             const name = document.getElementById('registerName').value.trim();
@@ -8507,5 +8515,6 @@ function shareCartViaWhatsApp() {
     }
 }
     </script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="if(window.onGoogleLibraryLoad) window.onGoogleLibraryLoad()"></script>
 </body>
 </html>
