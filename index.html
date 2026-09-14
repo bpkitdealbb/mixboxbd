@@ -867,7 +867,7 @@ font-weight: bold;
                 <!-- NEW: VARIANT SELECTION UI -->
                 <!-- ========================================== -->
                 <div id="variantSection" class="hidden">
-                    <label class="block text-xs font-bold text-gray-600 mb-2 uppercase" data-i18n="select_variant">Select Variant</label>
+                    <label id="variantLabel" class="block text-xs font-bold text-gray-600 mb-2 uppercase"></label>
                     <div id="variantButtons" class="flex flex-wrap gap-2">
                         <!-- Variant buttons will be injected here via JS -->
                     </div>
@@ -1288,7 +1288,7 @@ font-weight: bold;
                     onfocus="if(!this.value) triggerGoogleEmailSuggestion();"
                 >
 
-                <!-- Inline Google icon: external image নয়, তাই icon সবসময় visible থাকবে -->
+                <!-- Inline Google icon: external image নয়, তাই icon সবসময় visible থাকবে -->
                 <button
                     type="button"
                     onclick="triggerGoogleEmailSuggestion()"
@@ -1389,7 +1389,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxvnJTPkPAhxch-Dk5PjmFM0sj_kqU7ye0Z2p2tpIDAHiaczmshwT4rrWI9XnfGpnpQ/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzqDMFIJe8u2KOBlMYyLtou_GGSEfJRcf2stv93Gun2_7wVHabSDtMPdH9VWcRz2Wgmow/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 // NOTE: window.google = {...} দিয়ে সরাসরি ওভাররাইট করা হচ্ছে না, কারণ Google Identity
@@ -3188,9 +3188,9 @@ function createOrderCard(order) {
         // ============================================================
         // GOOGLE EMAIL ONLY - Registration
         // ============================================================
-        // শুধু Google account থেকে Email নেওয়া হবে।
+        // শুধু Google account থেকে Email নেওয়া হবে।
         // Name / Picture / অন্য কোনো profile data ব্যবহার করা হবে না।
-        // Google icon inline SVG হওয়ায় এটি external image-এর উপর নির্ভর করবে না।
+        // Google icon inline SVG হওয়ায় এটি external image-এর উপর নির্ভর করবে না।
         // ============================================================
 
         const GOOGLE_CLIENT_ID = "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
@@ -3207,7 +3207,7 @@ function createOrderCard(order) {
         }
 
         // Google ID token থেকে payload decode করা হবে।
-        // Callback-এ payload.email ছাড়া অন্য কোনো field ব্যবহার করা হবে না।
+        // Callback-এ payload.email ছাড়া অন্য কোনো field ব্যবহার করা হবে না।
         function parseGoogleJwt(token) {
             try {
                 if (!token || typeof token !== 'string') return null;
@@ -3235,7 +3235,7 @@ function createOrderCard(order) {
 
         // ============================================================
         // IMPORTANT:
-        // Google callback থেকে শুধু payload.email নেওয়া হচ্ছে।
+        // Google callback থেকে শুধু payload.email নেওয়া হচ্ছে।
         // payload.name / payload.picture / given_name / family_name
         // বা অন্য কোনো profile data একেবারেই ব্যবহার করা হচ্ছে না।
         // ============================================================
@@ -3250,7 +3250,7 @@ function createOrderCard(order) {
                 : '';
 
             if (!email) {
-                console.warn('Google credential থেকে Email পাওয়া যায়নি।');
+                console.warn('Google credential থেকে Email পাওয়া যায়নি।');
                 return;
             }
 
@@ -3271,7 +3271,7 @@ function createOrderCard(order) {
             if (googleOneTapInitialized) return true;
 
             if (!isGoogleClientIdConfigured()) {
-                console.warn('Google Client ID সেট করা হয়নি।');
+                console.warn('Google Client ID সেট করা হয়নি।');
                 return false;
             }
 
@@ -3293,12 +3293,12 @@ function createOrderCard(order) {
                 return true;
             } catch (e) {
                 googleLibraryReady = false;
-                console.warn('Google Identity Services initialize করা যায়নি:', e);
+                console.warn('Google Identity Services initialize করা যায়নি:', e);
                 return false;
             }
         }
 
-        // Google GIS library load হওয়ার পর initialize করা হবে।
+        // Google GIS library load হওয়ার পর initialize করা হবে।
         function onGoogleIdentityLibraryLoaded() {
             googleLibraryReady = true;
             initGoogleOneTapForEmail();
@@ -3321,7 +3321,7 @@ function createOrderCard(order) {
             }
 
             if (attempts <= 0) {
-                console.warn('Google Identity Services library load হয়নি।');
+                console.warn('Google Identity Services library load হয়নি।');
                 return;
             }
 
@@ -3343,12 +3343,12 @@ function createOrderCard(order) {
                 try {
                     google.accounts.id.prompt();
                 } catch (e) {
-                    console.warn('Google account prompt দেখানো যায়নি:', e);
+                    console.warn('Google account prompt দেখানো যায়নি:', e);
                 }
             });
         }
 
-        // Registration page load হওয়ার পর Google functionality প্রস্তুত করা।
+        // Registration page load হওয়ার পর Google functionality প্রস্তুত করা।
         function setupGoogleEmailForRegistration() {
             const emailInput = document.getElementById('registerEmail');
             if (!emailInput) return;
@@ -4758,7 +4758,7 @@ function getVariantErrorMessage(variants) {
     // ২. Size (সাইজ) - ইংরেজি ও বাংলা শব্দ ও সংখ্যা সাপোর্ট
     else if (
         firstName.match(/^(ছোট|মাঝারি|বড়|এস|এম|এল|এক্সএল)$/) || 
-        firstName.match(/^[a-z]{1,3}$/) || 
+        firstName.match(/^[a-z]{1,2}$/) || 
         (firstName.match(/^[0-9]+$/) || firstName.match(/[০-৯]+/))
     ) {
         type = 'size';
@@ -5833,7 +5833,7 @@ function loadProductDetails(id) {
     const variantSection = document.getElementById('variantSection');
     const variantButtons = document.getElementById('variantButtons');
     const variants = p.variants || [];
-
+document.getElementById('variantLabel').textContent = getVariantErrorMessage(variants);
     if (variants.length > 0) {
         variantSection.classList.remove('hidden');
         variantButtons.innerHTML = variants.map(v => `
@@ -7572,21 +7572,22 @@ function initFilterOptions() {
             document.getElementById('filterSort').value = 'default';
             loadAllProductsSection(1);
         }
+function getSocialBrandColor(iconClass) {
+    if(!iconClass) return 'bg-gray-700';
 
-        // ================= FEATURE: Footer Logic =================
-        
-        function getSocialBrandColor(iconClass) {
-            if(!iconClass) return 'bg-gray-700';
-            const lower = iconClass.toLowerCase();
-            if (lower.includes('facebook')) return 'bg-[#1877F2]';
-            if (lower.includes('whatsapp')) return 'bg-[#25D366]';
-            if (lower.includes('youtube')) return 'bg-[#FF0000]';
-            if (lower.includes('tiktok')) return 'bg-[#000000]';
-            if (lower.includes('instagram')) return 'bg-[#E1306C]';
-            if (lower.includes('twitter') || lower.includes('x')) return 'bg-[#000000]';
-            if (lower.includes('linkedin')) return 'bg-[#0077B5]';
-            return 'bg-gray-700';
-        }
+    const lower = iconClass.toLowerCase();
+
+    if (lower.includes('facebook')) return 'bg-[#1877F2]';
+    if (lower.includes('messenger')) return 'bg-[#0084FF]';
+    if (lower.includes('whatsapp')) return 'bg-[#25D366]';
+    if (lower.includes('youtube')) return 'bg-[#FF0000]';
+    if (lower.includes('tiktok')) return 'bg-[#000000]';
+    if (lower.includes('instagram')) return 'bg-[#E1306C]';
+    if (lower.includes('twitter') || lower.includes('x')) return 'bg-[#000000]';
+    if (lower.includes('linkedin')) return 'bg-[#0077B5]';
+
+    return 'bg-gray-700';
+}
 
         function getFooterHTML() {
             const s = appData.settings;
