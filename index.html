@@ -867,7 +867,7 @@ font-weight: bold;
                 <!-- NEW: VARIANT SELECTION UI -->
                 <!-- ========================================== -->
                 <div id="variantSection" class="hidden">
-                    <label id="variantLabel" class="block text-xs font-bold text-gray-600 mb-2 uppercase" data-i18n="select_variant">Select Variant</label>
+                    <label class="block text-xs font-bold text-gray-600 mb-2 uppercase" data-i18n="select_variant">Select Variant</label>
                     <div id="variantButtons" class="flex flex-wrap gap-2">
                         <!-- Variant buttons will be injected here via JS -->
                     </div>
@@ -1389,7 +1389,7 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzqDMFIJe8u2KOBlMYyLtou_GGSEfJRcf2stv93Gun2_7wVHabSDtMPdH9VWcRz2Wgmow/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxvnJTPkPAhxch-Dk5PjmFM0sj_kqU7ye0Z2p2tpIDAHiaczmshwT4rrWI9XnfGpnpQ/exec"; 
 
 // ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
 // NOTE: window.google = {...} দিয়ে সরাসরি ওভাররাইট করা হচ্ছে না, কারণ Google Identity
@@ -5833,7 +5833,6 @@ function loadProductDetails(id) {
     const variantSection = document.getElementById('variantSection');
     const variantButtons = document.getElementById('variantButtons');
     const variants = p.variants || [];
-    document.getElementById('variantLabel').textContent = getVariantErrorMessage(variants);
 
     if (variants.length > 0) {
         variantSection.classList.remove('hidden');
@@ -7580,7 +7579,6 @@ function initFilterOptions() {
             if(!iconClass) return 'bg-gray-700';
             const lower = iconClass.toLowerCase();
             if (lower.includes('facebook')) return 'bg-[#1877F2]';
-            if (lower.includes('messenger')) return 'bg-[#0084FF]';
             if (lower.includes('whatsapp')) return 'bg-[#25D366]';
             if (lower.includes('youtube')) return 'bg-[#FF0000]';
             if (lower.includes('tiktok')) return 'bg-[#000000]';
