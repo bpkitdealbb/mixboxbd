@@ -1282,12 +1282,23 @@ font-weight: bold;
                     maxlength="50"
                     class="w-full border rounded-lg p-3 pr-12 focus:ring-1 focus:ring-primary outline-none"
                 >
-                <div
+                <button
+                    type="button"
                     id="googleEmailButton"
-                    class="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center"
+                    onclick="toggleInlineGoogleEmailChooser()"
+                    class="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200 transition"
                     aria-label="Choose Google account for Email"
                     title="Google account থেকে Email বেছে নিন"
-                ></div>
+                >
+                    <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" focusable="false">
+                        <path fill="#4285F4" d="M21.35 12.23c0-.79-.07-1.55-.22-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.42z"/>
+                        <path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.35l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.53A9.74 9.74 0 0 0 12 21.5z"/>
+                        <path fill="#FBBC05" d="M6.54 13.59A5.85 5.85 0 0 1 6.23 12c0-.55.1-1.09.31-1.59V7.88H3.3A9.75 9.75 0 0 0 2.25 12c0 1.57.38 3.05 1.05 4.12l3.24-2.53z"/>
+                        <path fill="#EA4335" d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.83 3.5 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.38l3.24 2.53C7.31 8.1 9.46 6.38 12 6.38z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="inlineGoogleEmailChooser" class="hidden mt-1 border rounded-lg bg-white shadow-sm overflow-hidden"></div>
             </div>
             <!-- UPDATED: type="tel" and maxlength="11" -->
             <input type="tel" id="registerPhone" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
@@ -3170,15 +3181,16 @@ function createOrderCard(order) {
 
 
         // ============================================================
-        // GOOGLE EMAIL ONLY - Registration Email Account Chooser
+        // INLINE GOOGLE EMAIL CHOOSER
         // ============================================================
-        // Google account থেকে শুধু Email নেওয়া হবে।
-        // Name, picture বা অন্য profile data ব্যবহার করা হবে না।
-        // Login page-এ Google Sign-In যোগ করা হচ্ছে না।
+        // গুরুত্বপূর্ণ: browser/Google সরাসরি device-এর সব Google account
+        // email JavaScript-কে দেয় না। তাই এই inline chooser-এ আগে
+        // Google থেকে সফলভাবে নির্বাচিত email-গুলো localStorage-এ রাখা হয়।
+        // এতে পরেরবার কোনো popup/page ছাড়াই নিচে email list দেখা যাবে।
         // ============================================================
 
         const GOOGLE_CLIENT_ID = "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
-
+        const GOOGLE_EMAIL_HISTORY_KEY = 'safabox_google_email_history_v1';
         let googleEmailButtonInitialized = false;
         let googleEmailButtonRetryTimer = null;
 
@@ -3188,25 +3200,16 @@ function createOrderCard(order) {
                    GOOGLE_CLIENT_ID.includes('.apps.googleusercontent.com');
         }
 
-        // Google ID token (JWT) থেকে শুধু Email বের করা হবে।
         function parseGoogleJwt(token) {
             try {
                 if (!token || typeof token !== 'string') return null;
-
                 const parts = token.split('.');
                 if (parts.length !== 3) return null;
-
-                const base64Url = parts[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
                 const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
-
                 const jsonPayload = decodeURIComponent(
-                    atob(padded)
-                        .split('')
-                        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                        .join('')
+                    atob(padded).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
                 );
-
                 return JSON.parse(jsonPayload);
             } catch (e) {
                 console.error('Google JWT পার্স করতে সমস্যা হয়েছে:', e);
@@ -3214,48 +3217,88 @@ function createOrderCard(order) {
             }
         }
 
-        // Google account নির্বাচন হলে শুধু Email field পূরণ হবে।
-        function handleGoogleEmailSuggestion(response) {
-            if (!response || !response.credential) return;
+        function getInlineGoogleEmails() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(GOOGLE_EMAIL_HISTORY_KEY) || '[]');
+                if (!Array.isArray(saved)) return [];
+                return saved.filter(e => typeof e === 'string' && isValidEmail(e)).slice(0, 5);
+            } catch (e) {
+                return [];
+            }
+        }
 
-            const payload = parseGoogleJwt(response.credential);
+        function saveInlineGoogleEmail(email) {
+            if (!email || !isValidEmail(email)) return;
+            try {
+                const emails = getInlineGoogleEmails().filter(e => e.toLowerCase() !== email.toLowerCase());
+                emails.unshift(email);
+                localStorage.setItem(GOOGLE_EMAIL_HISTORY_KEY, JSON.stringify(emails.slice(0, 5)));
+            } catch (e) {}
+        }
 
-            const email = payload && typeof payload.email === 'string'
-                ? payload.email.trim()
-                : '';
+        function selectInlineGoogleEmail(email) {
+            const input = document.getElementById('registerEmail');
+            const chooser = document.getElementById('inlineGoogleEmailChooser');
+            if (!input) return;
+            input.value = email;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            if (chooser) chooser.classList.add('hidden');
+            input.focus();
+        }
 
-            if (!email) {
-                console.warn('Google credential থেকে Email পাওয়া যায়নি।');
+        function renderInlineGoogleEmailChooser() {
+            const chooser = document.getElementById('inlineGoogleEmailChooser');
+            if (!chooser) return;
+
+            const emails = getInlineGoogleEmails();
+            if (!emails.length) {
+                chooser.innerHTML = `
+                    <div class="px-3 py-3 text-sm text-gray-500">
+                        আগে Google account দিয়ে Email নির্বাচন করলে সেটি এখানে দেখা যাবে।
+                    </div>`;
                 return;
             }
 
-            const emailInput = document.getElementById('registerEmail');
-            if (!emailInput) return;
-
-            emailInput.value = email;
-            emailInput.dispatchEvent(new Event('input', { bubbles: true }));
-            emailInput.dispatchEvent(new Event('change', { bubbles: true }));
-            emailInput.focus();
+            chooser.innerHTML = emails.map(email => `
+                <button type="button" class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 active:bg-gray-100 border-b last:border-b-0" onclick="selectInlineGoogleEmail(${JSON.stringify(email)})">
+                    <span class="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 text-sm font-semibold text-gray-600">${email.charAt(0).toUpperCase()}</span>
+                    <span class="min-w-0 flex-1">
+                        <span class="block text-sm text-gray-800 truncate">${email}</span>
+                        <span class="block text-xs text-gray-400">Google account</span>
+                    </span>
+                </button>`).join('');
         }
 
+        function toggleInlineGoogleEmailChooser() {
+            const chooser = document.getElementById('inlineGoogleEmailChooser');
+            if (!chooser) return;
+            const willOpen = chooser.classList.contains('hidden');
+            if (willOpen) {
+                renderInlineGoogleEmailChooser();
+                chooser.classList.remove('hidden');
+            } else {
+                chooser.classList.add('hidden');
+            }
+        }
+
+        function handleGoogleEmailSuggestion(response) {
+            if (!response || !response.credential) return;
+            const payload = parseGoogleJwt(response.credential);
+            const email = payload && typeof payload.email === 'string' ? payload.email.trim() : '';
+            if (!email) return;
+
+            saveInlineGoogleEmail(email);
+            selectInlineGoogleEmail(email);
+        }
+
+        // প্রথমবার Google account email নেওয়ার জন্য GIS ব্যবহার করা হবে।
+        // সফল selection-এর পর email inline chooser-এ থাকবে; পরেরবার
+        // chooser খুললে কোনো Google page/popup লাগবে না।
         function initGoogleEmailButton() {
             if (googleEmailButtonInitialized) return true;
-
-            if (!isGoogleClientIdConfigured()) {
-                console.warn('Google Client ID সেট করা হয়নি।');
-                return false;
-            }
-
-            if (typeof google === 'undefined' ||
-                !google.accounts ||
-                !google.accounts.id) {
-                return false;
-            }
-
-            const container = document.getElementById('googleEmailButton');
-            const emailInput = document.getElementById('registerEmail');
-
-            if (!container || !emailInput) return false;
+            if (!isGoogleClientIdConfigured()) return false;
+            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) return false;
 
             try {
                 google.accounts.id.initialize({
@@ -3264,54 +3307,30 @@ function createOrderCard(order) {
                     auto_select: false,
                     cancel_on_tap_outside: false
                 });
-
-                container.innerHTML = '';
-
-                google.accounts.id.renderButton(container, {
-                    type: 'icon',
-                    theme: 'outline',
-                    size: 'large',
-                    shape: 'circle'
-                });
-
                 googleEmailButtonInitialized = true;
                 return true;
             } catch (e) {
-                console.error('Google Email chooser button তৈরি করা যায়নি:', e);
-                googleEmailButtonInitialized = false;
+                console.error('Google Identity Services initialize করা যায়নি:', e);
                 return false;
             }
         }
 
         function setupGoogleEmailButton() {
-            // Register page ছাড়া অন্য page-এ কিছু করা হবে না।
-            const container = document.getElementById('googleEmailButton');
-            const emailInput = document.getElementById('registerEmail');
-
-            if (!container || !emailInput) return;
-
+            const button = document.getElementById('googleEmailButton');
+            const input = document.getElementById('registerEmail');
+            if (!button || !input) return;
             if (initGoogleEmailButton()) return;
 
-            // GIS script একটু পরে load হলে retry করবে।
             clearTimeout(googleEmailButtonRetryTimer);
-
             let attempts = 0;
             const retry = () => {
                 attempts++;
-
                 if (initGoogleEmailButton()) return;
-
-                if (attempts < 40) {
-                    googleEmailButtonRetryTimer = setTimeout(retry, 250);
-                } else {
-                    console.warn('Google Identity Services load হয়নি।');
-                }
+                if (attempts < 40) googleEmailButtonRetryTimer = setTimeout(retry, 250);
             };
-
             googleEmailButtonRetryTimer = setTimeout(retry, 100);
         }
 
-        // GIS script load হওয়ার পর register page থাকলে button তৈরি করা হবে।
         function onGoogleIdentityLibraryLoaded() {
             setupGoogleEmailButton();
         }
