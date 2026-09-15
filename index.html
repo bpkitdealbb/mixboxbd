@@ -1481,6 +1481,28 @@ if (!window.google.script) {
             }
         }
 
+        // ইমেইল বক্সে ক্লিক করলে Google-এর নিজস্ব অ্যাকাউন্ট পিকার (FedCM/One Tap) দেখানোর জন্য
+        // — এটা renderButton-এ ক্লিক করলে যা হয় তারই সমতুল্য, একই GIS ইনস্ট্যান্স ব্যবহার করে
+        let pendingEmailBoxPrompt = false;
+
+        function triggerGoogleEmailPicker() {
+            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+                // GIS স্ক্রিপ্ট তখনও লোড হয়নি — লোড হওয়ার পর অটো-ট্রিগার করার জন্য ফ্ল্যাগ সেট
+                pendingEmailBoxPrompt = true;
+                waitAndInitGoogleSignIn();
+                return;
+            }
+            google.accounts.id.prompt((notification) => {
+                // এখানে বিশেষ কিছু করার নেই — পিকার না দেখালে/স্কিপ হলে
+                // ইউজার স্বাভাবিকভাবেই ইনপুট বক্সে নিজে টাইপ করতে পারবে
+                if (notification.isNotDisplayed && notification.isNotDisplayed()) {
+                    console.log('Google prompt not displayed:', notification.getNotDisplayedReason?.());
+                } else if (notification.isSkippedMoment && notification.isSkippedMoment()) {
+                    console.log('Google prompt skipped:', notification.getSkippedReason?.());
+                }
+            });
+        }
+
         // registerTemplate লোড হওয়ার পর "Sign in with Google" বাটন বসানো হয়
         function initGoogleSignInButton() {
             if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
@@ -1509,6 +1531,20 @@ if (!window.google.script) {
                     locale: appData.language === 'bn' ? 'bn' : 'en'
                 });
             }
+
+            // NEW: ইমেইল বক্সে ক্লিক করলেই Google অ্যাকাউন্ট পিকার ট্রিগার হবে
+            const emailInput = document.getElementById('registerEmail');
+            if (emailInput && !emailInput.dataset.googlePickerBound) {
+                emailInput.addEventListener('click', triggerGoogleEmailPicker);
+                emailInput.dataset.googlePickerBound = 'true';
+            }
+
+            // ইউজার ক্লিক করার সময় GIS তখনও লোড হচ্ছিল থাকলে, লোড শেষে এখন অটো-ট্রিগার হবে
+            if (pendingEmailBoxPrompt) {
+                pendingEmailBoxPrompt = false;
+                triggerGoogleEmailPicker();
+            }
+
             return true;
         }
 
@@ -1520,59 +1556,6 @@ if (!window.google.script) {
                 attempts++;
                 if (initGoogleSignInButton() || attempts > 20) clearInterval(iv);
             }, 250);
-        }
-
-        // ============================================================
-        // NAME এন্টার / EMAIL বক্সে ক্লিক করলে Google One Tap (অ্যাকাউন্ট চুজার) দেখানো
-        // ============================================================
-        // এটা ঠিক তাই দেখাবে যা "Continue with Google" বাটনে ক্লিক করলে দেখাতো —
-        // ব্রাউজারে/ডিভাইসে লগইন করা গুগল অ্যাকাউন্টগুলোর তালিকা।
-        // ইউজার চাইলে সেখান থেকে একটা সিলেক্ট করবে (handleGoogleEmailResponse অটো-ফিল করে দেবে),
-        // অথবা পপআপটা কেটে দিয়ে নিজে হাতে ইমেইল টাইপ করবে — দুটোই স্বাভাবিকভাবেই কাজ করে,
-        // কারণ google.accounts.id.prompt() শুধু UI-টা দেখায়, ইমেইল ফিল্ডকে লক করে না।
-        function showGoogleOneTap() {
-            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
-                return; // GIS স্ক্রিপ্ট এখনো লোড না হলে চুপচাপ স্কিপ — ইউজার ম্যানুয়ালি টাইপ করতে পারবে
-            }
-            if (!googleSignInInitialized) {
-                initGoogleSignInButton(); // initialize() না হয়ে থাকলে প্রথমে সেটা করে নেওয়া
-            }
-            try {
-                google.accounts.id.prompt();
-            } catch (e) {
-                console.warn('Google One Tap prompt failed:', e);
-            }
-        }
-
-        // registerTemplate-এ Name ফিল্ডে Enter চাপলে এবং Email ফিল্ডে ক্লিক/ফোকাস করলে
-        // উপরের One Tap পপআপটা ট্রিগার করার জন্য লিসেনার বসানো হচ্ছে
-        function attachGoogleOneTapTriggers() {
-            const nameInput = document.getElementById('registerName');
-            const emailInput = document.getElementById('registerEmail');
-
-            if (nameInput && !nameInput.dataset.oneTapBound) {
-                nameInput.dataset.oneTapBound = '1';
-                nameInput.addEventListener('keydown', function (e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault(); // ফর্ম সাবমিট হয়ে যাওয়া আটকানো
-                        if (nameInput.value.trim().length > 0) {
-                            showGoogleOneTap();
-                            if (emailInput) emailInput.focus();
-                        }
-                    }
-                });
-            }
-
-            if (emailInput && !emailInput.dataset.oneTapBound) {
-                emailInput.dataset.oneTapBound = '1';
-                emailInput.addEventListener('focus', function () {
-                    // ইমেইল ফিল্ড খালি থাকলেই দেখানো হচ্ছে, নাহলে যতবার ক্লিক করবে ততবার
-                    // পপআপ এসে বিরক্ত করবে — ইউজার ইতিমধ্যে ইমেইল বসিয়ে ফেললে আর দরকার নেই
-                    if (!emailInput.value.trim()) {
-                        showGoogleOneTap();
-                    }
-                });
-            }
         }
 
         // ============================================================
@@ -2783,7 +2766,6 @@ case 'brand':
             updateUIText(); // Ensure static content in templates is translated
             if (id === 'registerTemplate') {
                 waitAndInitGoogleSignIn();
-                attachGoogleOneTapTriggers();
             }
         }
 
