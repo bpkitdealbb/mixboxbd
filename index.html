@@ -1273,17 +1273,21 @@ font-weight: bold;
         <form id="registerForm" class="space-y-3" autocomplete="on" onsubmit="return false;">
             <!-- UPDATED: maxlength="50" -->
             <!-- name + autocomplete যোগ করা হলো যাতে ব্রাউজার এটিকে ফর্ম-ফিল্ড হিসেবে চিনে সাজেশন দেখাতে পারে -->
-            <input type="text" id="registerName" name="name" autocomplete="name" onkeydown="handleRegisterEnterKey(event, 'registerEmail')" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="text" id="registerName" name="name" autocomplete="name" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none" onkeydown="handleNameEnterKey(event)">
             <!-- REQUIREMENT: Added type="email" for basic browser validation, JS will handle Regex -->
             <!-- UPDATED: maxlength="50" -->
             <!-- name="email" + autocomplete="email" — এটাই মূল অংশ: এর ফলে ব্রাউজার সেভ করা ইমেইল/লগইন সাজেস্ট করবে -->
-            <input type="email" id="registerEmail" name="email" autocomplete="email" onkeydown="handleRegisterEnterKey(event, 'registerPhone')" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <!-- এই ডিভাইসে আগে ব্যবহৃত ইমেইল + আসল Google Sign-In — দুটোই এই বক্সের নিচে সাজেশন হিসেবে দেখানো হয় -->
+            <div class="relative">
+                <input type="email" id="registerEmail" name="email" autocomplete="email" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none" onfocus="showEmailSuggestions()" onclick="showEmailSuggestions()">
+                <div id="emailSuggestBox" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden text-left"></div>
+            </div>
             <!-- UPDATED: type="tel" and maxlength="11" -->
-            <input type="tel" id="registerPhone" name="phone" autocomplete="tel" onkeydown="handleRegisterEnterKey(event, 'registerPassword')" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="tel" id="registerPhone" name="phone" autocomplete="tel" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
-            <input type="password" id="registerPassword" name="new-password" autocomplete="new-password" onkeydown="handleRegisterEnterKey(event, 'registerConfirmPassword')" data-placeholder-ph="pass_ph" placeholder="Password (Min 6 chars)" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="password" id="registerPassword" name="new-password" autocomplete="new-password" data-placeholder-ph="pass_ph" placeholder="Password (Min 6 chars)" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
-            <input type="password" id="registerConfirmPassword" name="confirm-password" autocomplete="new-password" onkeydown="handleRegisterEnterKey(event, null)" data-placeholder-ph="confirm_pass_ph" placeholder="Confirm Password" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="password" id="registerConfirmPassword" name="confirm-password" autocomplete="new-password" data-placeholder-ph="confirm_pass_ph" placeholder="Confirm Password" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             
             <!-- NEW: OTP Section (Hidden by default) -->
             <div id="otpVerificationContainer" class="hidden space-y-4 pt-4 border-t border-gray-200">
@@ -1475,6 +1479,8 @@ if (!window.google.script) {
                     // অন্য কোনো লিসেনার/ভ্যালিডেশন থাকলে সেটা যেন ট্রিগার হয়
                     emailInput.dispatchEvent(new Event('input', { bubbles: true }));
                     emailInput.focus();
+                    // এই ডিভাইসে পরের বার সাজেশন হিসেবে দেখানোর জন্য সেভ করা হলো
+                    if (typeof saveRecentEmail === 'function') saveRecentEmail(googleEmail);
                 }
             } catch (e) {
                 console.error('Google credential decode failed:', e);
@@ -1521,6 +1527,133 @@ if (!window.google.script) {
                 if (initGoogleSignInButton() || attempts > 20) clearInterval(iv);
             }, 250);
         }
+
+        // ============================================================
+        // EMAIL সাজেশন বক্স
+        // ১) এই ডিভাইসে আগে সফলভাবে ব্যবহৃত ইমেইল (localStorage) — শুধু সাজেশন, কোনো ভেরিফিকেশন দাবি করে না
+        // ২) আসল Google One Tap / Sign-In — গুগলের নিজস্ব, ভেরিফায়েড UI ট্রিগার করে (উপরের GIS সেটআপ ব্যবহার করে)
+        // নাম ফিল্ডে Enter চাপলে ইমেইল ফিল্ডে ফোকাস যায় এবং এই বক্স খুলে যায়;
+        // ইমেইল বক্সে ক্লিক করলেও এটা খোলে; বাইরে ক্লিক করলে বন্ধ হয়ে ইউজার নিজে টাইপ করতে পারে
+        // ============================================================
+        const RECENT_EMAILS_KEY = 'recentEmails';
+
+        function getRecentEmails() {
+            try {
+                return JSON.parse(localStorage.getItem(RECENT_EMAILS_KEY)) || [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // রেজিস্ট্রেশন/লগইন সফল হলে এই ফাংশন কল করে ইমেইলটা "সাম্প্রতিক" তালিকায় রাখা হয়
+        function saveRecentEmail(email) {
+            if (!email || typeof isValidEmail === 'function' && !isValidEmail(email)) return;
+            let list = getRecentEmails().filter(e => e.toLowerCase() !== email.toLowerCase());
+            list.unshift(email);
+            list = list.slice(0, 5); // সর্বোচ্চ ৫টা মনে রাখা হবে
+            try { localStorage.setItem(RECENT_EMAILS_KEY, JSON.stringify(list)); } catch (e) {}
+        }
+
+        function handleNameEnterKey(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const emailInput = document.getElementById('registerEmail');
+                if (emailInput) emailInput.focus(); // ফোকাস হলেই onfocus ট্রিগার হয়ে সাজেশন বক্স খুলবে
+            }
+        }
+
+        function renderEmailSuggestBox() {
+            const box = document.getElementById('emailSuggestBox');
+            if (!box) return;
+            const isBn = appData.language === 'bn';
+            const recents = getRecentEmails();
+            let html = '';
+
+            if (recents.length) {
+                html += `<div class="px-3 pt-2 pb-1 text-[11px] font-bold text-gray-400 uppercase">${isBn ? 'এই ডিভাইসে আগে ব্যবহৃত' : 'Used on this device before'}</div>`;
+                recents.forEach(email => {
+                    const safe = email.replace(/'/g, "\\'");
+                    const initial = email.charAt(0).toUpperCase();
+                    html += `
+                    <button type="button" onclick="selectSuggestedEmail('${safe}')" class="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 text-left">
+                        <span class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm flex-shrink-0">${initial}</span>
+                        <span class="text-sm text-gray-700 truncate">${email}</span>
+                    </button>`;
+                });
+            }
+
+            // এটা গুগলের প্রকৃত Sign-In ফ্লো ট্রিগার করে (google.accounts.id.prompt) — কোনো নকল তালিকা নয়
+            html += `
+            <button type="button" onclick="handleGoogleSuggestClick()" class="w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 text-left border-t border-gray-100">
+                <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.9 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.5 29.6 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5 44.5 36.3 44.5 25c0-1.5-.2-3-.4-4.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.5 29.6 4.5 24 4.5c-7.4 0-13.8 4.2-17 10.2z"/><path fill="#4CAF50" d="M24 45.5c5.5 0 10.4-1.9 14.1-5.1l-6.5-5.5c-2 1.4-4.6 2.2-7.6 2.2-5.4 0-9.9-3.4-11.6-8.2l-6.6 5.1C9.9 40.9 16.4 45.5 24 45.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.9 2.6-2.7 4.8-5 6.4l6.5 5.5C40.5 36.9 44.5 31.5 44.5 25c0-1.5-.2-3-.4-4.5z"/></svg>
+                <span class="text-sm font-semibold text-gray-700">${isBn ? 'গুগল দিয়ে চালিয়ে যান' : 'Continue with Google'}</span>
+            </button>`;
+
+            html += `
+            <button type="button" onclick="hideEmailSuggestions()" class="w-full px-3 py-2 text-xs text-gray-400 hover:text-gray-600 border-t border-gray-100">${isBn ? 'নিজে টাইপ করুন' : 'Type manually'}</button>`;
+
+            box.innerHTML = html;
+        }
+
+        function showEmailSuggestions() {
+            renderEmailSuggestBox();
+            const box = document.getElementById('emailSuggestBox');
+            if (box) box.classList.remove('hidden');
+        }
+
+        function hideEmailSuggestions() {
+            const box = document.getElementById('emailSuggestBox');
+            if (box) box.classList.add('hidden');
+            const emailInput = document.getElementById('registerEmail');
+            if (emailInput) emailInput.focus();
+        }
+
+        function selectSuggestedEmail(email) {
+            const emailInput = document.getElementById('registerEmail');
+            if (emailInput) {
+                emailInput.value = email;
+                emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            const box = document.getElementById('emailSuggestBox');
+            if (box) box.classList.add('hidden');
+            const phoneInput = document.getElementById('registerPhone');
+            if (phoneInput) phoneInput.focus();
+        }
+
+        // "গুগল দিয়ে চালিয়ে যান"-এ ক্লিক করলে গুগলের নিজস্ব One Tap / অ্যাকাউন্ট চুজার দেখানো হয়
+        // (এটা সাইটের বানানো কোনো তালিকা না — সরাসরি Google Identity Services API কল)
+        function handleGoogleSuggestClick() {
+            const box = document.getElementById('emailSuggestBox');
+            if (box) box.classList.add('hidden');
+            const isBn = appData.language === 'bn';
+
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                google.accounts.id.prompt((notification) => {
+                    if (notification.isNotDisplayed && (notification.isNotDisplayed() || notification.isSkippedMoment())) {
+                        // ব্রাউজার/ডিভাইস One Tap দেখাতে না পারলে, নিচের আসল Google বাটনের দিকে নির্দেশ করা হয়
+                        const googleDiv = document.getElementById('googleSignInDiv');
+                        if (googleDiv) googleDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        Swal.fire({
+                            icon: 'info',
+                            title: isBn ? 'গুগল দিয়ে চালিয়ে যান' : 'Continue with Google',
+                            text: isBn ? 'নিচের "Sign in with Google" বাটনে ক্লিক করুন।' : 'Please click the "Sign in with Google" button below.',
+                            confirmButtonColor: appData.settings.themecolor || '#2563eb'
+                        });
+                    }
+                });
+            }
+        }
+
+        // সাজেশন বক্সের বাইরে ক্লিক করলে বক্সটি বন্ধ হয়ে যাবে, যাতে ইউজার নিজে টাইপ করতে পারে
+        document.addEventListener('click', function (e) {
+            const box = document.getElementById('emailSuggestBox');
+            const input = document.getElementById('registerEmail');
+            if (box && !box.classList.contains('hidden')) {
+                if (!box.contains(e.target) && e.target !== input) {
+                    box.classList.add('hidden');
+                }
+            }
+        });
 
         // ============================================================
         // GLOBAL STATE & APP DATA
@@ -3249,23 +3382,6 @@ function createOrderCard(order) {
             }, 1000);
         }
 
-        // ==========================================
-        // রেজিস্ট্রেশন ফর্মে Enter চাপলে পরের ফিল্ডে ফোকাস যাবে
-        // (ফোকাস সিঙ্ক্রোনাসভাবে/সরাসরি key ইভেন্টের ভেতর থেকে হচ্ছে,
-        //  তাই ব্রাউজার এটাকে আসল ইউজার-অ্যাকশন হিসেবে ধরে নেয় এবং
-        //  ইমেইল ফিল্ডে ফোকাস গেলে সেভ করা ইমেইল/অটোফিল সাজেশন ঠিকভাবে দেখায়)
-        // ==========================================
-        function handleRegisterEnterKey(e, nextFieldId) {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            if (nextFieldId) {
-                const nextField = document.getElementById(nextFieldId);
-                if (nextField) nextField.focus();
-            } else {
-                performRegistration();
-            }
-        }
-
         function performRegistration() {
             const name = document.getElementById('registerName').value.trim();
             const email = document.getElementById('registerEmail').value.trim();
@@ -3335,6 +3451,7 @@ function createOrderCard(order) {
                     .withSuccessHandler(res => {
                         Swal.close();
                         if (res.success) {
+                            if (typeof saveRecentEmail === 'function') saveRecentEmail(email);
                             Swal.fire('Success', 'Registration Successful! Please Login.', 'success').then(() => {
                                 navigateTo('/login');
                             });
@@ -6930,6 +7047,9 @@ function silentPointsRefresh() {
                     // ==========================================
                     
                     localStorage.setItem('user', JSON.stringify(res.user)); 
+                    if (typeof saveRecentEmail === 'function' && typeof isValidEmail === 'function' && isValidEmail(id)) {
+                        saveRecentEmail(id);
+                    }
                     silentPointsRefresh();
                     navigateTo('/account'); 
                 }
