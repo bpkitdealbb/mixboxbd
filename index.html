@@ -1270,14 +1270,19 @@ font-weight: bold;
         <!-- Back Button Removed Here -->
         <h1 class="text-2xl font-bold mb-2" data-i18n="create_acc">Create Account</h1>
         <p class="text-gray-500 mb-6" data-i18n="join_us">Join us today</p>
-        <form id="registerForm" class="space-y-3" autocomplete="on" onsubmit="return false;">
+        <form id="registerForm" class="space-y-3" autocomplete="off" onsubmit="return false;">
             <!-- UPDATED: maxlength="50" -->
             <!-- name + autocomplete যোগ করা হলো যাতে ব্রাউজার এটিকে ফর্ম-ফিল্ড হিসেবে চিনে সাজেশন দেখাতে পারে -->
             <input type="text" id="registerName" name="name" autocomplete="name" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
-            <!-- REGISTRATION EMAIL: Browser email autofill বন্ধ রাখা হয়েছে।
-                 Google Identity Services (GIS) account chooser-এর মাধ্যমে email নেওয়া হবে।
-                 name intentionally generic রাখা হয়েছে যাতে browser এটিকে saved-email field হিসেবে কম detect করে। -->
-            <input type="email" id="registerEmail" name="googleEmail" autocomplete="off" inputmode="email" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <!-- REQUIREMENT: Added type="email" for basic browser validation, JS will handle Regex -->
+            <!-- UPDATED: maxlength="50" -->
+            <!-- name="email" + autocomplete="email" — এটাই মূল অংশ: এর ফলে ব্রাউজার সেভ করা ইমেইল/লগইন সাজেস্ট করবে -->
+            <div class="relative">
+                <input type="email" id="registerEmail" name="register_email" autocomplete="off" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+                <button type="button" id="googleEmailChooserHint" onclick="openGoogleEmailChooser(event)" class="hidden w-full text-left mt-1 px-1 py-1 text-xs text-primary font-medium hover:underline focus:outline-none">
+                    লগইন থাকা Email থেকে নির্বাচন করতে ক্লিক করুন
+                </button>
+            </div>
             <!-- UPDATED: type="tel" and maxlength="11" -->
             <input type="tel" id="registerPhone" name="phone" autocomplete="tel" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
@@ -1309,7 +1314,7 @@ font-weight: bold;
                 <span data-i18n="or_google">অথবা</span>
                 <div class="flex-1 h-px bg-gray-200"></div>
             </div>
-            <!-- Google account chooser: Email field-এ tap/click করলেও chooser prompt চালু হবে -->
+            <!-- Google থেকে শুধু ইমেইল আনার বাটন: সিলেক্ট করলে ইমেইল ফিল্ড অটো-ফিল হবে (নতুন ট্যাব/পেজ খুলবে না) -->
             <div id="googleSignInDiv" class="w-full flex justify-center"></div>
 
             <div class="text-center text-sm"><span data-i18n="already_acc">Already have an account?</span> <button type="button" onclick="navigateTo('/login')" class="text-primary font-bold" data-i18n="login">Login</button></div>
@@ -1448,15 +1453,13 @@ if (!window.google.script) {
     };
 }
         // ============================================================
-        // GOOGLE SIGN-IN — Registration Email-এর জন্য Google account chooser
+        // GOOGLE ACCOUNT PICKER — Registration Email field
         // ============================================================
         // Google Cloud Console → APIs & Services → Credentials এ তৈরি করা আপনার Web application Client ID
         const GOOGLE_CLIENT_ID = "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
 
         let googleSignInInitialized = false;
 
-        // Google থেকে আসা JWT টোকেন ডিকোড করে শুধু ইমেইলটা বের করা হচ্ছে
-        // (এটা কোনো লগইন/অথেন্টিকেশন করছে না, শুধু ফিল্ড অটোফিল)
         function handleGoogleEmailResponse(response) {
             try {
                 const base64Payload = response.credential.split('.')[1];
@@ -1472,53 +1475,115 @@ if (!window.google.script) {
                 const emailInput = document.getElementById('registerEmail');
                 if (emailInput && googleEmail) {
                     emailInput.value = googleEmail;
-                    // অন্য কোনো লিসেনার/ভ্যালিডেশন থাকলে সেটা যেন ট্রিগার হয়
                     emailInput.dispatchEvent(new Event('input', { bubbles: true }));
                     emailInput.focus();
                 }
             } catch (e) {
                 console.error('Google credential decode failed:', e);
+            } finally {
+                hideGoogleEmailChooserHint();
             }
         }
 
-        // registerTemplate লোড হওয়ার পর "Sign in with Google" বাটন বসানো হয়
+        function showGoogleEmailChooserHint() {
+            const input = document.getElementById('registerEmail');
+            const hint = document.getElementById('googleEmailChooserHint');
+            if (!input || !hint) return;
+            if (document.activeElement === input && !input.value.trim()) {
+                hint.classList.remove('hidden');
+            }
+        }
+
+        function hideGoogleEmailChooserHint() {
+            const hint = document.getElementById('googleEmailChooserHint');
+            if (hint) hint.classList.add('hidden');
+        }
+
+        // Email field-এ ক্লিক করলে ছোট নির্দেশনাটি দেখানো হবে।
+        // ইউজার নিজে টাইপ শুরু করলে নির্দেশনাটি সঙ্গে সঙ্গে সরে যাবে।
+        function setupRegistrationEmailChooser() {
+            const input = document.getElementById('registerEmail');
+            const hint = document.getElementById('googleEmailChooserHint');
+            if (!input || !hint || input.dataset.googleChooserReady === '1') return;
+
+            input.dataset.googleChooserReady = '1';
+
+            input.addEventListener('focus', () => {
+                if (!input.value.trim()) showGoogleEmailChooserHint();
+            });
+
+            input.addEventListener('input', () => {
+                // Manual typing শুরু হলে hint সরিয়ে দেওয়া হবে।
+                if (input.value.trim()) hideGoogleEmailChooserHint();
+                else if (document.activeElement === input) showGoogleEmailChooserHint();
+            });
+
+            input.addEventListener('blur', () => {
+                // Hint-এ click করার সুযোগ রাখতে সামান্য delay।
+                setTimeout(() => {
+                    if (document.activeElement !== input && document.activeElement !== hint) {
+                        hideGoogleEmailChooserHint();
+                    }
+                }, 120);
+            });
+
+            // অন্য input-এ গেলে hint থাকবে না।
+            const form = document.getElementById('registerForm');
+            if (form) {
+                form.addEventListener('focusin', (event) => {
+                    if (event.target !== input && event.target !== hint) hideGoogleEmailChooserHint();
+                });
+            }
+        }
+
+        // Hint-এ চাপলে Google-এর একই GIS/FedCM account-selection flow trigger করা হয়।
+        // এখানে কোনো নতুন tab/page খোলা হয় না।
+        function openGoogleEmailChooser(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            hideGoogleEmailChooserHint();
+
+            if (!initGoogleSignInButton()) {
+                console.warn('Google Identity Services is not ready yet.');
+                return;
+            }
+
+            try {
+                // GIS-এর browser-mediated account chooser / credential prompt।
+                // Chrome Android-এ FedCM available থাকলে browser নিজেই native overlay দেখাবে।
+                google.accounts.id.prompt((notification) => {
+                    if (notification && notification.isNotDisplayed && notification.isNotDisplayed()) {
+                        console.info('[Google Email Chooser] Prompt not displayed:', notification.getNotDisplayedReason());
+                    }
+                    if (notification && notification.isSkippedMoment && notification.isSkippedMoment()) {
+                        console.info('[Google Email Chooser] Prompt skipped:', notification.getSkippedReason());
+                    }
+                });
+            } catch (err) {
+                console.error('[Google Email Chooser] Failed:', err);
+            }
+        }
+
+        // registerTemplate লোড হওয়ার পর Google Identity Services initialize করা হয়।
+        // Visible Google button-টিও রাখা হচ্ছে—এটি existing Continue with Google flow।
         function initGoogleSignInButton() {
             if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
-                return false; // GIS স্ক্রিপ্ট এখনো লোড হয়নি
+                return false;
             }
+
             if (!googleSignInInitialized) {
                 google.accounts.id.initialize({
                     client_id: GOOGLE_CLIENT_ID,
                     callback: handleGoogleEmailResponse,
-                    // FedCM: Google account selection browser-controlled overlay হিসেবে দেখাবে
+                    // Chrome Android/Desktop-এর Google button-এ FedCM UX ব্যবহার করবে।
                     use_fedcm_for_button: true,
-                    use_fedcm_for_prompt: true
+                    // Returning user যেন chooser skip করে auto-login না হয়।
+                    button_auto_select: false
                 });
                 googleSignInInitialized = true;
-            }
-
-            // Registration Email field-এ tap/click করলে Google account chooser prompt চালু হবে।
-            // Browser-এর saved email/password autofill-এর উপর নির্ভর করা হবে না।
-            const emailInput = document.getElementById('registerEmail');
-            if (emailInput && !emailInput.dataset.googleChooserBound) {
-                const openGoogleChooser = function () {
-                    if (!googleSignInInitialized || !google.accounts?.id?.prompt) return;
-
-                    try {
-                        google.accounts.id.prompt((notification) => {
-                            // Google/FedCM prompt বন্ধ থাকলে বা unavailable হলে button ব্যবহার করা যাবে।
-                            if (notification && notification.isNotDisplayed && notification.isNotDisplayed()) {
-                                console.info('Google account chooser is not displayed:', notification.getNotDisplayedReason?.());
-                            }
-                        });
-                    } catch (e) {
-                        console.warn('Google account chooser could not be opened:', e);
-                    }
-                };
-
-                emailInput.addEventListener('focus', openGoogleChooser, { passive: true });
-                emailInput.addEventListener('click', openGoogleChooser, { passive: true });
-                emailInput.dataset.googleChooserBound = 'true';
             }
 
             const container = document.getElementById('googleSignInDiv');
@@ -1529,15 +1594,17 @@ if (!window.google.script) {
                     size: 'large',
                     width: 320,
                     text: 'continue_with',
-                    // সাইটের বর্তমান ভাষা অনুযায়ী গুগল বাটনের নিজস্ব টেক্সট বদলাবে
                     locale: appData.language === 'bn' ? 'bn' : 'en'
                 });
             }
+
+            setupRegistrationEmailChooser();
             return true;
         }
 
-        // GIS স্ক্রিপ্ট async — তাই তৈরি না হওয়া পর্যন্ত অল্প কয়েকবার চেষ্টা করা হয়
+        // GIS script async — তাই তৈরি না হওয়া পর্যন্ত কয়েকবার চেষ্টা করা হয়।
         function waitAndInitGoogleSignIn() {
+            setupRegistrationEmailChooser();
             if (initGoogleSignInButton()) return;
             let attempts = 0;
             const iv = setInterval(() => {
