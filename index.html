@@ -1273,17 +1273,17 @@ font-weight: bold;
         <form id="registerForm" class="space-y-3" autocomplete="on" onsubmit="return false;">
             <!-- UPDATED: maxlength="50" -->
             <!-- name + autocomplete যোগ করা হলো যাতে ব্রাউজার এটিকে ফর্ম-ফিল্ড হিসেবে চিনে সাজেশন দেখাতে পারে -->
-            <input type="text" id="registerName" name="name" autocomplete="name" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="text" id="registerName" name="name" autocomplete="name" onkeydown="handleRegisterEnterKey(event, 'registerEmail')" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- REQUIREMENT: Added type="email" for basic browser validation, JS will handle Regex -->
             <!-- UPDATED: maxlength="50" -->
             <!-- name="email" + autocomplete="email" — এটাই মূল অংশ: এর ফলে ব্রাউজার সেভ করা ইমেইল/লগইন সাজেস্ট করবে -->
-            <input type="email" id="registerEmail" name="email" autocomplete="email" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="email" id="registerEmail" name="email" autocomplete="email" onkeydown="handleRegisterEnterKey(event, 'registerPhone')" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: type="tel" and maxlength="11" -->
-            <input type="tel" id="registerPhone" name="phone" autocomplete="tel" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="tel" id="registerPhone" name="phone" autocomplete="tel" onkeydown="handleRegisterEnterKey(event, 'registerPassword')" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
-            <input type="password" id="registerPassword" name="new-password" autocomplete="new-password" data-placeholder-ph="pass_ph" placeholder="Password (Min 6 chars)" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="password" id="registerPassword" name="new-password" autocomplete="new-password" onkeydown="handleRegisterEnterKey(event, 'registerConfirmPassword')" data-placeholder-ph="pass_ph" placeholder="Password (Min 6 chars)" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
-            <input type="password" id="registerConfirmPassword" name="confirm-password" autocomplete="new-password" data-placeholder-ph="confirm_pass_ph" placeholder="Confirm Password" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="password" id="registerConfirmPassword" name="confirm-password" autocomplete="new-password" onkeydown="handleRegisterEnterKey(event, null)" data-placeholder-ph="confirm_pass_ph" placeholder="Confirm Password" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             
             <!-- NEW: OTP Section (Hidden by default) -->
             <div id="otpVerificationContainer" class="hidden space-y-4 pt-4 border-t border-gray-200">
@@ -1504,7 +1504,9 @@ if (!window.google.script) {
                     theme: 'outline',
                     size: 'large',
                     width: 320,
-                    text: 'continue_with'
+                    text: 'continue_with',
+                    // সাইটের বর্তমান ভাষা অনুযায়ী গুগল বাটনের নিজস্ব টেক্সট বদলাবে
+                    locale: appData.language === 'bn' ? 'bn' : 'en'
                 });
             }
             return true;
@@ -1791,6 +1793,7 @@ ask_buy_whatsapp: "WhatsApp-এ অর্ডার বা জিজ্ঞাস�
                 apply: "Apply", confirm_order: "Confirm Order", checkout: "Checkout",
                 my_orders: "My Orders", logout: "Logout",
                 welcome: "Welcome Back", login: "Login", register: "Register",
+                or_google: "Or",
                 change_password: "Change Password",
                 track_order: "Track Order",
                 filter_products: "Filter Products",
@@ -1935,6 +1938,7 @@ our_brands: "আমাদের ব্র্যান্ডসমূহ",
                 apply: "প্রয়োগ করুন", confirm_order: "অর্ডার কনফার্ম করুন", checkout: "চেকআউট",
                 my_orders: "আমার অর্ডার", logout: "লগআউট",
                 welcome: "স্বাগতম", login: "লগইন", register: "রেজিস্টার",
+                or_google: "অথবা",
                 change_password: "পাসওয়ার্ড পরিবর্তন",
                 track_order: "অর্ডার ট্র্যাক করুন",
                 filter_products: "পণ্য ফিল্টার করুন",
@@ -3243,6 +3247,23 @@ function createOrderCard(order) {
                 }
                 duration--;
             }, 1000);
+        }
+
+        // ==========================================
+        // রেজিস্ট্রেশন ফর্মে Enter চাপলে পরের ফিল্ডে ফোকাস যাবে
+        // (ফোকাস সিঙ্ক্রোনাসভাবে/সরাসরি key ইভেন্টের ভেতর থেকে হচ্ছে,
+        //  তাই ব্রাউজার এটাকে আসল ইউজার-অ্যাকশন হিসেবে ধরে নেয় এবং
+        //  ইমেইল ফিল্ডে ফোকাস গেলে সেভ করা ইমেইল/অটোফিল সাজেশন ঠিকভাবে দেখায়)
+        // ==========================================
+        function handleRegisterEnterKey(e, nextFieldId) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (nextFieldId) {
+                const nextField = document.getElementById(nextFieldId);
+                if (nextField) nextField.focus();
+            } else {
+                performRegistration();
+            }
         }
 
         function performRegistration() {
