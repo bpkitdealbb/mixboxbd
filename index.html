@@ -1274,10 +1274,10 @@ font-weight: bold;
             <!-- UPDATED: maxlength="50" -->
             <!-- name + autocomplete যোগ করা হলো যাতে ব্রাউজার এটিকে ফর্ম-ফিল্ড হিসেবে চিনে সাজেশন দেখাতে পারে -->
             <input type="text" id="registerName" name="name" autocomplete="name" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
-            <!-- REQUIREMENT: Added type="email" for basic browser validation, JS will handle Regex -->
-            <!-- UPDATED: maxlength="50" -->
-            <!-- name="email" + autocomplete="email" — এটাই মূল অংশ: এর ফলে ব্রাউজার সেভ করা ইমেইল/লগইন সাজেস্ট করবে -->
-            <input type="email" id="registerEmail" name="email" autocomplete="email" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <!-- REGISTRATION EMAIL: Browser email autofill বন্ধ রাখা হয়েছে।
+                 Google Identity Services (GIS) account chooser-এর মাধ্যমে email নেওয়া হবে।
+                 name intentionally generic রাখা হয়েছে যাতে browser এটিকে saved-email field হিসেবে কম detect করে। -->
+            <input type="email" id="registerEmail" name="googleEmail" autocomplete="off" inputmode="email" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: type="tel" and maxlength="11" -->
             <input type="tel" id="registerPhone" name="phone" autocomplete="tel" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
@@ -1309,7 +1309,7 @@ font-weight: bold;
                 <span data-i18n="or_google">অথবা</span>
                 <div class="flex-1 h-px bg-gray-200"></div>
             </div>
-            <!-- Google থেকে শুধু ইমেইল আনার বাটন: সিলেক্ট করলে ইমেইল ফিল্ড অটো-ফিল হবে (নতুন ট্যাব/পেজ খুলবে না) -->
+            <!-- Google account chooser: Email field-এ tap/click করলেও chooser prompt চালু হবে -->
             <div id="googleSignInDiv" class="w-full flex justify-center"></div>
 
             <div class="text-center text-sm"><span data-i18n="already_acc">Already have an account?</span> <button type="button" onclick="navigateTo('/login')" class="text-primary font-bold" data-i18n="login">Login</button></div>
@@ -1448,7 +1448,7 @@ if (!window.google.script) {
     };
 }
         // ============================================================
-        // GOOGLE SIGN-IN — শুধুমাত্র ইমেইল অটোফিল করার জন্য
+        // GOOGLE SIGN-IN — Registration Email-এর জন্য Google account chooser
         // ============================================================
         // Google Cloud Console → APIs & Services → Credentials এ তৈরি করা আপনার Web application Client ID
         const GOOGLE_CLIENT_ID = "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
@@ -1481,28 +1481,6 @@ if (!window.google.script) {
             }
         }
 
-        // ইমেইল বক্সে ক্লিক করলে Google-এর নিজস্ব অ্যাকাউন্ট পিকার (FedCM/One Tap) দেখানোর জন্য
-        // — এটা renderButton-এ ক্লিক করলে যা হয় তারই সমতুল্য, একই GIS ইনস্ট্যান্স ব্যবহার করে
-        let pendingEmailBoxPrompt = false;
-
-        function triggerGoogleEmailPicker() {
-            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
-                // GIS স্ক্রিপ্ট তখনও লোড হয়নি — লোড হওয়ার পর অটো-ট্রিগার করার জন্য ফ্ল্যাগ সেট
-                pendingEmailBoxPrompt = true;
-                waitAndInitGoogleSignIn();
-                return;
-            }
-            google.accounts.id.prompt((notification) => {
-                // এখানে বিশেষ কিছু করার নেই — পিকার না দেখালে/স্কিপ হলে
-                // ইউজার স্বাভাবিকভাবেই ইনপুট বক্সে নিজে টাইপ করতে পারবে
-                if (notification.isNotDisplayed && notification.isNotDisplayed()) {
-                    console.log('Google prompt not displayed:', notification.getNotDisplayedReason?.());
-                } else if (notification.isSkippedMoment && notification.isSkippedMoment()) {
-                    console.log('Google prompt skipped:', notification.getSkippedReason?.());
-                }
-            });
-        }
-
         // registerTemplate লোড হওয়ার পর "Sign in with Google" বাটন বসানো হয়
         function initGoogleSignInButton() {
             if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
@@ -1512,13 +1490,37 @@ if (!window.google.script) {
                 google.accounts.id.initialize({
                     client_id: GOOGLE_CLIENT_ID,
                     callback: handleGoogleEmailResponse,
-                    // FedCM: গুগল অ্যাকাউন্ট সিলেকশন নতুন ট্যাব/পপআপে না গিয়ে
-                    // এই পেজের মধ্যেই ব্রাউজারের নিজস্ব ওভারলে হিসেবে দেখাবে
+                    // FedCM: Google account selection browser-controlled overlay হিসেবে দেখাবে
                     use_fedcm_for_button: true,
                     use_fedcm_for_prompt: true
                 });
                 googleSignInInitialized = true;
             }
+
+            // Registration Email field-এ tap/click করলে Google account chooser prompt চালু হবে।
+            // Browser-এর saved email/password autofill-এর উপর নির্ভর করা হবে না।
+            const emailInput = document.getElementById('registerEmail');
+            if (emailInput && !emailInput.dataset.googleChooserBound) {
+                const openGoogleChooser = function () {
+                    if (!googleSignInInitialized || !google.accounts?.id?.prompt) return;
+
+                    try {
+                        google.accounts.id.prompt((notification) => {
+                            // Google/FedCM prompt বন্ধ থাকলে বা unavailable হলে button ব্যবহার করা যাবে।
+                            if (notification && notification.isNotDisplayed && notification.isNotDisplayed()) {
+                                console.info('Google account chooser is not displayed:', notification.getNotDisplayedReason?.());
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('Google account chooser could not be opened:', e);
+                    }
+                };
+
+                emailInput.addEventListener('focus', openGoogleChooser, { passive: true });
+                emailInput.addEventListener('click', openGoogleChooser, { passive: true });
+                emailInput.dataset.googleChooserBound = 'true';
+            }
+
             const container = document.getElementById('googleSignInDiv');
             if (container) {
                 container.innerHTML = '';
@@ -1531,20 +1533,6 @@ if (!window.google.script) {
                     locale: appData.language === 'bn' ? 'bn' : 'en'
                 });
             }
-
-            // NEW: ইমেইল বক্সে ক্লিক করলেই Google অ্যাকাউন্ট পিকার ট্রিগার হবে
-            const emailInput = document.getElementById('registerEmail');
-            if (emailInput && !emailInput.dataset.googlePickerBound) {
-                emailInput.addEventListener('click', triggerGoogleEmailPicker);
-                emailInput.dataset.googlePickerBound = 'true';
-            }
-
-            // ইউজার ক্লিক করার সময় GIS তখনও লোড হচ্ছিল থাকলে, লোড শেষে এখন অটো-ট্রিগার হবে
-            if (pendingEmailBoxPrompt) {
-                pendingEmailBoxPrompt = false;
-                triggerGoogleEmailPicker();
-            }
-
             return true;
         }
 
