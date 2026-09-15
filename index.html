@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 <link rel="preconnect" href="https://accounts.google.com" crossorigin>
-<!-- Google Identity Services: রেজিস্ট্রেশন ফর্মে ফোনে লগইন থাকা Google অ্যাকাউন্ট থেকে ইমেইল সাজেস্ট করার জন্য -->
+<!-- Google Identity Services: শুধু ইমেইল বসানোর জন্য "Sign in with Google" বাটন -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <meta name="google-site-verification" content="yHp-0_G2el853pU5DenVxHAp743vJTPdicmY2CnbHqA" />
 <!-- Meta Pixel Code -->
@@ -867,7 +867,7 @@ font-weight: bold;
                 <!-- NEW: VARIANT SELECTION UI -->
                 <!-- ========================================== -->
                 <div id="variantSection" class="hidden">
-                    <label class="block text-xs font-bold text-gray-600 mb-2 uppercase" data-i18n="select_variant">Select Variant</label>
+                    <label id="variantLabel" class="block text-xs font-bold text-gray-600 mb-2 uppercase"></label>
                     <div id="variantButtons" class="flex flex-wrap gap-2">
                         <!-- Variant buttons will be injected here via JS -->
                     </div>
@@ -1251,15 +1251,16 @@ font-weight: bold;
         <!-- Back Button Removed Here -->
         <h1 class="text-2xl font-bold mb-2" data-i18n="welcome">Welcome Back</h1>
         <p class="text-gray-500 mb-6" data-i18n="login_sub">Login to continue</p>
-        <div class="space-y-4">
+        <form id="loginForm" class="space-y-4" autocomplete="on" onsubmit="return false;">
             <!-- UPDATED: maxlength="50" -->
-            <div><label class="text-xs font-bold text-gray-600 uppercase" data-i18n="email_or_mobile">Email or Mobile</label><input type="text" id="loginIdentifier" maxlength="50" class="w-full border rounded-lg p-3 mt-1 focus:ring-1 focus:ring-primary outline-none"></div>
+            <!-- name + autocomplete="username" যোগ করা হলো: browser এই ফিল্ডকে লগইন-ইউজারনেম হিসেবে চিনবে -->
+            <div><label class="text-xs font-bold text-gray-600 uppercase" data-i18n="email_or_mobile">Email or Mobile</label><input type="text" id="loginIdentifier" name="username" autocomplete="username" maxlength="50" class="w-full border rounded-lg p-3 mt-1 focus:ring-1 focus:ring-primary outline-none"></div>
             <!-- UPDATED: maxlength="15" -->
-            <div><label class="text-xs font-bold text-gray-600 uppercase" data-i18n="password">Password</label><input type="password" id="loginPassword" maxlength="15" class="w-full border rounded-lg p-3 mt-1 focus:ring-1 focus:ring-primary outline-none"></div>
-            <div class="text-right"><button onclick="navigateTo('/forgot-password')" class="text-sm text-primary font-bold" data-i18n="forgot_pass_q">Forgot Password?</button></div>
-            <button onclick="performLogin()" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:opacity-90" data-i18n="login">Login</button>
-            <div class="text-center text-sm"><span data-i18n="no_acc_q">Don't have an account?</span> <button onclick="navigateTo('/register')" class="text-primary font-bold" data-i18n="register">Register</button></div>
-        </div>
+            <div><label class="text-xs font-bold text-gray-600 uppercase" data-i18n="password">Password</label><input type="password" id="loginPassword" name="current-password" autocomplete="current-password" maxlength="15" class="w-full border rounded-lg p-3 mt-1 focus:ring-1 focus:ring-primary outline-none"></div>
+            <div class="text-right"><button type="button" onclick="navigateTo('/forgot-password')" class="text-sm text-primary font-bold" data-i18n="forgot_pass_q">Forgot Password?</button></div>
+            <button type="button" onclick="performLogin()" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:opacity-90" data-i18n="login">Login</button>
+            <div class="text-center text-sm"><span data-i18n="no_acc_q">Don't have an account?</span> <button type="button" onclick="navigateTo('/register')" class="text-primary font-bold" data-i18n="register">Register</button></div>
+        </form>
     </div>
 </template>
 
@@ -1269,47 +1270,20 @@ font-weight: bold;
         <!-- Back Button Removed Here -->
         <h1 class="text-2xl font-bold mb-2" data-i18n="create_acc">Create Account</h1>
         <p class="text-gray-500 mb-6" data-i18n="join_us">Join us today</p>
-        <div class="space-y-3">
+        <form id="registerForm" class="space-y-3" autocomplete="on" onsubmit="return false;">
             <!-- UPDATED: maxlength="50" -->
+            <!-- name + autocomplete যোগ করা হলো যাতে ব্রাউজার এটিকে ফর্ম-ফিল্ড হিসেবে চিনে সাজেশন দেখাতে পারে -->
             <input type="text" id="registerName" name="name" autocomplete="name" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- REQUIREMENT: Added type="email" for basic browser validation, JS will handle Regex -->
             <!-- UPDATED: maxlength="50" -->
-            <!-- NEW: ইমেইল সাজেশন — name/autocomplete দিয়ে ফোন/ব্রাউজারের সেভ করা ইমেইল সাজেস্ট হবে (নেটিভ), আর পাশের বাটনে ট্যাপ করলে/ফোকাস হলে ফোনে লগইন থাকা Google অ্যাকাউন্ট চুজার দেখাবে (One Tap) -->
-            <div class="relative">
-                <input
-                    type="email"
-                    id="registerEmail"
-                    name="email"
-                    autocomplete="email"
-                    data-placeholder-ph="email_ph"
-                    placeholder="Email Address"
-                    maxlength="50"
-                    class="w-full border rounded-lg p-3 pr-12 focus:ring-1 focus:ring-primary outline-none"
-                    onfocus="if(!this.value) triggerGoogleEmailSuggestion();"
-                >
-
-                <!-- Inline Google icon: external image নয়, তাই icon সবসময় visible থাকবে -->
-                <button
-                    type="button"
-                    onclick="triggerGoogleEmailSuggestion()"
-                    title="Google account থেকে Email বেছে নিন"
-                    aria-label="Google account থেকে Email বেছে নিন"
-                    class="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200 transition"
-                >
-                    <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" focusable="false">
-                        <path fill="#4285F4" d="M21.35 12.23c0-.79-.07-1.55-.22-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.42z"/>
-                        <path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.35l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.53A9.74 9.74 0 0 0 12 21.5z"/>
-                        <path fill="#FBBC05" d="M6.54 13.59A5.85 5.85 0 0 1 6.23 12c0-.55.1-1.09.31-1.59V7.88H3.3A9.75 9.75 0 0 0 2.25 12c0 1.57.38 3.05 1.05 4.12l3.24-2.53z"/>
-                        <path fill="#EA4335" d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.83 3.5 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.38l3.24 2.53C7.31 8.1 9.46 6.38 12 6.38z"/>
-                    </svg>
-                </button>
-            </div>
+            <!-- name="email" + autocomplete="email" — এটাই মূল অংশ: এর ফলে ব্রাউজার সেভ করা ইমেইল/লগইন সাজেস্ট করবে -->
+            <input type="email" id="registerEmail" name="email" autocomplete="email" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: type="tel" and maxlength="11" -->
             <input type="tel" id="registerPhone" name="phone" autocomplete="tel" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
             <input type="password" id="registerPassword" name="new-password" autocomplete="new-password" data-placeholder-ph="pass_ph" placeholder="Password (Min 6 chars)" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
-            <input type="password" id="registerConfirmPassword" name="new-password" autocomplete="new-password" data-placeholder-ph="confirm_pass_ph" placeholder="Confirm Password" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <input type="password" id="registerConfirmPassword" name="confirm-password" autocomplete="new-password" data-placeholder-ph="confirm_pass_ph" placeholder="Confirm Password" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             
             <!-- NEW: OTP Section (Hidden by default) -->
             <div id="otpVerificationContainer" class="hidden space-y-4 pt-4 border-t border-gray-200">
@@ -1318,18 +1292,28 @@ font-weight: bold;
                     We sent a code to your email.
                 </div>
                 <div class="relative">
-                    <input type="text" id="registerOtp" placeholder="Enter 6-digit OTP" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none text-center tracking-widest text-lg font-bold bg-gray-50">
+                    <input type="text" id="registerOtp" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none text-center tracking-widest text-lg font-bold bg-gray-50">
                 </div>
                 <div class="flex justify-between items-center text-xs px-1">
                     <span id="otpTimerDisplay" class="text-primary font-bold">05:00</span>
-                    <button id="resendOtpBtn" onclick="handleResendOtp()" class="text-gray-400 underline cursor-not-allowed" disabled>Resend OTP</button>
+                    <button type="button" id="resendOtpBtn" onclick="handleResendOtp()" class="text-gray-400 underline cursor-not-allowed" disabled>Resend OTP</button>
                 </div>
             </div>
             <!-- END OTP Section -->
 
-            <button id="registerBtn" onclick="performRegistration()" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:opacity-90 mt-2" data-i18n="create_acc_btn">Create Account</button>
-            <div class="text-center text-sm"><span data-i18n="already_acc">Already have an account?</span> <button onclick="navigateTo('/login')" class="text-primary font-bold" data-i18n="login">Login</button></div>
-        </div>
+            <button type="button" id="registerBtn" onclick="performRegistration()" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:opacity-90 mt-2" data-i18n="create_acc_btn">Create Account</button>
+
+            <!-- Create Account বাটনের নিচে Google বাটন -->
+            <div class="flex items-center gap-2 text-xs text-gray-400 py-1">
+                <div class="flex-1 h-px bg-gray-200"></div>
+                <span data-i18n="or_google">অথবা</span>
+                <div class="flex-1 h-px bg-gray-200"></div>
+            </div>
+            <!-- Google থেকে শুধু ইমেইল আনার বাটন: সিলেক্ট করলে ইমেইল ফিল্ড অটো-ফিল হবে (নতুন ট্যাব/পেজ খুলবে না) -->
+            <div id="googleSignInDiv" class="w-full flex justify-center"></div>
+
+            <div class="text-center text-sm"><span data-i18n="already_acc">Already have an account?</span> <button type="button" onclick="navigateTo('/login')" class="text-primary font-bold" data-i18n="login">Login</button></div>
+        </form>
     </div>
 </template>
     
@@ -1389,12 +1373,12 @@ font-weight: bold;
     // VERCEL/NETLIFY HOSTING HELPER (POLYFILL FOR GOOGLE.SCRIPT.RUN)
     // ============================================================
     // নিচে আপনার Google Apps Script-এর বর্তমান Web App URL-টি বসিয়ে দিন:
-    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxvnJTPkPAhxch-Dk5PjmFM0sj_kqU7ye0Z2p2tpIDAHiaczmshwT4rrWI9XnfGpnpQ/exec"; 
+    const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzqDMFIJe8u2KOBlMYyLtou_GGSEfJRcf2stv93Gun2_7wVHabSDtMPdH9VWcRz2Wgmow/exec"; 
 
-// ✅ সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
-// NOTE: window.google = {...} দিয়ে সরাসরি ওভাররাইট করা হচ্ছে না, কারণ Google Identity
-// Services (নিচে যোগ করা ইমেইল সাজেশন ফিচার) নিজেও window.google.accounts ব্যবহার করে —
-// পুরো অবজেক্ট রিপ্লেস করলে সেটা মুছে যেত। তাই এখানে merge করা হচ্ছে।
+// সঠিক পলিফিল (Proxy Chain ভাঙে না, Handler আলাদা থাকে)
+// NOTE: window.google মার্জ করে বসানো হচ্ছে, পুরোপুরি ওভাররাইট নয় —
+// কারণ Google Identity Services (Sign in with Google) স্ক্রিপ্টও window.google.accounts
+// ব্যবহার করে; এভাবে দুটো লোড অর্ডার যাই হোক, সংঘর্ষ ছাড়াই একসাথে কাজ করবে।
 window.google = window.google || {};
 if (!window.google.script) {
     window.google.script = {
@@ -1463,6 +1447,79 @@ if (!window.google.script) {
             })()
     };
 }
+        // ============================================================
+        // GOOGLE SIGN-IN — শুধুমাত্র ইমেইল অটোফিল করার জন্য
+        // ============================================================
+        // Google Cloud Console → APIs & Services → Credentials এ তৈরি করা আপনার Web application Client ID
+        const GOOGLE_CLIENT_ID = "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
+
+        let googleSignInInitialized = false;
+
+        // Google থেকে আসা JWT টোকেন ডিকোড করে শুধু ইমেইলটা বের করা হচ্ছে
+        // (এটা কোনো লগইন/অথেন্টিকেশন করছে না, শুধু ফিল্ড অটোফিল)
+        function handleGoogleEmailResponse(response) {
+            try {
+                const base64Payload = response.credential.split('.')[1];
+                const normalized = base64Payload.replace(/-/g, '+').replace(/_/g, '/');
+                const decoded = decodeURIComponent(
+                    atob(normalized).split('').map(c =>
+                        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                    ).join('')
+                );
+                const payload = JSON.parse(decoded);
+                const googleEmail = payload.email;
+
+                const emailInput = document.getElementById('registerEmail');
+                if (emailInput && googleEmail) {
+                    emailInput.value = googleEmail;
+                    // অন্য কোনো লিসেনার/ভ্যালিডেশন থাকলে সেটা যেন ট্রিগার হয়
+                    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    emailInput.focus();
+                }
+            } catch (e) {
+                console.error('Google credential decode failed:', e);
+            }
+        }
+
+        // registerTemplate লোড হওয়ার পর "Sign in with Google" বাটন বসানো হয়
+        function initGoogleSignInButton() {
+            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+                return false; // GIS স্ক্রিপ্ট এখনো লোড হয়নি
+            }
+            if (!googleSignInInitialized) {
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleGoogleEmailResponse,
+                    // FedCM: গুগল অ্যাকাউন্ট সিলেকশন নতুন ট্যাব/পপআপে না গিয়ে
+                    // এই পেজের মধ্যেই ব্রাউজারের নিজস্ব ওভারলে হিসেবে দেখাবে
+                    use_fedcm_for_button: true,
+                    use_fedcm_for_prompt: true
+                });
+                googleSignInInitialized = true;
+            }
+            const container = document.getElementById('googleSignInDiv');
+            if (container) {
+                container.innerHTML = '';
+                google.accounts.id.renderButton(container, {
+                    theme: 'outline',
+                    size: 'large',
+                    width: 320,
+                    text: 'continue_with'
+                });
+            }
+            return true;
+        }
+
+        // GIS স্ক্রিপ্ট async — তাই তৈরি না হওয়া পর্যন্ত অল্প কয়েকবার চেষ্টা করা হয়
+        function waitAndInitGoogleSignIn() {
+            if (initGoogleSignInButton()) return;
+            let attempts = 0;
+            const iv = setInterval(() => {
+                attempts++;
+                if (initGoogleSignInButton() || attempts > 20) clearInterval(iv);
+            }, 250);
+        }
+
         // ============================================================
         // GLOBAL STATE & APP DATA
         // ============================================================
@@ -2638,7 +2695,7 @@ case 'brand':
                 case 'account': loadAccountPage(); break;
                 case 'my-orders': loadMyOrdersPage(); break; 
                 case 'login': loadTemplate('loginTemplate'); break;
-                case 'register': loadTemplate('registerTemplate'); setupGoogleEmailForRegistration(); break;
+                case 'register': loadTemplate('registerTemplate'); break;
                 case 'forgot-password': loadTemplate('forgotPasswordTemplate'); break;
                 case 'messages': loadMessagesPage(); break;
                 default: loadHomePage();
@@ -2667,6 +2724,9 @@ case 'brand':
             const tpl = document.getElementById(id);
             document.getElementById('content').appendChild(tpl.content.cloneNode(true));
             updateUIText(); // Ensure static content in templates is translated
+            if (id === 'registerTemplate') {
+                waitAndInitGoogleSignIn();
+            }
         }
 
 function loadMyOrdersPage() {
@@ -3184,294 +3244,6 @@ function createOrderCard(order) {
                 duration--;
             }, 1000);
         }
-
-        // ============================================================
-        // GOOGLE EMAIL ONLY - Registration
-        // ============================================================
-        // Google account chooser থেকে শুধু Email নেওয়া হবে।
-        // Name / Picture / অন্য কোনো profile data ব্যবহার করা হবে না.
-        // ============================================================
-
-        const GOOGLE_CLIENT_ID =
-            "30660206786-e93kuabugvb3njfjrdf6d6la0p8htm1i.apps.googleusercontent.com";
-
-        let googleOneTapInitialized = false;
-        let googleLibraryReady = false;
-        let googleEmailPromptPending = false;
-        let googleInitRetryTimer = null;
-
-
-        // ============================================================
-        // GOOGLE CLIENT ID CHECK
-        // ============================================================
-        function isGoogleClientIdConfigured() {
-            return !!GOOGLE_CLIENT_ID &&
-                   !GOOGLE_CLIENT_ID.includes('PASTE_YOUR') &&
-                   GOOGLE_CLIENT_ID.includes('.apps.googleusercontent.com');
-        }
-
-
-        // ============================================================
-        // GOOGLE JWT PAYLOAD
-        // ============================================================
-        function parseGoogleJwt(token) {
-            try {
-                if (!token || typeof token !== 'string') return null;
-
-                const parts = token.split('.');
-                if (parts.length !== 3) return null;
-
-                const base64Url = parts[1];
-                const base64 = base64Url
-                    .replace(/-/g, '+')
-                    .replace(/_/g, '/');
-
-                const padded = base64 +
-                    '='.repeat((4 - base64.length % 4) % 4);
-
-                const jsonPayload = decodeURIComponent(
-                    atob(padded)
-                        .split('')
-                        .map(c => '%' +
-                            ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-                        )
-                        .join('')
-                );
-
-                return JSON.parse(jsonPayload);
-
-            } catch (e) {
-                console.warn('[Google Email] JWT parse করা যায়নি:', e);
-                return null;
-            }
-        }
-
-
-        // ============================================================
-        // GOOGLE CALLBACK
-        // ============================================================
-        function handleGoogleEmailSuggestion(response) {
-            if (!response || !response.credential) {
-                console.warn('[Google Email] Credential পাওয়া যায়নি।');
-                return;
-            }
-
-            const payload = parseGoogleJwt(response.credential);
-            const email = payload && typeof payload.email === 'string'
-                ? payload.email.trim()
-                : '';
-
-            if (!email) {
-                console.warn('[Google Email] Credential থেকে Email পাওয়া যায়নি।');
-                return;
-            }
-
-            const emailInput = document.getElementById('registerEmail');
-            if (!emailInput) return;
-
-            emailInput.value = email;
-            emailInput.dispatchEvent(new Event('input', { bubbles: true }));
-            emailInput.dispatchEvent(new Event('change', { bubbles: true }));
-            emailInput.focus();
-        }
-
-
-        // ============================================================
-        // GOOGLE IDENTITY SERVICES INITIALIZE
-        // ============================================================
-        function initGoogleOneTapForEmail() {
-            if (googleOneTapInitialized) return true;
-
-            if (!isGoogleClientIdConfigured()) {
-                console.warn('[Google Email] Google Client ID সেট করা হয়নি।');
-                return false;
-            }
-
-            if (typeof google === 'undefined' ||
-                !google.accounts ||
-                !google.accounts.id) {
-                googleLibraryReady = false;
-                return false;
-            }
-
-            try {
-                google.accounts.id.initialize({
-                    client_id: GOOGLE_CLIENT_ID,
-                    callback: handleGoogleEmailSuggestion,
-
-                    // FedCM বন্ধ রাখা হয়েছে যাতে বিভিন্ন Android/Chrome-এ
-                    // user-click account chooser বেশি consistent থাকে।
-                    use_fedcm_for_prompt: false,
-                    auto_select: false,
-                    cancel_on_tap_outside: true
-                });
-
-                googleOneTapInitialized = true;
-                googleLibraryReady = true;
-
-                console.log('[Google Email] Identity Services initialized');
-                return true;
-
-            } catch (e) {
-                googleLibraryReady = false;
-                console.warn(
-                    '[Google Email] Identity Services initialize করা যায়নি:',
-                    e
-                );
-                return false;
-            }
-        }
-
-
-        // ============================================================
-        // GOOGLE LIBRARY LOAD CALLBACK
-        // ============================================================
-        function onGoogleIdentityLibraryLoaded() {
-            googleLibraryReady = true;
-            initGoogleOneTapForEmail();
-
-            if (googleEmailPromptPending) {
-                googleEmailPromptPending = false;
-                setTimeout(() => triggerGoogleEmailSuggestion(), 100);
-            }
-        }
-
-        window.onGoogleLibraryLoad = onGoogleIdentityLibraryLoaded;
-
-
-        // ============================================================
-        // WAIT FOR GOOGLE GIS
-        // ============================================================
-        function waitForGoogleIdentityServices(callback, attempts = 50) {
-            if (typeof google !== 'undefined' &&
-                google.accounts &&
-                google.accounts.id) {
-                googleLibraryReady = true;
-                callback();
-                return;
-            }
-
-            if (attempts <= 0) {
-                console.warn('[Google Email] Google Identity Services load হয়নি।');
-                return;
-            }
-
-            clearTimeout(googleInitRetryTimer);
-
-            googleInitRetryTimer = setTimeout(() => {
-                waitForGoogleIdentityServices(callback, attempts - 1);
-            }, 250);
-        }
-
-
-        // ============================================================
-        // GOOGLE PROMPT STATUS CHECK
-        // ============================================================
-        function handleGooglePromptNotification(notification) {
-            try {
-                if (!notification) return;
-
-                if (typeof notification.isNotDisplayed === 'function' &&
-                    notification.isNotDisplayed()) {
-                    const reason =
-                        typeof notification.getNotDisplayedReason === 'function'
-                            ? notification.getNotDisplayedReason()
-                            : 'unknown';
-
-                    console.warn(
-                        '[Google Email] Prompt not displayed:',
-                        reason
-                    );
-                    return;
-                }
-
-                if (typeof notification.isSkippedMoment === 'function' &&
-                    notification.isSkippedMoment()) {
-                    const reason =
-                        typeof notification.getSkippedReason === 'function'
-                            ? notification.getSkippedReason()
-                            : 'unknown';
-
-                    console.warn(
-                        '[Google Email] Prompt skipped:',
-                        reason
-                    );
-                }
-
-            } catch (e) {
-                console.warn(
-                    '[Google Email] Prompt notification error:',
-                    e
-                );
-            }
-        }
-
-
-        // ============================================================
-        // TRIGGER GOOGLE ACCOUNT CHOOSER
-        // ============================================================
-        function triggerGoogleEmailSuggestion() {
-            const emailInput = document.getElementById('registerEmail');
-            if (!emailInput) return;
-
-            // Email আগে থেকেই থাকলে আবার chooser খোলা হবে না।
-            if (emailInput.value.trim()) return;
-
-            googleEmailPromptPending = true;
-
-            waitForGoogleIdentityServices(() => {
-                if (!initGoogleOneTapForEmail()) {
-                    console.warn(
-                        '[Google Email] Google Identity Services ready নয়।'
-                    );
-                    return;
-                }
-
-                googleEmailPromptPending = false;
-
-                try {
-                    google.accounts.id.prompt(handleGooglePromptNotification);
-                } catch (e) {
-                    console.warn(
-                        '[Google Email] Account prompt দেখানো যায়নি:',
-                        e
-                    );
-                }
-            });
-        }
-
-
-        // ============================================================
-        // REGISTRATION PAGE SETUP
-        // ============================================================
-        function setupGoogleEmailForRegistration() {
-            const emailInput = document.getElementById('registerEmail');
-            if (!emailInput) return;
-
-            waitForGoogleIdentityServices(() => {
-                initGoogleOneTapForEmail();
-            });
-        }
-
-
-        // ============================================================
-        // GOOGLE EMAIL INITIALIZATION
-        // ============================================================
-        (function prepareGoogleEmailRegistration() {
-            if (typeof google !== 'undefined' &&
-                google.accounts &&
-                google.accounts.id) {
-                googleLibraryReady = true;
-                initGoogleOneTapForEmail();
-            } else {
-                setTimeout(() => {
-                    waitForGoogleIdentityServices(() => {
-                        initGoogleOneTapForEmail();
-                    });
-                }, 300);
-            }
-        })();
-
 
         function performRegistration() {
             const name = document.getElementById('registerName').value.trim();
@@ -4873,7 +4645,7 @@ function getVariantErrorMessage(variants) {
     // ২. Size (সাইজ) - ইংরেজি ও বাংলা শব্দ ও সংখ্যা সাপোর্ট
     else if (
         firstName.match(/^(ছোট|মাঝারি|বড়|এস|এম|এল|এক্সএল)$/) || 
-        firstName.match(/^[a-z]{1,3}$/) || 
+        firstName.match(/^[a-z]{1,2}$/) || 
         (firstName.match(/^[0-9]+$/) || firstName.match(/[০-৯]+/))
     ) {
         type = 'size';
@@ -5948,7 +5720,7 @@ function loadProductDetails(id) {
     const variantSection = document.getElementById('variantSection');
     const variantButtons = document.getElementById('variantButtons');
     const variants = p.variants || [];
-
+document.getElementById('variantLabel').textContent = getVariantErrorMessage(variants);
     if (variants.length > 0) {
         variantSection.classList.remove('hidden');
         variantButtons.innerHTML = variants.map(v => `
@@ -7687,21 +7459,22 @@ function initFilterOptions() {
             document.getElementById('filterSort').value = 'default';
             loadAllProductsSection(1);
         }
+function getSocialBrandColor(iconClass) {
+    if(!iconClass) return 'bg-gray-700';
 
-        // ================= FEATURE: Footer Logic =================
-        
-        function getSocialBrandColor(iconClass) {
-            if(!iconClass) return 'bg-gray-700';
-            const lower = iconClass.toLowerCase();
-            if (lower.includes('facebook')) return 'bg-[#1877F2]';
-            if (lower.includes('whatsapp')) return 'bg-[#25D366]';
-            if (lower.includes('youtube')) return 'bg-[#FF0000]';
-            if (lower.includes('tiktok')) return 'bg-[#000000]';
-            if (lower.includes('instagram')) return 'bg-[#E1306C]';
-            if (lower.includes('twitter') || lower.includes('x')) return 'bg-[#000000]';
-            if (lower.includes('linkedin')) return 'bg-[#0077B5]';
-            return 'bg-gray-700';
-        }
+    const lower = iconClass.toLowerCase();
+
+    if (lower.includes('facebook')) return 'bg-[#1877F2]';
+    if (lower.includes('messenger')) return 'bg-[#0084FF]';
+    if (lower.includes('whatsapp')) return 'bg-[#25D366]';
+    if (lower.includes('youtube')) return 'bg-[#FF0000]';
+    if (lower.includes('tiktok')) return 'bg-[#000000]';
+    if (lower.includes('instagram')) return 'bg-[#E1306C]';
+    if (lower.includes('twitter') || lower.includes('x')) return 'bg-[#000000]';
+    if (lower.includes('linkedin')) return 'bg-[#0077B5]';
+
+    return 'bg-gray-700';
+}
 
         function getFooterHTML() {
             const s = appData.settings;
