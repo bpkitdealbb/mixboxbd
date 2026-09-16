@@ -101,8 +101,13 @@ gtag('config', 'G-N74T65FH7X');
 <script>
 if ('serviceWorker' in navigator) {
 let refreshing = false;
+let hasController = !!navigator.serviceWorker.controller; // true মানে আগে থেকেই একটিভ SW ছিল (নতুন ভিজিটর না)
 navigator.serviceWorker.addEventListener('controllerchange', () => {
   if (refreshing) return;
+  if (!hasController) { // প্রথমবার সাইটে আসা ইউজার—এটা আপডেট না, তাই reload দরকার নেই
+    hasController = true;
+    return;
+  }
   refreshing = true;
   console.log("New Service Worker detected. Reloading...");
   window.location.reload();
@@ -1276,7 +1281,7 @@ font-weight: bold;
             <input type="text" id="registerName" name="name" autocomplete="name" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- Registration Email: browser saved-email autofill বন্ধ রেখে Google account chooser ব্যবহার করা হবে -->
             <div class="relative">
-                <input type="email" id="registerEmail" name="register_email" autocomplete="off" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+                <input type="email" id="registerEmail" name="register_email" autocomplete="email" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
                 <div id="googleEmailChooserHint" class="hidden relative mt-1 w-full min-h-[36px] overflow-hidden rounded-lg cursor-pointer border border-[var(--primary-color)] bg-[var(--primary-color)] text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.99]" aria-label="লগইন থাকা Email থেকে নির্বাচন করতে ক্লিক করুন">
                     <div class="absolute inset-0 z-20 flex items-center justify-center opacity-[0.01]">
                         <div id="googleEmailChooserFedcmButton" class="w-full flex justify-center"></div>
@@ -7599,7 +7604,7 @@ function getSocialBrandColor(iconClass) {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by SafaBoxBD team
+                        <br>Developed by SafaBox team
                     </div>
                 </div>
             </footer>`;
