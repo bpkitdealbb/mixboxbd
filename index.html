@@ -5334,16 +5334,18 @@ function loadOurBrandSection() {
             navigateTo(`/${routeType}?name=${encodeURIComponent(displayName)}`);  
         };  
 
-        slide.innerHTML = `  
-            <div class="inline-block rounded-2xl overflow-hidden border border-gray-200 bg-white">  
-                <img  
-                    src="${c.categoryimageurl}"  
-                    alt="${displayName}"  
-                    class="block max-w-full h-auto"  
-                    loading="lazy"  
-                    onerror="this.src='https://via.placeholder.com/250x250/f3f4f6/9ca3af?text=Brand'">  
-            </div>  
-        `;  
+slide.innerHTML = `  
+    <div class="inline-block rounded-2xl overflow-hidden border border-gray-200 bg-white">  
+        <img  
+            src="${c.categoryimageurl}"  
+            alt="${displayName}"  
+            class="block max-w-full h-auto"  
+            loading="eager"
+            decoding="async"
+            fetchpriority="${index === 0 ? 'high' : 'auto'}"
+            onerror="this.src='https://via.placeholder.com/250x250/f3f4f6/9ca3af?text=Brand'">  
+    </div>  
+`;
 
         container.appendChild(slide);  
 
