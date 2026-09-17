@@ -5198,11 +5198,15 @@ function loadHeroSlider() {
     const container = document.getElementById('sliderContainer');
     const dots = document.getElementById('sliderDots');
     if (!container || appData.banners.length === 0) return;
-    container.innerHTML = appData.banners.map((b, i) => `
-        <div class="hero-slide w-full shrink-0 relative cursor-pointer" onclick="handleBannerClick('${b.linktocategory}', '${b.redirecturl}')">
-            <img src="${b.imageurl}" class="w-full h-auto object-cover bg-gray-200 aspect-video rounded-xl" loading="lazy">
-        </div>
-    `).join('');
+container.innerHTML = appData.banners.map((b, i) => `
+    <div class="hero-slide w-full shrink-0 relative cursor-pointer" onclick="handleBannerClick('${b.linktocategory}', '${b.redirecturl}')">
+        <img src="${b.imageurl}" 
+             class="w-full h-auto object-cover bg-gray-200 aspect-video rounded-xl" 
+             loading="${i === 0 ? 'eager' : 'lazy'}"
+             decoding="async"
+             fetchpriority="${i === 0 ? 'high' : 'auto'}">
+    </div>
+`).join('');
     dots.innerHTML = appData.banners.map((_, i) => `
         <button onclick="scrollToSlide(${i})" class="w-2 h-2 rounded-full transition-colors ${i===0?'bg-[var(--primary-color)]':'bg-white/50'}"></button>
     `).join('');
@@ -7606,7 +7610,7 @@ function getSocialBrandColor(iconClass) {
                     
                     <div class="border-t border-gray-800 pt-6 text-center text-sm text-white font-bold">
                         &copy; ${year} ${s.sitename}. All rights reserved.
-                        <br>Developed by SafaBox team
+                        <br>Developed by SafaBoxBD team
                     </div>
                 </div>
             </footer>`;
