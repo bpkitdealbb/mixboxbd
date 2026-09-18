@@ -1788,7 +1788,7 @@ function seoBreadcrumbSchema(items) {
 // FIXED: সম্পূর্ণ seoProductSchema ফাংশন
 // ==========================================
 function seoProductSchema(p) {
-    const price = parseFloat(p.discountprice || p.price);
+    const price = getDisplayPricing(p).price;
 const reviews = (appData.reviews || []).filter(r => r.productid == p.id && r.status === 'active');
     const currentUrl = window.location.origin + '/product?id=' + p.id;
     
@@ -4593,12 +4593,24 @@ function updateCartPageUI() {
         if (!originalPrice || originalPrice <= currentPrice) {
             const product = appData.products.find(p => p.id == item.id);
             if (product) {
-                const productPrice = parseFloat(product.price || 0);
-                const productDiscPrice = parseFloat(product.discountprice || 0);
-                if (productDiscPrice > 0 && Math.abs(currentPrice - productDiscPrice) < 0.1) {
-                    originalPrice = productPrice;
-                } else if (currentPrice < productPrice) {
-                    originalPrice = productPrice;
+                // UPDATED: এই কার্ট আইটেমে ভ্যারিয়েন্ট সিলেক্ট করা থাকলে, মেইন
+                // Price/Discount Price না দেখে সেই নির্দিষ্ট ভ্যারিয়েন্টের regularprice
+                // থেকেই সঠিক "সেভিংস" হিসাব করা হচ্ছে
+                if (item.selectedVariant && product.variants && product.variants.length > 0) {
+                    const v = product.variants.find(v =>
+                        String(v.name).trim().toLowerCase() === String(item.selectedVariant).trim().toLowerCase());
+                    if (v) {
+                        const vRegular = parseFloat(v.regularprice || v.price || 0);
+                        if (vRegular > currentPrice) originalPrice = vRegular;
+                    }
+                } else {
+                    const productPrice = parseFloat(product.price || 0);
+                    const productDiscPrice = parseFloat(product.discountprice || 0);
+                    if (productDiscPrice > 0 && Math.abs(currentPrice - productDiscPrice) < 0.1) {
+                        originalPrice = productPrice;
+                    } else if (currentPrice < productPrice) {
+                        originalPrice = productPrice;
+                    }
                 }
             }
         }
@@ -4736,21 +4748,17 @@ function getVariantErrorMessage(variants) {
     return (appData.language === 'bn') ? 'দয়া করে ভ্যারিয়েন্ট সিলেক্ট করুন' : 'Please select a variant';
 }
 function addToCart(product, qty = 1) {
-    // REQUIREMENT CHANGE: Check stock based on totalstock (sum of variants)
     if (product.totalstock <= 0) {
          return Swal.fire('Sorry', t('out_stock'), 'info');
     }
 
     let selectedVariantData = null;
     let finalPrice = parseFloat(product.discountprice || product.price);
+    let finalRegularPrice = parseFloat(product.price); // ডিফল্ট (নন-ভ্যারিয়েন্ট)
 
-    // Check for variants
     if (product.variants && product.variants.length > 0) {
         const activeBtn = document.querySelector('.variant-btn.active');
         if (!activeBtn) {
-            // ==========================================
-            // NEW: DYNAMIC MESSAGE LOGIC
-            // ==========================================
             const errorMsg = getVariantErrorMessage(product.variants);
             return Swal.fire('Warning', errorMsg, 'warning');
         }
@@ -4758,16 +4766,17 @@ function addToCart(product, qty = 1) {
         const vName = activeBtn.getAttribute('data-name');
         const vPrice = parseFloat(activeBtn.getAttribute('data-price'));
         const vStock = parseInt(activeBtn.getAttribute('data-stock'));
+        const vRegularPrice = parseFloat(activeBtn.getAttribute('data-regularprice')) || vPrice;
 
         if (vStock < qty) {
             return Swal.fire('Sorry', `Insufficient stock for ${vName}. Available: ${vStock}`, 'info');
         }
 
         selectedVariantData = vName;
-        finalPrice = vPrice; // Use variant price
+        finalPrice = vPrice;
+        finalRegularPrice = vRegularPrice; // NEW
     }
 
-    // Unique ID: ProductID_VariantName (or ProductID if no variant)
     const uniqueId = product.id + '_' + (selectedVariantData || 'Default');
     const existing = appData.cart.find(i => i.uniqueId === uniqueId);
     
@@ -4777,17 +4786,17 @@ function addToCart(product, qty = 1) {
         else existing.qty += qty;
     } else {
         if (appData.cart.length >=5) return Swal.fire(t('limit'), t('cart_full'), 'warning');
-    // NEW: ভ্যারিয়েন্ট সিলেক্ট করা থাকলে প্রোডাক্টের মূল চার্জের বদলে ভ্যারিয়েন্টের চার্জ বসাবে
-    const finalExtraCharge = selectedVariantData ? appData.currentSelectedVariantCharge : parseFloat(product.extradeliverycharge || 0);
+        const finalExtraCharge = selectedVariantData ? appData.currentSelectedVariantCharge : parseFloat(product.extradeliverycharge || 0);
 
-    appData.cart.push({ 
-            ...product, 
-            quantity: qty, 
-            uniqueId: uniqueId,
-            selectedVariant: selectedVariantData,
-            price: finalPrice, // Overwrite price with specific variant price
-            extradeliverycharge: finalExtraCharge // Overwrite extra delivery charge
-    });
+        appData.cart.push({ 
+                ...product, 
+                quantity: qty, 
+                uniqueId: uniqueId,
+                selectedVariant: selectedVariantData,
+                price: finalPrice,
+                regularprice: finalRegularPrice, // NEW: কার্টে সঠিক "সেভিংস" দেখানোর জন্য
+                extradeliverycharge: finalExtraCharge
+        });
     }
     
     resetCouponLogic(); 
@@ -4798,9 +4807,7 @@ function addToCart(product, qty = 1) {
         items: [{ item_id: product.id, item_name: product.name, variant: selectedVariantData, quantity: qty }]
     });
 
-    // === NEW: FACEBOOK PIXEL EVENT (AddToCart) ===
     const currentEventId = generateEventId(); 
-
     const addToCartData = {
         content_name: product.name,
         content_category: product.category,
@@ -4809,17 +4816,12 @@ function addToCart(product, qty = 1) {
         value: finalPrice * qty,
         currency: 'BDT'
     };
-
-    // ১. ব্রাউজার পিক্সেল ট্র্যাকিং
     fbq('track', 'AddToCart', addToCartData, { eventID: currentEventId });
-
-    // ২. সার্ভার-সাইড ট্র্যাকিং (CAPI) - NON-BLOCKING
     if (typeof trackCAPI === 'function') {
         setTimeout(() => {
             trackCAPI('AddToCart', addToCartData, currentEventId); 
         }, 0);
     }
-    // ===========================
 
     updateCartBadge();
     updateOrderSummary();
@@ -4827,7 +4829,6 @@ function addToCart(product, qty = 1) {
     const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
     Toast.fire({ icon: 'success', title: t('added_cart') });
 }
-
 function quickAdd(id) {
     const p = appData.products.find(x => x.id == id);
     if (!p) return;
@@ -4878,7 +4879,7 @@ function quickBuyNow(id) {
                 variantsHtml += `
                     <button class="swal-variant-btn w-full flex justify-between items-center p-3 mb-2 border border-gray-200 rounded-lg hover:border-primary hover:bg-gray-50 transition-all group cursor-pointer">
                         <span class="font-bold text-gray-800 group-hover:text-primary text-sm">${v.name}</span>
-<span class="text-primary font-bold text-sm" data-charge="${v.extradeliverycharge || 0}">৳ ${v.price}</span>
+                        <span class="text-primary font-bold text-sm" data-charge="${v.extradeliverycharge || 0}" data-regularprice="${v.regularprice || v.price}">৳ ${v.price}</span>
                     </button>
                 `;
             }
@@ -4908,7 +4909,9 @@ function quickBuyNow(id) {
                 btns.forEach(btn => {
                     btn.addEventListener('click', () => {
                         const vName = btn.querySelector('span:first-child').innerText; 
-                        const vPrice = parseFloat(btn.querySelector('.text-primary').innerText.replace(/[^0-9.]/g, '')); 
+                        const priceSpan = btn.querySelector('.text-primary');
+                        const vPrice = parseFloat(priceSpan.innerText.replace(/[^0-9.]/g, '')); 
+                        const vRegularPrice = parseFloat(priceSpan.getAttribute('data-regularprice')) || vPrice; // NEW
                         
                         appData.cart.forEach(item => item.selected = false);
 
@@ -4919,22 +4922,21 @@ function quickBuyNow(id) {
                             existing.quantity = (existing.quantity || 0) + 1;
                             existing.selected = true;
                             
-                            // === MOVE TO TOP LOGIC ===
                             const index = appData.cart.indexOf(existing);
                             if (index > -1) {
                                 appData.cart.splice(index, 1);
                                 appData.cart.unshift(existing);
                             }
-                            // ========================
                         } else {
-                            appData.cart.unshift({ // push -> unshift
+                            appData.cart.unshift({
                                 ...p, 
                                 quantity: 1, 
                                 selected: true,
                                 uniqueId: uniqueId,
                                 selectedVariant: vName,
                                 price: vPrice,
-                                extradeliverycharge: parseFloat(btn.querySelector('.text-primary').getAttribute('data-charge')) || 0 // NEW
+                                regularprice: vRegularPrice, // NEW
+                                extradeliverycharge: parseFloat(priceSpan.getAttribute('data-charge')) || 0
                             });
                         }
                         
@@ -4951,8 +4953,8 @@ function quickBuyNow(id) {
         return;
     }
 
+    // ... বাকি অংশ অপরিবর্তিত (non-variant path)
     appData.cart.forEach(item => item.selected = false);
-
     const uniqueId = p.id + '_Default';
     const existing = appData.cart.find(i => i.uniqueId === uniqueId);
     const price = parseFloat(p.discountprice || p.price);
@@ -4960,16 +4962,13 @@ function quickBuyNow(id) {
     if (existing) {
         existing.quantity = (existing.quantity || 0) + 1;
         existing.selected = true;
-        
-        // === MOVE TO TOP LOGIC ===
         const index = appData.cart.indexOf(existing);
         if (index > -1) {
             appData.cart.splice(index, 1);
             appData.cart.unshift(existing);
         }
-        // ========================
     } else {
-        appData.cart.unshift({ // push -> unshift
+        appData.cart.unshift({
             ...p, 
             quantity: 1, 
             selected: true,
@@ -5050,18 +5049,16 @@ function removeItem(idx) {
 // UPDATED: BUY NOW (NO LIMIT CHECK + TOP SORTING)
 // ==========================================
 function buyNow(product, qty = 1) {
-    // REQUIREMENT CHANGE: Check total stock
     if (product.totalstock <= 0) {
          return Swal.fire('Sorry', t('out_stock'), 'info');
     }
 
-    // সব আগের আইটেমকে Unselect করা (এখন শুধু এই প্রোডাক্টটি কিনবে)
     appData.cart.forEach(item => item.selected = false);
 
     let selectedVariantData = null;
     let finalPrice = parseFloat(product.discountprice || product.price);
+    let finalRegularPrice = parseFloat(product.price); // NEW
 
-    // ভ্যারিয়েন্ট চেক
     if (product.variants && product.variants.length > 0) {
         const activeBtn = document.querySelector('.variant-btn.active');
         if (!activeBtn) {
@@ -5070,8 +5067,10 @@ function buyNow(product, qty = 1) {
         }
         const vName = activeBtn.getAttribute('data-name');
         const vPrice = parseFloat(activeBtn.getAttribute('data-price'));
+        const vRegularPrice = parseFloat(activeBtn.getAttribute('data-regularprice')) || vPrice; // NEW
         selectedVariantData = vName;
         finalPrice = vPrice;
+        finalRegularPrice = vRegularPrice; // NEW
     }
 
     const uniqueId = product.id + '_' + (selectedVariantData || 'Default');
@@ -5082,20 +5081,12 @@ function buyNow(product, qty = 1) {
         else existing.qty = qty;
         existing.selected = true;
         
-        // === LOGIC: আপডেট করা আইটেমটিকে তুলে সবার উপরে নিয়ে আসা ===
         const index = appData.cart.indexOf(existing);
         if (index > -1) {
-            appData.cart.splice(index, 1); // আগের জায়গা থেকে মুছে ফেলুন
-            appData.cart.unshift(existing); // সবার উপরে (Index 0) বসিয়ে দিন
+            appData.cart.splice(index, 1);
+            appData.cart.unshift(existing);
         }
-        // ===================================================
     } else {
-        // ==========================================
-        // গুরুত্বপূর্ণ: এখানে লিমিট চেক রিমুভ করা হয়েছে
-        // ==========================================
-        
-        // === LOGIC: নতুন আইটেম সবার উপরে যোগ করা ===
-        // NEW: ভ্যারিয়েন্ট সিলেক্ট করা থাকলে প্রোডাক্টের মূল চার্জের বদলে ভ্যারিয়েন্টের চার্জ বসাবে
         const finalExtraCharge = selectedVariantData ? appData.currentSelectedVariantCharge : parseFloat(product.extradeliverycharge || 0);
 
         appData.cart.unshift({ 
@@ -5105,9 +5096,9 @@ function buyNow(product, qty = 1) {
             uniqueId: uniqueId,
             selectedVariant: selectedVariantData,
             price: finalPrice,
-            extradeliverycharge: finalExtraCharge // Overwrite extra delivery charge
+            regularprice: finalRegularPrice, // NEW
+            extradeliverycharge: finalExtraCharge
         });
-        // ===================================================
     }
 
     localStorage.setItem('cart', JSON.stringify(appData.cart));
@@ -5483,10 +5474,53 @@ function loadFeaturedProducts() {
     appData.featuredBannerProductIds = usedProductIds;
 }
 
+        // ================= NEW: CENTRALIZED DISPLAY PRICING HELPER =================
+        // এই একটা ফাংশনই ঠিক করে দেয় হোম কার্ড, সার্চ, ফিল্টার, প্রোডাক্ট পেজের ডিফল্ট
+        // প্রাইস — সব জায়গায় একই দাম দেখাবে (ভ্যারিয়েন্ট থাকলে সেটার ভিত্তিতে, নাহলে
+        // মেইন Price/Discount Price কলাম থেকে)।
+        //
+        // ভবিষ্যতে ব্যাকএন্ড থেকে যদি সরাসরি p.displayPrice / p.displayRegularPrice
+        // পাঠানো শুরু হয়, তাহলে এই ফাংশনের প্রথম চেকটাই সেটা ধরে নেবে —
+        // অন্য কোথাও (createProductCard, seoProductSchema ইত্যাদি) আর কিছু বদলাতে হবে না।
+        function getDisplayPricing(p) {
+            let price, regularPrice;
+
+            if (p.displayPrice !== undefined && p.displayPrice !== null && p.displayPrice !== '') {
+                // ব্যাকএন্ড থেকে রেডি ভ্যালু এলে সরাসরি সেটাই ব্যবহার হবে
+                price = parseFloat(p.displayPrice) || 0;
+                regularPrice = parseFloat(p.displayRegularPrice || p.displayPrice) || 0;
+
+            } else if (p.variants && p.variants.length > 0) {
+                // ভ্যারিয়েন্ট থাকলে: আগে in-stock ভ্যারিয়েন্টগুলো থেকে বাছাই,
+                // সবগুলো স্টকআউট হলে সব ভ্যারিয়েন্ট থেকেই বাছাই
+                const inStock = p.variants.filter(v => Number(v.stock) > 0);
+                const pool = inStock.length > 0 ? inStock : p.variants;
+
+                // সবচেয়ে কম দামের ভ্যারিয়েন্ট ("৳X থেকে শুরু" স্টাইল)
+                const chosen = pool.reduce((min, v) =>
+                    (parseFloat(v.price) < parseFloat(min.price) ? v : min), pool[0]);
+
+                price = parseFloat(chosen.price) || 0;
+                regularPrice = parseFloat(chosen.regularprice || chosen.price) || 0;
+
+            } else {
+                // ভ্যারিয়েন্ট নেই — আগের মতোই মেইন ফিল্ড থেকে
+                price = parseFloat(p.discountprice || p.price) || 0;
+                regularPrice = parseFloat(p.price) || 0;
+            }
+
+            const hasDiscount = regularPrice > price && price > 0;
+            const discountPercent = hasDiscount ? Math.round(((regularPrice - price) / regularPrice) * 100) : 0;
+            const saveAmount = hasDiscount ? (regularPrice - price).toFixed(0) : '0';
+
+            return { price, regularPrice, hasDiscount, discountPercent, saveAmount };
+        }
+
         // ================= UPDATED: Product Card Generator =================
         function createProductCard(p) {
-            const discount = p.discountprice ? Math.round(((p.price - p.discountprice)/p.price)*100) : 0;
-            const saveAmount = p.discountprice ? (p.price - p.discountprice).toFixed(0) : 0;
+            const pricing = getDisplayPricing(p);
+            const discount = pricing.discountPercent;
+            const saveAmount = pricing.saveAmount;
             
             // Use totalstock (sum of variants) for availability check
             const isOutOfStock = p.totalstock <= 0;
@@ -5517,8 +5551,8 @@ function loadFeaturedProducts() {
                         
                         <div class="flex items-center justify-between">
                             <div class="flex flex-col items-start">
-                                <span class="text-lg font-bold text-primary">৳ ${p.discountprice || p.price}</span>
-                                ${p.discountprice ? `<span class="text-xs text-gray-400 line-through">৳ ${p.price}</span>` : ''}
+                                <span class="text-lg font-bold text-primary">৳ ${pricing.price}</span>
+                                ${pricing.hasDiscount ? `<span class="text-xs text-gray-400 line-through">৳ ${pricing.regularPrice}</span>` : ''}
                             </div>
                             
                             ${saveAmount > 0 && !isOutOfStock ? `
@@ -5751,12 +5785,15 @@ function loadProductDetails(id) {
     document.getElementById('productDescription').innerHTML = p.description || 'No description.';
     
     // Price Calculation
-    const mainPrice = parseFloat(p.discountprice || p.price);
+    // NOTE: ভ্যারিয়েন্ট থাকলে সবচেয়ে কম দামের in-stock ভ্যারিয়েন্ট থেকে দাম আসবে
+    // (হোম পেজ কার্ডের সাথে সামঞ্জস্য রাখতে — getDisplayPricing ফাংশন দেখুন)
+    const pagePricing = getDisplayPricing(p);
+    const mainPrice = pagePricing.price;
     document.getElementById('productPrice').textContent = `৳ ${mainPrice}`;
-    document.getElementById('originalPrice').textContent = p.discountprice ? `৳ ${p.price}` : '';
-    document.getElementById('discountBadge').textContent = p.discountprice ? `${Math.round(((p.price-p.discountprice)/p.price)*100)}% OFF` : '';
-    document.getElementById('originalPrice').style.display = p.discountprice ? 'block' : 'none';
-    document.getElementById('discountBadge').style.display = p.discountprice ? 'inline-block' : 'none';
+    document.getElementById('originalPrice').textContent = pagePricing.hasDiscount ? `৳ ${pagePricing.regularPrice}` : '';
+    document.getElementById('discountBadge').textContent = pagePricing.hasDiscount ? `${pagePricing.discountPercent}% OFF` : '';
+    document.getElementById('originalPrice').style.display = pagePricing.hasDiscount ? 'block' : 'none';
+    document.getElementById('discountBadge').style.display = pagePricing.hasDiscount ? 'inline-block' : 'none';
     
     // Stock Status Logic
     const stockEl = document.getElementById('stockStatus');
@@ -5792,32 +5829,39 @@ function loadProductDetails(id) {
     const variantButtons = document.getElementById('variantButtons');
     const variants = p.variants || [];
 document.getElementById('variantLabel').textContent = getVariantErrorMessage(variants);
-    if (variants.length > 0) {
-        variantSection.classList.remove('hidden');
-        variantButtons.innerHTML = variants.map(v => `
-            <button class="variant-btn px-4 py-2 rounded-lg text-sm font-medium transition-all ${v.stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}" 
-                data-name="${v.name}" 
-                data-price="${v.price}" 
-                data-stock="${v.stock}"
-                data-charge="${v.extradeliverycharge || 0}"
-                ${v.stock <= 0 ? 'disabled' : ''}
-                onclick="selectVariant(this, ${mainPrice})">
-                ${v.name}
-            </button>
-        `).join('');
-        
-        // Reset selection
-        appData.currentSelectedVariant = null; 
-        
-        const hasOutOfStockVariant = variants.some(v => v.stock <= 0);
-        if(hasOutOfStockVariant && p.totalstock > 0) {
-             stockEl.innerHTML = '<i class="fas fa-box-open mr-2"></i> Limited Stock';
-        }
+if (variants.length > 0) {
+    variantSection.classList.remove('hidden');
+    variantButtons.innerHTML = variants.map(v => `
+        <button class="variant-btn px-4 py-2 rounded-lg text-sm font-medium transition-all ${v.stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}" 
+            data-name="${v.name}" 
+            data-price="${v.price}" 
+            data-stock="${v.stock}"
+            data-charge="${v.extradeliverycharge || 0}"
+            data-regularprice="${v.regularprice || v.price}"
+            ${v.stock <= 0 ? 'disabled' : ''}
+            onclick="selectVariant(this, ${mainPrice})">
+            ${v.name}
+        </button>
+    `).join('');
+    
+    // Reset selection
+    appData.currentSelectedVariant = null; 
+    appData.currentSelectedVariantRegularPrice = null;
 
-    } else {
-        variantSection.classList.add('hidden');
-        document.getElementById('productPrice').textContent = `৳ ${mainPrice}`;
+    // UPDATED: আগে এখানে ছাড় জোর করে লুকিয়ে রাখা হতো, কারণ মেইন Price/Discount Price
+    // ভ্যারিয়েন্টের সাথে না মিলে ভুল ছাড় দেখানোর ঝুঁকি ছিল। এখন উপরের pagePricing
+    // ইতিমধ্যে সবচেয়ে কম দামের in-stock ভ্যারিয়েন্ট থেকে হিসাব করা, তাই এখানে
+    // আলাদা করে লুকানোর দরকার নেই — উপরের productPrice/originalPrice/discountBadge-ই থাকবে।
+
+    const hasOutOfStockVariant = variants.some(v => v.stock <= 0);
+    if(hasOutOfStockVariant && p.totalstock > 0) {
+         stockEl.innerHTML = '<i class="fas fa-box-open mr-2"></i> Limited Stock';
     }
+
+} else {
+    variantSection.classList.add('hidden');
+    document.getElementById('productPrice').textContent = `৳ ${mainPrice}`;
+}
     // ==========================================
 
     // Gallery logic
@@ -5879,7 +5923,7 @@ schema: {
     fbq('track', 'ViewContent', {
         content_name: p.name,           
         content_category: p.category,    
-        value: parseFloat(p.discountprice || p.price), 
+        value: pagePricing.price, 
         currency: 'BDT'
     }, { eventID: viewEventId }); // পিক্সেলে আইডি পাস করুন
 
@@ -5890,7 +5934,7 @@ schema: {
             content_category: p.category,
             content_ids: [String(p.id)],
             content_type: 'product',
-            value: parseFloat(p.discountprice || p.price),
+            value: pagePricing.price,
             currency: 'BDT'
         }, viewEventId); // CAPI তে একই আইডি পাস করুন
     }
@@ -5904,32 +5948,46 @@ schema: {
         // ==========================================
         // NEW: VARIANT SELECTION FUNCTION
         // ==========================================
-        function selectVariant(btn, fallbackPrice) {
-            // UI Update
-            document.querySelectorAll('.variant-btn').forEach(b => {
-                b.classList.remove('active', 'bg-primary', 'text-white', 'border-primary');
-                if(!b.disabled) {
-                    b.classList.add('bg-white', 'text-gray-700', 'border-gray-200');
-                }
-            });
-            btn.classList.remove('bg-white', 'text-gray-700', 'border-gray-200');
-            btn.classList.add('active', 'bg-primary', 'text-white', 'border-primary');
-
-            // Data Update
-            const name = btn.getAttribute('data-name');
-            const price = parseFloat(btn.getAttribute('data-price'));
-            
-            appData.currentSelectedVariant = name;
-            // NEW: ভ্যারিয়েন্টের নিজস্ব এক্সট্রা চার্জ গ্লোবালে সেভ করা হচ্ছে
-            appData.currentSelectedVariantCharge = parseFloat(btn.getAttribute('data-charge')) || 0;
-
-            // Price Update (If price is defined, use it, else use fallback/main price)
-            if (!isNaN(price)) {
-                document.getElementById('productPrice').textContent = `৳ ${price}`;
-            } else {
-                document.getElementById('productPrice').textContent = `৳ ${fallbackPrice}`;
-            }
+function selectVariant(btn, fallbackPrice) {
+    // UI Update
+    document.querySelectorAll('.variant-btn').forEach(b => {
+        b.classList.remove('active', 'bg-primary', 'text-white', 'border-primary');
+        if(!b.disabled) {
+            b.classList.add('bg-white', 'text-gray-700', 'border-gray-200');
         }
+    });
+    btn.classList.remove('bg-white', 'text-gray-700', 'border-gray-200');
+    btn.classList.add('active', 'bg-primary', 'text-white', 'border-primary');
+
+    // Data Update
+    const name = btn.getAttribute('data-name');
+    const price = parseFloat(btn.getAttribute('data-price'));
+    const regularPrice = parseFloat(btn.getAttribute('data-regularprice')) || price;
+    
+    appData.currentSelectedVariant = name;
+    appData.currentSelectedVariantCharge = parseFloat(btn.getAttribute('data-charge')) || 0;
+    appData.currentSelectedVariantRegularPrice = regularPrice; // NEW: কার্টে যোগ করার সময় ব্যবহার হবে
+
+    const finalPrice = !isNaN(price) ? price : fallbackPrice;
+    document.getElementById('productPrice').textContent = `৳ ${finalPrice}`;
+
+    // NEW: এই নির্দিষ্ট ভ্যারিয়েন্টের নিজস্ব ছাড় হিসাব করে দেখানো
+    const originalPriceEl = document.getElementById('originalPrice');
+    const discountBadgeEl = document.getElementById('discountBadge');
+    
+    if (regularPrice > finalPrice) {
+        const discountPercent = Math.round(((regularPrice - finalPrice) / regularPrice) * 100);
+        originalPriceEl.textContent = `৳ ${regularPrice}`;
+        originalPriceEl.style.display = 'block';
+        discountBadgeEl.textContent = `${discountPercent}% OFF`;
+        discountBadgeEl.style.display = 'inline-block';
+    } else {
+        originalPriceEl.textContent = '';
+        originalPriceEl.style.display = 'none';
+        discountBadgeEl.textContent = '';
+        discountBadgeEl.style.display = 'none';
+    }
+}
         // ==========================================
 
         function loadRelatedProducts(cat, id) {
@@ -6214,7 +6272,9 @@ async function applyCouponFromCartCard(code, btnElement) {
 function getRecommendationProducts() {
     const allProducts = appData.products || [];
     const freeDeliveryProducts = allProducts.filter(p => {
-        return (parseFloat(p.extradeliverycharge) === 0) && (p.totalstock > 0);
+        // ভ্যারিয়েন্ট প্রোডাক্ট বাদ — renderCartRecommendations-এর মতো একই কারণে
+        return (parseFloat(p.extradeliverycharge) === 0) && (p.totalstock > 0)
+            && (!p.variants || p.variants.length === 0);
     });
     if (freeDeliveryProducts.length === 0) return [];
     
@@ -6254,7 +6314,11 @@ function renderCartRecommendations() {
     
     const allProducts = appData.products || [];
     const freeDeliveryProducts = allProducts.filter(p => {
-        return (parseFloat(p.extradeliverycharge) === 0) && (p.totalstock > 0) && (!selectedIds.has(String(p.id)));
+        // UPDATED: ভ্যারিয়েন্ট প্রোডাক্ট বাদ — কারণ addRecToCart সরাসরি Add করে দেয়,
+        // ভ্যারিয়েন্ট সিলেক্ট করার সুযোগ থাকে না
+        return (parseFloat(p.extradeliverycharge) === 0) && (p.totalstock > 0)
+            && (!selectedIds.has(String(p.id)))
+            && (!p.variants || p.variants.length === 0);
     });
     
     if (freeDeliveryProducts.length === 0) {
@@ -6318,9 +6382,10 @@ function toggleCartRecommendations() {
 }
 
 function createRecCard(product, prefix) {
-    const price = parseFloat(product.discountprice || product.price);
-    const originalPrice = parseFloat(product.price);
-    const savings = originalPrice > price ? (originalPrice - price) : 0;
+    const recPricing = getDisplayPricing(product);
+    const price = recPricing.price;
+    const originalPrice = recPricing.regularPrice;
+    const savings = recPricing.hasDiscount ? (originalPrice - price) : 0;
     const mainCat = (product.category || '').split(' > ')[0];
     const isSelected = appData.cart.some(item => item.id == product.id && item.selected !== false);
     
@@ -6350,6 +6415,12 @@ function createRecCard(product, prefix) {
 function addRecToCart(productId) {
     const product = appData.products.find(p => p.id == productId);
     if (!product) return;
+    // SAFETY GUARD: ভ্যারিয়েন্ট প্রোডাক্ট এখানে সরাসরি Add করা যাবে না, কারণ এখানে
+    // ভ্যারিয়েন্ট সিলেক্ট করার UI নেই — প্রোডাক্ট পেজে গিয়ে সিলেক্ট করতে হবে
+    if (product.variants && product.variants.length > 0) {
+        navigateTo('/product?id=' + product.id);
+        return;
+    }
     
     const uniqueId = product.id + '_Default';
     const existing = appData.cart.find(i => i.uniqueId === uniqueId);
@@ -7370,7 +7441,7 @@ function searchProducts(query) {
                 <div class="ml-3 flex-1 min-w-0">
                     <h4 class="text-sm font-bold text-gray-800 truncate group-hover:text-primary transition-colors">${escapeHTML(p.name)}</h4>
                     <div class="flex items-center justify-between mt-1">
-                        <span class="text-xs font-bold text-primary">৳ ${p.discountprice || p.price}</span>
+                        <span class="text-xs font-bold text-primary">৳ ${getDisplayPricing(p).price}</span>
                         <span class="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">${toCategoryTitleCase(p.category.split(' > ')[0])}</span>
                     </div>
                 </div>
@@ -7476,20 +7547,20 @@ function initFilterOptions() {
                 const min = parseInt(minStr);
                 
                 if (priceRange === '2001-above') {
-                    filtered = filtered.filter(p => (p.discountprice || p.price) > 2000);
+                    filtered = filtered.filter(p => getDisplayPricing(p).price > 2000);
                 } else {
                     const max = parseInt(maxStr);
                     filtered = filtered.filter(p => {
-                        const price = p.discountprice || p.price;
+                        const price = getDisplayPricing(p).price;
                         return price >= min && price <= max;
                     });
                 }
             }
 
             if (sortOrder === 'low-high') {
-                filtered.sort((a, b) => (a.discountprice || a.price) - (b.discountprice || b.price));
+                filtered.sort((a, b) => getDisplayPricing(a).price - getDisplayPricing(b).price);
             } else if (sortOrder === 'high-low') {
-                filtered.sort((a, b) => (b.discountprice || a.price) - (a.discountprice || b.price));
+                filtered.sort((a, b) => getDisplayPricing(b).price - getDisplayPricing(a).price);
             }
 
             document.getElementById('homeHeroSection').style.display = 'none';
