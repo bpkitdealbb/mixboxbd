@@ -90,23 +90,48 @@
             </div>
             <div class="p-6 overflow-y-auto flex-1">
                 <form id="productForm" class="grid grid-cols-3 gap-x-5 gap-y-4 text-sm">
-                    <div><label class="font-bold block mb-1">ID*</label><input type="text" id="p_id" class="w-full border rounded-lg p-2.5" required></div>
-                    <div><label class="font-bold block mb-1">Name*</label><input type="text" id="p_name" class="w-full border rounded-lg p-2.5" required></div>
-                    <div><label class="font-bold block mb-1">Category*</label><input type="text" id="p_category" class="w-full border rounded-lg p-2.5" placeholder="Nuts > Badam"></div>
-                    <div><label class="font-bold block mb-1">Price*</label><input type="number" id="p_price" class="w-full border rounded-lg p-2.5" required></div>
-                    <div><label class="font-bold block mb-1">Discount</label><input type="number" id="p_discount" class="w-full border rounded-lg p-2.5"></div>
-                    <div><label class="font-bold block mb-1">Cost Price</label><input type="text" id="p_costprice" class="w-full border rounded-lg p-2.5" placeholder="200 বা 100g:130"></div>
-                    <div><label class="font-bold block mb-1">Stock*</label><input type="number" id="p_stock" class="w-full border rounded-lg p-2.5" required></div>
-                    <div><label class="font-bold block mb-1">Status</label><select id="p_stockstatus" class="w-full border rounded-lg p-2.5"><option>In Stock</option><option>Low Stock</option><option>Out of Stock</option></select></div>
-                    <div><label class="font-bold block mb-1">Extra Del. Charge</label><input type="number" id="p_extra_delivery" class="w-full border rounded-lg p-2.5" step="any"></div>
-                    <div class="col-span-3"><label class="font-bold block mb-1">Image 1*</label><input type="url" id="p_image" class="w-full border rounded-lg p-2.5" required></div>
-                    <div><label class="font-bold block mb-1">Image 2</label><input type="url" id="p_image2" class="w-full border rounded-lg p-2.5"></div>
-                    <div><label class="font-bold block mb-1">Image 3</label><input type="url" id="p_image3" class="w-full border rounded-lg p-2.5"></div>
-                    <div><label class="font-bold block mb-1">Image 4</label><input type="url" id="p_image4" class="w-full border rounded-lg p-2.5"></div>
-                    <div><label class="font-bold block mb-1">Image 5</label><input type="url" id="p_image5" class="w-full border rounded-lg p-2.5"></div>
-                    <div class="col-span-2"><label class="font-bold block mb-1">Video URL</label><input type="url" id="p_video" class="w-full border rounded-lg p-2.5"></div>
-                    <div class="col-span-3"><label class="font-bold block mb-1">Variants</label><input type="text" id="p_variants" class="w-full border rounded-lg p-2.5" placeholder="Name:Price:Stock:Extra"></div>
-                    <div class="col-span-3"><label class="font-bold block mb-1">Description</label><textarea id="p_desc" rows="3" class="w-full border rounded-lg p-2.5"></textarea></div>
+                    <div class="col-span-3 bg-amber-50 border-2 border-amber-300 rounded-lg p-3">
+                        <p class="font-bold text-sm text-amber-800 mb-2">এই প্রোডাক্টে কি ভ্যারিয়েন্ট (যেমন: সাইজ/ওজন/রং) আছে?</p>
+                        <div class="flex items-center gap-3">
+                            <button type="button" id="p_variant_yes_btn" onclick="setVariantFlag(true)" class="px-5 py-2 rounded-lg font-bold text-sm border-2 transition-colors bg-white text-green-700 border-green-400 hover:bg-green-50">হ্যাঁ</button>
+                            <button type="button" id="p_variant_no_btn" onclick="setVariantFlag(false)" class="px-5 py-2 rounded-lg font-bold text-sm border-2 transition-colors bg-white text-gray-700 border-gray-300 hover:bg-gray-50">না</button>
+                            <input type="hidden" id="p_has_variant_flag" value="">
+                        </div>
+                        <p id="variantLockHint" class="text-xs text-amber-700 mt-2">উপরে হ্যাঁ / না বাটনে ক্লিক করে জানিয়ে দিন — তারপর নিচের বাকি ফর্ম আনলক হবে।</p>
+                    </div>
+                    <div><label class="font-bold block mb-1">ID*</label><input type="text" id="p_id" class="w-full border rounded-lg p-2.5" required disabled></div>
+                    <div><label class="font-bold block mb-1">Name*</label><input type="text" id="p_name" class="w-full border rounded-lg p-2.5" required disabled></div>
+                    <div><label class="font-bold block mb-1">Category*</label><input type="text" id="p_category" class="w-full border rounded-lg p-2.5" placeholder="Nuts > Badam" disabled></div>
+                    <div><label class="font-bold block mb-1">Price*</label><input type="number" id="p_price" class="w-full border rounded-lg p-2.5" required disabled></div>
+                    <div><label class="font-bold block mb-1">Discount</label><input type="number" id="p_discount" class="w-full border rounded-lg p-2.5" disabled></div>
+                    <div><label class="font-bold block mb-1">Cost Price</label><input type="text" id="p_costprice" class="w-full border rounded-lg p-2.5" placeholder="200 বা 100g:130" disabled></div>
+                    <div><label class="font-bold block mb-1">Stock*</label><input type="number" id="p_stock" class="w-full border rounded-lg p-2.5" required disabled></div>
+                    <div><label class="font-bold block mb-1">Status</label><select id="p_stockstatus" class="w-full border rounded-lg p-2.5" disabled><option>In Stock</option><option>Low Stock</option><option>Out of Stock</option></select></div>
+                    <div><label class="font-bold block mb-1">Extra Del. Charge</label><input type="number" id="p_extra_delivery" class="w-full border rounded-lg p-2.5" step="any" disabled></div>
+                    <div class="col-span-3"><label class="font-bold block mb-1">Image 1*</label><input type="url" id="p_image" class="w-full border rounded-lg p-2.5" required disabled></div>
+                    <div><label class="font-bold block mb-1">Image 2</label><input type="url" id="p_image2" class="w-full border rounded-lg p-2.5" disabled></div>
+                    <div><label class="font-bold block mb-1">Image 3</label><input type="url" id="p_image3" class="w-full border rounded-lg p-2.5" disabled></div>
+                    <div><label class="font-bold block mb-1">Image 4</label><input type="url" id="p_image4" class="w-full border rounded-lg p-2.5" disabled></div>
+                    <div><label class="font-bold block mb-1">Image 5</label><input type="url" id="p_image5" class="w-full border rounded-lg p-2.5" disabled></div>
+                    <div class="col-span-2"><label class="font-bold block mb-1">Video URL</label><input type="url" id="p_video" class="w-full border rounded-lg p-2.5" disabled></div>
+                    <div class="col-span-3" id="variantSectionWrap">
+                        <label class="font-bold block mb-1">Variants</label>
+                        <div class="grid grid-cols-12 gap-1.5 text-[10px] font-bold text-gray-500 uppercase px-1 mb-1">
+                            <div class="col-span-2">নাম</div>
+                            <div class="col-span-2">বিক্রয় মূল্য</div>
+                            <div class="col-span-2">আসল মূল্য</div>
+                            <div class="col-span-2">কেনা দাম</div>
+                            <div class="col-span-2">স্টক</div>
+                            <div class="col-span-1">চার্জ</div>
+                            <div class="col-span-1"></div>
+                        </div>
+                        <div id="variantRowsContainer" class="space-y-1.5"></div>
+                        <button type="button" id="addVariantRowBtn" onclick="addVariantRow()" disabled class="mt-2 text-xs font-bold text-blue-600 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fas fa-plus mr-1"></i> ভ্যারিয়েন্ট যোগ করুন
+                        </button>
+                        <input type="hidden" id="p_variants">
+                    </div>
+                    <div class="col-span-3"><label class="font-bold block mb-1">Description</label><textarea id="p_desc" rows="3" class="w-full border rounded-lg p-2.5" disabled></textarea></div>
                 </form>
             </div>
             <div class="px-6 py-4 border-t shrink-0 flex justify-end gap-3 bg-gray-50">
@@ -120,6 +145,9 @@
 let adminSecret = sessionStorage.getItem('adminSecret') || '';
 let localData = { products:[], orders:[], settings:{}, categories:[], users:[], banners:[], locations:[], socialmedia:[], policies:[], reviews:[], popups:[], coupons:[], offlineorders:[] };
 let currentEditSheet = '', currentEditKey = '';
+// NEW: প্রোডাক্ট মডেল খোলার সময় এটা আগে থেকে ভ্যারিয়েন্ট প্রোডাক্ট ছিল কিনা মনে রাখে —
+// Save করার সময় "না" নির্বাচিত থাকলে ভ্যারিয়েন্ট মুছে যাওয়ার আগে নিশ্চিতকরণ দেখাতে ব্যবহৃত হয়
+let modalOriginallyHadVariants = false;
 
 // ==========================================
 // FALLBACK COST LOGIC FOR OLD ORDERS
@@ -1546,16 +1574,228 @@ function markOfflinePaid(orderId){
   }).adminMarkOfflineOrderPaid(adminSecret,orderId,payment);
 }
 
+// ==========================================
+// NEW: ভ্যারিয়েন্ট স্ট্রাকচার্ড ফর্ম + "ভ্যারিয়েন্ট আছে কিনা" লক সিস্টেম
+// ==========================================
+const VARIANT_LOCK_FIELD_IDS = ['p_id','p_name','p_category','p_price','p_discount','p_costprice','p_stock','p_stockstatus','p_extra_delivery','p_image','p_image2','p_image3','p_image4','p_image5','p_video','p_desc'];
+
+function lockEntireProductModal() {
+    VARIANT_LOCK_FIELD_IDS.forEach(fid => { const el = document.getElementById(fid); if (el) el.disabled = true; });
+    document.getElementById('variantRowsContainer').innerHTML = '';
+    document.getElementById('addVariantRowBtn').disabled = true;
+    document.getElementById('variantSectionWrap').classList.add('opacity-40', 'pointer-events-none');
+    const hint = document.getElementById('variantLockHint');
+    if (hint) hint.classList.remove('hidden');
+}
+
+// হ্যাঁ/না বাটনের ভিজ্যুয়াল স্টেট আপডেট করে (state: true = হ্যাঁ সিলেক্টেড, false = না সিলেক্টেড, null = কিছুই সিলেক্ট করা হয়নি)
+function setVariantButtonsVisual(state) {
+    const yesBtn = document.getElementById('p_variant_yes_btn');
+    const noBtn = document.getElementById('p_variant_no_btn');
+    if (!yesBtn || !noBtn) return;
+    yesBtn.className = 'px-5 py-2 rounded-lg font-bold text-sm border-2 transition-colors ' +
+        (state === true ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-700 border-green-400 hover:bg-green-50');
+    noBtn.className = 'px-5 py-2 rounded-lg font-bold text-sm border-2 transition-colors ' +
+        (state === false ? 'bg-gray-600 text-white border-gray-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50');
+}
+
+// হ্যাঁ/না বাটনে ক্লিক করলে এটা কল হয় — flag সেট করে, বাটনের রঙ বদলায়, আর ফর্ম আনলক/লক করে
+function setVariantFlag(hasVariant) {
+    document.getElementById('p_has_variant_flag').value = hasVariant ? 'true' : 'false';
+    setVariantButtonsVisual(hasVariant);
+    applyVariantModeUI(hasVariant);
+}
+
+// flag অনুযায়ী ফর্ম আনলক করে, এবং ভ্যারিয়েন্ট থাকা/না-থাকা অনুযায়ী
+// প্রাসঙ্গিক কলাম চালু/বন্ধ করে
+function applyVariantModeUI(hasVariant) {
+    VARIANT_LOCK_FIELD_IDS.forEach(fid => { const el = document.getElementById(fid); if (el) el.disabled = false; });
+    const hint = document.getElementById('variantLockHint');
+    if (hint) hint.classList.add('hidden');
+
+    const extraDeliveryInput = document.getElementById('p_extra_delivery');
+    const priceInput = document.getElementById('p_price');
+    const discountInput = document.getElementById('p_discount');
+    const costPriceInput = document.getElementById('p_costprice');
+    const variantSectionWrap = document.getElementById('variantSectionWrap');
+    const addBtn = document.getElementById('addVariantRowBtn');
+
+    if (hasVariant) {
+        // ভ্যারিয়েন্ট থাকলে বেস প্রোডাক্টের Extra Delivery Charge লাগবে না —
+        // প্রতিটা ভ্যারিয়েন্টের নিজস্ব এক্সট্রা চার্জ থাকবে (নিচের রো-তে)
+        extraDeliveryInput.value = '';
+        extraDeliveryInput.disabled = true;
+
+        // NEW: ভ্যারিয়েন্ট থাকলে বেস Price ও Discount কলামের ডাটার দরকার নেই —
+        // প্রতিটা ভ্যারিয়েন্টের নিজস্ব বিক্রয় মূল্য/আসল মূল্য থাকবে (নিচের রো-তে), তাই এগুলো ডিজেবল
+        priceInput.value = '';
+        priceInput.disabled = true;
+        discountInput.value = '';
+        discountInput.disabled = true;
+
+        // NEW: ভ্যারিয়েন্ট থাকলে বেস Cost Price ফিল্ডও ম্যানুয়ালি পূরণ করা লাগবে না —
+        // এটা নিচের প্রতিটা ভ্যারিয়েন্ট রো-এর "কেনা দাম" ফিল্ড থেকে সেভ করার সময় অটোমেটিক তৈরি হবে
+        costPriceInput.value = '';
+        costPriceInput.disabled = true;
+
+        variantSectionWrap.classList.remove('opacity-40', 'pointer-events-none');
+        addBtn.disabled = false;
+        if (document.querySelectorAll('#variantRowsContainer .variant-row').length === 0) {
+            addVariantRow();
+        }
+    } else {
+        extraDeliveryInput.disabled = false;
+        priceInput.disabled = false;
+        discountInput.disabled = false;
+        costPriceInput.disabled = false;
+        // FIX: আগে এখানে ভ্যারিয়েন্ট রো-গুলো DOM থেকে মুছে ফেলা হতো (innerHTML = '')।
+        // এতে ভুলবশত "না"-তে ক্লিক করলে সব ভ্যারিয়েন্ট ডাটা হারিয়ে যেত, আবার "হ্যাঁ" ক্লিক
+        // করলেও আর ফিরে আসত না। এখন রো-গুলো DOM-এ অক্ষত থাকবে, শুধু সেকশনটা দৃশ্যত
+        // লক (ধূসর) করে দেওয়া হচ্ছে — "হ্যাঁ"-তে আবার ক্লিক করলে আগের সব ডাটাসহ ফিরে আসবে।
+        // প্রকৃতপক্ষে ভ্যারিয়েন্ট মুছে ফেলা হয় শুধু Save করার সময়ে (নিচে saveProduct() দ্রষ্টব্য), আর
+        // সেখানে আগে থেকে ভ্যারিয়েন্ট থাকা প্রোডাক্টের জন্য একটা নিশ্চিতকরণ পপ-আপ দেখানো হয়।
+        variantSectionWrap.classList.add('opacity-40', 'pointer-events-none');
+        addBtn.disabled = true;
+    }
+}
+
+function variantRowHTML(v = {}) {
+    const safeName = v.name ? String(v.name).replace(/"/g, '&quot;') : '';
+    return `
+    <div class="variant-row grid grid-cols-12 gap-1.5 items-center border border-gray-200 rounded-lg p-2 bg-gray-50">
+        <input type="text" class="v-name col-span-2 border rounded p-1.5 text-xs" placeholder="যেমন: 1kg" value="${safeName}">
+        <input type="number" step="any" class="v-price col-span-2 border rounded p-1.5 text-xs" placeholder="বিক্রয় মূল্য*" value="${v.price ?? ''}">
+        <input type="number" step="any" class="v-regularprice col-span-2 border rounded p-1.5 text-xs" placeholder="আসল মূল্য (ঐচ্ছিক)" value="${v.regularprice ?? ''}">
+        <input type="number" step="any" class="v-costprice col-span-2 border rounded p-1.5 text-xs" placeholder="কেনা দাম (ঐচ্ছিক)" value="${v.costprice ?? ''}">
+        <input type="number" class="v-stock col-span-2 border rounded p-1.5 text-xs" placeholder="স্টক*" value="${v.stock ?? ''}">
+        <input type="number" step="any" class="v-extra col-span-1 border rounded p-1.5 text-xs" placeholder="চার্জ" value="${v.extradeliverycharge ?? 0}">
+        <button type="button" onclick="this.closest('.variant-row').remove()" class="col-span-1 text-red-500 hover:text-red-700" title="মুছে ফেলুন"><i class="fas fa-trash"></i></button>
+    </div>`;
+}
+
+function addVariantRow(v = {}) {
+    document.getElementById('variantRowsContainer').insertAdjacentHTML('beforeend', variantRowHTML(v));
+}
+
+function collectVariantsFromRows() {
+    const rows = document.querySelectorAll('#variantRowsContainer .variant-row');
+    const variants = [];
+    rows.forEach(row => {
+        const name = row.querySelector('.v-name').value.trim();
+        const price = row.querySelector('.v-price').value.trim();
+        const regularprice = row.querySelector('.v-regularprice').value.trim();
+        const costprice = row.querySelector('.v-costprice').value.trim();
+        const stock = row.querySelector('.v-stock').value.trim();
+        const extra = row.querySelector('.v-extra').value.trim();
+        if (!name || price === '') return; // নাম বা দাম ফাঁকা থাকলে ঐ রো বাদ
+        variants.push({ name, price, stock: stock || '0', extra: extra || '0', regularprice, costprice });
+    });
+    return variants;
+}
+
+// এডিট মোডে পুরনো costprice স্ট্রিং ("নাম:দাম, নাম২:দাম২") থেকে একটা নির্দিষ্ট
+// ভ্যারিয়েন্টের কেনা দাম বের করে আনে — ব্যাকএন্ডের parseProductCostSnapshot()-এর সমতুল্য লজিক
+function getVariantCostFromCostPriceStr(costStr, variantName) {
+    if (!costStr) return '';
+    const raw = String(costStr).trim();
+    if (!raw || raw === '0' || !raw.includes(':')) return ''; // ফ্ল্যাট নাম্বার হলে কোনো ভ্যারিয়েন্টের সাথে ম্যাচ করা যাবে না
+    const cleanVariant = String(variantName || '').trim().toLowerCase();
+    const parts = raw.split(',');
+    const matched = parts.find(p => p.trim().split(':')[0].trim().toLowerCase() === cleanVariant);
+    if (!matched) return '';
+    const val = matched.trim().split(':')[1];
+    return val !== undefined ? val.trim() : '';
+}
+
+// Save করার ঠিক আগে স্ট্রাকচার্ড রো থেকে পুরনো ফরম্যাটের কোলন-স্ট্রিং বানিয়ে
+// হিডেন p_variants ফিল্ডে বসিয়ে দেয় — ব্যাকএন্ড/saveProduct-এ কোনো পরিবর্তন লাগে না
+function syncVariantsToHiddenField() {
+    const hasVariant = document.getElementById('p_has_variant_flag').value === 'true';
+    if (!hasVariant) { document.getElementById('p_variants').value = ''; return true; }
+
+    const variants = collectVariantsFromRows();
+    if (variants.length === 0) {
+        Swal.fire('Warning', 'ভ্যারিয়েন্ট আছে বলে জানিয়েছেন — অন্তত একটা ভ্যারিয়েন্ট যোগ করুন (নাম ও বিক্রয় মূল্য আবশ্যক)', 'warning');
+        return false;
+    }
+    const str = variants.map(v => `${v.name}:${v.price}:${v.stock}:${v.extra}:${v.regularprice}`).join(', ');
+    document.getElementById('p_variants').value = str;
+
+    // NEW: প্রতিটা ভ্যারিয়েন্টের "কেনা দাম" থেকে "নাম:দাম, নাম২:দাম২" ফরম্যাটে
+    // Cost Price ফিল্ডে বসিয়ে দেওয়া হচ্ছে — ব্যাকএন্ডের parseProductCostSnapshot() ঠিক এই
+    // ফরম্যাট আশা করে (তাই ব্যাকএন্ডে কোনো পরিবর্তন লাগছে না)। কেনা দাম ফাঁকা রাখা ভ্যারিয়েন্ট বাদ যাবে।
+    const costStr = variants
+        .filter(v => v.costprice !== '')
+        .map(v => `${v.name}:${v.costprice}`)
+        .join(', ');
+    document.getElementById('p_costprice').value = costStr;
+
+    // ভ্যারিয়েন্ট প্রোডাক্টে বেস Price/Discount কলামের ডাটা লাগে না, তাই খালি রাখা হচ্ছে
+    document.getElementById('p_price').value = '';
+    document.getElementById('p_discount').value = '';
+
+    return true;
+}
+
+
 function openProductModal(id=null){
     document.getElementById('productForm').reset();document.getElementById('p_stockstatus').value='In Stock';
     document.getElementById('productModalTitle').innerText=id?"Edit Product":"Add Product";
+    // NEW: প্রতিবার মডেল খোলার সময় হ্যাঁ/না ফ্ল্যাগ ও বাটনের রঙ নিরপেক্ষ অবস্থায় রিসেট করা হচ্ছে
+    document.getElementById('p_has_variant_flag').value = '';
+    setVariantButtonsVisual(null);
+    modalOriginallyHadVariants = false;
+    // NEW: প্রতিবার মডেল খোলার সময় প্রথমে সম্পূর্ণ লক করে শুরু করা (আগের এডিটের আনলক অবস্থা যেন থেকে না যায়)
+    lockEntireProductModal();
     // BUG FIX: String() দিয়ে টাইপ ম্যাচিং ঠিক করা হয়েছে (Number vs String সমস্যা সমাধান)
-    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;document.getElementById('p_category').value=p.category;document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';if(Array.isArray(p.variants))document.getElementById('p_variants').value=p.variants.map(v=>`${v.name}:${v.price}:${v.stock}:${v.extradeliverycharge||0}`).join(', '); else if(p.variants)document.getElementById('p_variants').value=p.variants;}}else{document.getElementById('p_id').readOnly=false;}
+    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;document.getElementById('p_category').value=p.category;document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';
+        // NEW: ভ্যারিয়েন্ট থাকলে প্রতিটার জন্য একটা স্ট্রাকচার্ড রো বসানো (regularprice ও costprice সহ — আগের বাগ যেটা এডিট করলে ডিসকাউন্ট মুছে দিত, সেটাও এখানেই ঠিক হয়ে গেল)
+        const hasVariant = Array.isArray(p.variants) && p.variants.length>0;
+        modalOriginallyHadVariants = hasVariant;
+        document.getElementById('p_has_variant_flag').value = hasVariant ? 'true' : 'false';
+        setVariantButtonsVisual(hasVariant);
+        if (hasVariant) {
+            p.variants.forEach(v => addVariantRow({ ...v, costprice: getVariantCostFromCostPriceStr(p.costprice, v.name) }));
+        }
+        applyVariantModeUI(hasVariant);
+    }}else{document.getElementById('p_id').readOnly=false;}
     document.getElementById('productModal').classList.remove('hidden');document.getElementById('productModal').classList.add('flex');
 }
 function closeProductModal(){document.getElementById('productModal').classList.add('hidden');document.getElementById('productModal').classList.remove('flex');}
 
-function saveProduct(){const d={id:document.getElementById('p_id').value.trim(),name:document.getElementById('p_name').value.trim(),category:document.getElementById('p_category').value.trim(),price:parseFloat(document.getElementById('p_price').value)||0,discountprice:parseFloat(document.getElementById('p_discount').value)||0,totalstock:parseInt(document.getElementById('p_stock').value)||0,stockstatus:document.getElementById('p_stockstatus').value,costprice:document.getElementById('p_costprice').value.trim(),extradeliverycharge:parseFloat(document.getElementById('p_extra_delivery').value)||0,imagemain:document.getElementById('p_image').value.trim(),image2:document.getElementById('p_image2').value.trim(),image3:document.getElementById('p_image3').value.trim(),image4:document.getElementById('p_image4').value.trim(),image5:document.getElementById('p_image5').value.trim(),videourl:document.getElementById('p_video').value.trim(),description:document.getElementById('p_desc').value.trim(),variants:document.getElementById('p_variants').value.trim()};if(!d.id||!d.name||!d.price)return Swal.fire('Warning','ID, Name, Price required','warning');Swal.fire({title:'Syncing...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});google.script.run.withSuccessHandler(res=>{if(res.success){Swal.fire('Saved!','','success');closeProductModal();const idx=localData.products.findIndex(x=>String(x.id)===String(d.id));if(idx>-1)localData.products[idx]={...localData.products[idx],...d};else localData.products.unshift(d);renderProducts(document.getElementById('contentArea'));}else Swal.fire('Error',res.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminSaveProduct(adminSecret,d);}
+function saveProduct(){
+    if (!syncVariantsToHiddenField()) return;
+    const hasVariant = document.getElementById('p_has_variant_flag').value === 'true';
+
+    // NEW: আগে থেকে ভ্যারিয়েন্ট থাকা প্রোডাক্ট এখন "না" অবস্থায় সেভ করতে গেলে —
+    // অর্থাৎ প্রকৃতপক্ষেই সব ভ্যারিয়েন্ট মুছে যাবে — শেষ মুহূর্তে একবার নিশ্চিত হয়ে নেওয়া হচ্ছে
+    if (modalOriginallyHadVariants && !hasVariant) {
+        Swal.fire({
+            title: 'ভ্যারিয়েন্ট মুছে যাবে!',
+            text: 'এই প্রোডাক্টে আগে থেকে ভ্যারিয়েন্ট ছিল। এখন "না" অবস্থায় সেভ করলে এর সব ভ্যারিয়েন্ট ডাটা স্থায়ীভাবে মুছে যাবে। আপনি কি নিশ্চিত?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'হ্যাঁ, মুছে সেভ করুন',
+            cancelButtonText: 'বাতিল',
+            confirmButtonColor: '#d33'
+        }).then(result => {
+            if (result.isConfirmed) doSaveProduct(hasVariant);
+        });
+        return;
+    }
+
+    doSaveProduct(hasVariant);
+}
+
+function doSaveProduct(hasVariant){
+    const d={id:document.getElementById('p_id').value.trim(),name:document.getElementById('p_name').value.trim(),category:document.getElementById('p_category').value.trim(),price:parseFloat(document.getElementById('p_price').value)||0,discountprice:parseFloat(document.getElementById('p_discount').value)||0,totalstock:parseInt(document.getElementById('p_stock').value)||0,stockstatus:document.getElementById('p_stockstatus').value,costprice:document.getElementById('p_costprice').value.trim(),extradeliverycharge:parseFloat(document.getElementById('p_extra_delivery').value)||0,imagemain:document.getElementById('p_image').value.trim(),image2:document.getElementById('p_image2').value.trim(),image3:document.getElementById('p_image3').value.trim(),image4:document.getElementById('p_image4').value.trim(),image5:document.getElementById('p_image5').value.trim(),videourl:document.getElementById('p_video').value.trim(),description:document.getElementById('p_desc').value.trim(),variants:document.getElementById('p_variants').value.trim()};
+    if(!d.id||!d.name)return Swal.fire('Warning','ID, Name required','warning');
+    // ভ্যারিয়েন্ট প্রোডাক্টের ক্ষেত্রে বেস Price লাগে না (প্রতিটা ভ্যারিয়েন্টের নিজস্ব দাম আছে),
+    // তাই শুধু non-variant প্রোডাক্টের জন্যই Price আবশ্যক রাখা হলো
+    if(!hasVariant && !d.price)return Swal.fire('Warning','ID, Name, Price required','warning');
+    Swal.fire({title:'Syncing...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});google.script.run.withSuccessHandler(res=>{if(res.success){Swal.fire('Saved!','','success');closeProductModal();const idx=localData.products.findIndex(x=>String(x.id)===String(d.id));if(idx>-1)localData.products[idx]={...localData.products[idx],...d};else localData.products.unshift(d);renderProducts(document.getElementById('contentArea'));}else Swal.fire('Error',res.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminSaveProduct(adminSecret,d);
+}
+
 
 function deleteProduct(id){
     Swal.fire({title:'Delete?',icon:'warning',showCancelButton:true,confirmButtonColor:'#d33'}).then(r=>{
