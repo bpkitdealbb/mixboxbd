@@ -2619,7 +2619,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ================= ROUTING =================
 function setupEventListeners() {
-    window.addEventListener('popstate', () => loadRoute(window.location.pathname + window.location.search));
+    // NOTE: popstate is handled by the single global handler near the end of this file.
+    // Do not register a second popstate listener here; doing so causes a visible
+    // Product Details -> top -> previous-position jump on browser Back.
     const searchInput = document.getElementById('searchInput');
     
     if(searchInput) {
@@ -8210,7 +8212,12 @@ window.onpopstate = function(event) {
             }
         }
     } else {
-        maintainHistoryTrap();
+        // We have arrived at the previous route's trap entry after the history
+        // step above. Render that route now. This keeps Back navigation to a
+        // single visual transition instead of first rendering the current
+        // Product Details page at scrollTop=0 and then moving again.
+        const currentPath = window.location.pathname + window.location.search;
+        loadRoute(currentPath);
     }
 };
 // ==========================================
