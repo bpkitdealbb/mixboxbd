@@ -4516,6 +4516,7 @@ function syncCartWithLivePrices() {
     if (!appData.products || appData.products.length === 0) return;
 
     let isPriceChanged = false;
+    let isQtyAdjusted = false; // NEW: স্টক অনুযায়ী কোয়ান্টিটি অ্যাডজাস্ট হয়েছে কিনা
 
     appData.cart.forEach((cartItem, index) => {
         // ১. লাইভ প্রোডাক্ট খুঁজে বের করা (ID দিয়ে)
@@ -4551,17 +4552,43 @@ function syncCartWithLivePrices() {
                 // ডিবাগিং-এর জন্য কনসোলে লগ করা হচ্ছে (F12 দিয়ে দেখতে পারবেন)
                 console.log(`Price Updated for ${cartItem.name}: ${currentCartPrice} -> ${newLivePrice}`);
             }
+
+            // ==========================================
+            // NEW: স্টক অনুযায়ী কোয়ান্টিটি ক্ল্যাম্প করা
+            // (আগে বেশি পরিমাণে cart করা থাকলে, স্টক কমে গেলে
+            //  রিফ্রেশ/পরবর্তী এন্ট্রিতে অটো কমে যাবে)
+            // ==========================================
+            let availableStock = liveProduct.totalstock;
+            if (cartItem.selectedVariant && liveProduct.variants && liveProduct.variants.length > 0) {
+                const variant = liveProduct.variants.find(v => v.name.trim().toLowerCase() === cartItem.selectedVariant.trim().toLowerCase());
+                availableStock = variant ? variant.stock : 0;
+            }
+
+            const currentCartQty = cartItem.quantity || cartItem.qty || 1;
+            if (availableStock > 0 && currentCartQty > availableStock) {
+                if (appData.cart[index].quantity) appData.cart[index].quantity = availableStock;
+                else appData.cart[index].qty = availableStock;
+                isQtyAdjusted = true;
+
+                console.log(`Quantity Adjusted for ${cartItem.name}: ${currentCartQty} -> ${availableStock} (Limited Stock)`);
+            }
         }
     });
 
     // ৫. সেভ করা এবং কুপন রিসেট
-    if (isPriceChanged) {
+    if (isPriceChanged || isQtyAdjusted) {
         localStorage.setItem('cart', JSON.stringify(appData.cart));
         
-        // দাম বদলালে কুপন রিসেট করা জরুরি
+        // দাম বা কোয়ান্টিটি বদলালে কুপন রিসেট করা জরুরি
         if (appData.coupon) {
             resetCouponLogic();
         }
+    }
+
+    // NEW: স্টক কম থাকায় কোনো আইটেমের কোয়ান্টিটি কমানো হলে ইউজারকে জানানো
+    if (isQtyAdjusted) {
+        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+        Toast.fire({ icon: 'warning', title: 'স্টক সীমিত থাকায় কিছু আইটেমের পরিমাণ কমানো হয়েছে' });
     }
 }
 
@@ -4998,6 +5025,24 @@ function updateQty(idx, delta) {
     if (newQty > 3) {
         Swal.fire(t('limit'), t('max_items'), 'warning');
         return; 
+    }
+
+    // ==========================================
+    // NEW: স্টক চেক (কার্ট পেজেও স্টকের বেশি বাড়ানো যাবে না)
+    // ==========================================
+    if (delta > 0) {
+        const liveProduct = appData.products.find(p => p.id == item.id);
+        if (liveProduct) {
+            let availableStock = liveProduct.totalstock;
+            if (item.selectedVariant && liveProduct.variants && liveProduct.variants.length > 0) {
+                const variant = liveProduct.variants.find(v => v.name.trim().toLowerCase() === item.selectedVariant.trim().toLowerCase());
+                availableStock = variant ? variant.stock : 0;
+            }
+            if (newQty > availableStock) {
+                Swal.fire('Sorry', `Insufficient stock. Available: ${availableStock}`, 'info');
+                return;
+            }
+        }
     }
     
     // কার্ট অ্যারেতে নতুন পরিমাণ সেট করা
@@ -5746,6 +5791,13 @@ schema: {
         // ==========================================
         // UPDATED: PRODUCT DETAILS WITH VARIANT LOGIC
         // ==========================================
+// ইউটিউব লিংক (watch, youtu.be, shorts, embed) থেকে ভিডিও আইডি বের করে embed URL বানায়
+function getYouTubeEmbedUrl(url) {
+    if (!url) return null;
+    const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    return match ? `https://www.youtube.com/embed/${match[1]}?rel=0&playsinline=1` : null;
+}
+
 function loadProductDetails(id) {
     const content = document.getElementById('content');
     content.innerHTML = ''; 
@@ -5871,7 +5923,14 @@ if (variants.length > 0) {
     const images = [p.imagemain, p.image2, p.image3, p.image4, p.image5].filter(i => i);
     gallery.innerHTML = images.map((img, i) => `<div class="gallery-slide w-full h-full shrink-0"><img src="${img}" class="w-full h-full object-cover" loading="lazy"></div>`).join('');
     if (p.videourl) {
-        gallery.innerHTML += `<div class="gallery-slide w-full h-full shrink-0 flex items-center justify-center bg-black cursor-pointer" onclick="window.open('${p.videourl}','_blank')"><i class="fas fa-play-circle text-white text-5xl opacity-80"></i></div>`;
+        const ytEmbed = getYouTubeEmbedUrl(p.videourl);
+        if (ytEmbed) {
+            // ইউটিউব ভিডিও এখন সাইটের ভিতরেই প্লে হবে (নতুন ট্যাবে যাবে না)
+            gallery.innerHTML += `<div class="gallery-slide w-full h-full shrink-0 bg-black"><iframe class="w-full h-full" src="${ytEmbed}" title="Product Video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe></div>`;
+        } else {
+            // ইউটিউব লিংক না হলে (যেমন সরাসরি .mp4 লিংক), আগের মতো নতুন ট্যাবে খুলবে
+            gallery.innerHTML += `<div class="gallery-slide w-full h-full shrink-0 flex items-center justify-center bg-black cursor-pointer" onclick="window.open('${p.videourl}','_blank')"><i class="fas fa-play-circle text-white text-5xl opacity-80"></i></div>`;
+        }
     }
     document.getElementById('galleryCounter').textContent = `1/${images.length + (p.videourl?1:0)}`;
     gallery.onscroll = () => {
