@@ -101,7 +101,31 @@
                     </div>
                     <div><label class="font-bold block mb-1">ID*</label><input type="text" id="p_id" class="w-full border rounded-lg p-2.5" required disabled></div>
                     <div><label class="font-bold block mb-1">Name*</label><input type="text" id="p_name" class="w-full border rounded-lg p-2.5" required disabled></div>
-                    <div><label class="font-bold block mb-1">Category*</label><input type="text" id="p_category" class="w-full border rounded-lg p-2.5" placeholder="Nuts > Badam" disabled></div>
+                    <div class="relative">
+                        <label class="font-bold block mb-1">Category*</label>
+                        <div id="p_category_picker" class="relative">
+                            <button type="button" id="p_category_display" onclick="toggleProductCategoryPicker()"
+                                class="w-full border rounded-lg p-2.5 text-left bg-white disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-between"
+                                disabled>
+                                <span id="p_category_display_text" class="truncate text-gray-500">-- ক্যাটাগরি বাছাই করুন --</span>
+                                <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                            </button>
+                            <div id="p_category_dropdown" class="hidden absolute left-0 right-0 top-full mt-1 z-[80] bg-white border rounded-lg shadow-xl overflow-hidden">
+                                <div class="p-2 border-b bg-gray-50">
+                                    <div class="relative">
+                                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                        <input type="text" id="p_category_search"
+                                            class="w-full border rounded-lg py-2 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="ক্যাটাগরি সার্চ করুন..." autocomplete="off"
+                                            oninput="filterProductCategoryOptions(this.value)"
+                                            onclick="event.stopPropagation()">
+                                    </div>
+                                </div>
+                                <div id="p_category_options" class="max-h-56 overflow-y-auto p-1"></div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="p_category" value="" required>
+                    </div>
                     <div><label class="font-bold block mb-1">Price*</label><input type="number" id="p_price" class="w-full border rounded-lg p-2.5" required disabled></div>
                     <div><label class="font-bold block mb-1">Discount</label><input type="number" id="p_discount" class="w-full border rounded-lg p-2.5" disabled></div>
                     <div><label class="font-bold block mb-1">Cost Price</label><input type="text" id="p_costprice" class="w-full border rounded-lg p-2.5" placeholder="200 বা 100g:130" disabled></div>
@@ -221,8 +245,8 @@ const SHEET_CONFIGS = {
         {label:'Usage Limit/User', id:'f6', type:'number', help:'প্রতি ইউজার কতবার ব্যবহার করবে'},
         {label:'Status*', id:'f7', type:'select', options:['active','inactive']},
         {label:'Free Delivery', id:'f8', type:'select', options:['yes','no']},
-        {label:'Applicable Category', id:'f9', type:'text', help:'সব ক্যাটাগরিতে চাইলে: all। নির্দিষ্ট ক্যাটাগরি: Nuts > Badam, Fruits'},
-        {label:'Excluded Categories', id:'f10', type:'text', help:'কুপন বাদ পড়বে এমন ক্যাটাগরি'},
+        {label:'Applicable Category', id:'f9', type:'category-multiselect', allowAll:true, colSpan:2, help:'ALL সিলেক্ট করলে সব ক্যাটাগরিতে কাজ করবে, অথবা নির্দিষ্ট কিছু ক্যাটাগরি/সাব-ক্যাটাগরি বাছাই করুন।'},
+        {label:'Excluded Categories', id:'f10', type:'category-multiselect', lockUntilField:'f9', colSpan:2, help:'Applicable-এ ALL সিলেক্ট থাকলে, বা কোনো মূল ক্যাটাগরির ভেতর থেকে নির্দিষ্ট একটা সাব-ক্যাটাগরি বাদ দিতে চাইলে ব্যবহার করুন। আগে Applicable Category বাছাই শেষ করতে হবে।'},
         {label:'Description', id:'f11', type:'text', help:'ইউজারকে কুপন সম্পর্কে বলুন'},
         {label:'Delivery Discount', id:'f12', type:'number', help:'ডেলিভারি চার্জ থেকে ঠিক কত টাকা কমাবে। 0 মানে ফুল ফ্রি।'}
     ]},
@@ -678,6 +702,342 @@ function renderGenericSheet(c, key) {
     c.innerHTML=`<div class="bg-white rounded-xl shadow-sm border overflow-hidden"><div class="p-4 border-b bg-gray-50 flex justify-between items-center"><h3 class="font-bold text-sm text-gray-700">${config.title} Management</h3><button onclick="openGenericModal('${key}')" class="bg-blue-600 text-white px-4 py-1.5 rounded-lg font-bold text-xs hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>Add New</button></div><div class="tbl-wrap overflow-x-auto"><table class="w-full text-left min-w-[800px]"><thead><tr class="bg-gray-100 text-gray-600">${thead}</tr></thead><tbody>${tbody}</tbody></table></div></div>`;
 }
 
+// ==========================================
+// NEW: কুপনের Applicable/Excluded Category — চেকবক্স-লিস্ট + লক সিস্টেম
+// ==========================================
+function escapeCategoryHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[ch]));
+}
+
+function categoryMultiselectHTML(fieldIdx, currentVal, opts) {
+    const raw = String(currentVal || '').trim();
+    const isAll = raw.toLowerCase() === 'all';
+    const selected = !isAll && raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const selectedJson = JSON.stringify(selected).replace(/</g, '\\u003c');
+
+    return `
+        <div id="gen_f${fieldIdx}_picker" class="relative">
+            <div id="gen_f${fieldIdx}_persistent_summary" class="mb-1 text-sm font-semibold text-gray-700">
+                ${isAll ? 'সব ক্যাটাগরি নির্বাচিত' : (selected.length ? `${selected.length}টি ক্যাটাগরি নির্বাচিত` : 'কোনো ক্যাটাগরি নির্বাচিত হয়নি')}
+            </div>
+            <div id="gen_f${fieldIdx}_persistent_preview" class="mb-2 min-h-[22px] leading-6">
+                ${isAll ? '<span class="inline-block bg-green-50 border border-green-200 rounded px-2 py-0.5 text-xs text-green-700">ALL — সব ক্যাটাগরি</span>' : (selected.length ? selected.map(x => `<span class="inline-block bg-gray-100 border rounded px-1.5 py-0.5 mr-1 mb-1 text-xs">${escapeCategoryHTML(x)}</span>`).join('') : '<span class="text-xs text-gray-400">নির্বাচিত ক্যাটাগরি এখানে দেখা যাবে</span>')}
+            </div>
+            <button type="button" id="gen_f${fieldIdx}_display"
+                onclick="toggleCategoryMultiselect(${fieldIdx})"
+                class="w-full min-h-[44px] border rounded-lg p-2 text-left bg-white flex items-center justify-between gap-2">
+                <span id="gen_f${fieldIdx}_summary" class="text-sm text-gray-500 truncate">
+                    ${isAll ? 'ALL (সব ক্যাটাগরি)' : (selected.length ? `${selected.length}টি ক্যাটাগরি নির্বাচিত` : 'ক্যাটাগরি বাছাই করুন')}
+                </span>
+                <i class="fas fa-chevron-down text-gray-400 text-xs shrink-0"></i>
+            </button>
+
+            <div id="gen_f${fieldIdx}_dropdown"
+                class="hidden absolute left-0 right-0 top-full mt-1 z-[90] bg-white border rounded-lg shadow-xl overflow-hidden">
+                <div class="p-2 border-b bg-gray-50">
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                        <input type="text" id="gen_f${fieldIdx}_search"
+                            class="w-full border rounded-lg py-2 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="ক্যাটাগরি সার্চ করুন..." autocomplete="off"
+                            oninput="filterCategoryMultiselect(${fieldIdx}, this.value)"
+                            onclick="event.stopPropagation()">
+                    </div>
+                </div>
+
+                <div id="gen_f${fieldIdx}_selected"
+                     class="hidden px-2 py-1.5 border-b bg-blue-50 text-[11px] text-blue-800"></div>
+
+                <div id="gen_f${fieldIdx}_options"
+                     class="max-h-56 overflow-y-auto p-1"></div>
+                <div class="p-2 border-t bg-gray-50">
+                    <button type="button"
+                            class="w-full rounded-lg border px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+                            onclick="closeCategoryMultiselect(${fieldIdx}, event)">
+                        বন্ধ করুন
+                    </button>
+                </div>
+            </div>
+
+            <input type="hidden" id="gen_f${fieldIdx}_value"
+                   data-allow-all="${opts.allowAll ? '1' : '0'}"
+                   data-selected='${escapeCategoryHTML(JSON.stringify(selected))}'
+                   data-is-all="${isAll ? '1' : '0'}">
+        </div>
+        ${opts.lockUntilField ? `<p id="gen_f${fieldIdx}_lockhint" class="text-[10px] text-amber-600 mt-1 hidden">⚠️ আগে "Applicable Category"-তে অন্তত একটা ক্যাটাগরি বা ALL সিলেক্ট করে শেষ করুন।</p>` : ''}
+    `;
+}
+
+function getCategoryPickerState(fieldIdx) {
+    const el = document.getElementById(`gen_f${fieldIdx}_value`);
+    if (!el) return { isAll:false, list:[] };
+    let list = [];
+    try { list = JSON.parse(el.dataset.selected || '[]') || []; } catch(e) {}
+    return { isAll: el.dataset.isAll === '1', list };
+}
+
+function setCategoryPickerState(fieldIdx, isAll, list) {
+    const el = document.getElementById(`gen_f${fieldIdx}_value`);
+    if (!el) return;
+    const clean = Array.from(new Set((list || []).map(x => String(x).trim()).filter(Boolean)));
+    el.dataset.isAll = isAll ? '1' : '0';
+    el.dataset.selected = JSON.stringify(clean);
+    renderCategoryMultiselectOptions(fieldIdx);
+    updateCategoryMultiselectSummary(fieldIdx);
+
+    // Selection summary/preview is independent of dropdown open/close state.
+    const dropdown = document.getElementById(`gen_f${fieldIdx}_dropdown`);
+    if (dropdown) dropdown.classList.remove('hidden');
+}
+
+function renderCategoryMultiselectOptions(fieldIdx, query='') {
+    const wrap = document.getElementById(`gen_f${fieldIdx}_options`);
+    if (!wrap) return;
+
+    const config = SHEET_CONFIGS[currentEditSheet];
+    const f = config && config.fields[fieldIdx];
+    const cats = (localData.categories || [])
+        .map(r => String(r[0] || '').trim())
+        .filter(Boolean);
+
+    const q = String(query || '').trim().toLowerCase();
+    const state = getCategoryPickerState(fieldIdx);
+    const sourceIdx = f && f.lockUntilField ? config.fields.findIndex(x => x.id === f.lockUntilField) : -1;
+    const sourceState = sourceIdx > -1 ? getCategoryPickerState(sourceIdx) : {isAll:false,list:[]};
+    const sourceSet = new Set(sourceState.list);
+
+    let html = '';
+    if (f && f.allowAll) {
+        html += `<label class="w-full flex items-center gap-2 py-2 px-2 rounded text-xs font-bold cursor-pointer ${state.isAll ? 'bg-green-50 text-green-700' : 'hover:bg-gray-50'}"
+            onclick="event.stopPropagation()">
+            <input type="checkbox" ${state.isAll ? 'checked' : ''}
+                onclick="event.stopPropagation(); selectCategoryMultiselectAll(${fieldIdx})"
+                class="w-4 h-4 cursor-pointer">
+            <span>ALL (সব ক্যাটাগরি)</span>
+        </label>`;
+    }
+
+    const filtered = cats.filter(cat => !q || cat.toLowerCase().includes(q));
+
+    if (!filtered.length) {
+        html += `<div class="p-3 text-xs text-gray-400 text-center">কোনো ক্যাটাগরি পাওয়া যায়নি</div>`;
+    } else {
+        filtered.forEach(cat => {
+            const selected = !state.isAll && state.list.includes(cat);
+            const blocked = sourceIdx > -1 && !sourceState.isAll && sourceSet.has(cat);
+            const safe = escapeCategoryHTML(cat);
+
+            html += `<label class="w-full flex items-center gap-2 py-2 px-2 rounded text-xs text-left ${blocked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}"
+                onclick="event.stopPropagation()">
+                <input type="checkbox"
+                    value="${escapeCategoryHTML(cat)}"
+                    ${selected ? 'checked' : ''}
+                    ${blocked ? 'disabled' : ''}
+                    onclick="event.stopPropagation(); toggleCategoryMultiselectItem(${fieldIdx}, this.value)"
+                    class="w-4 h-4 cursor-pointer shrink-0">
+                <span class="truncate">${safe}</span>
+            </label>`;
+        });
+    }
+
+    wrap.innerHTML = html;
+    updateCategoryMultiselectSelectedPreview(fieldIdx);
+}
+
+
+function updateCategoryMultiselectSummary(fieldIdx) {
+    const state = getCategoryPickerState(fieldIdx);
+    const summary = document.getElementById(`gen_f${fieldIdx}_summary`);
+    const persistent = document.getElementById(`gen_f${fieldIdx}_persistent_summary`);
+    const preview = document.getElementById(`gen_f${fieldIdx}_persistent_preview`);
+    if (!state) return;
+
+    const countText = state.isAll ? 'সব ক্যাটাগরি নির্বাচিত' : (state.list.length ? `${state.list.length}টি ক্যাটাগরি নির্বাচিত` : 'কোনো ক্যাটাগরি নির্বাচিত হয়নি');
+    if (summary) {
+        summary.textContent = state.isAll ? 'ALL (সব ক্যাটাগরি)' : (state.list.length ? `${state.list.length}টি ক্যাটাগরি নির্বাচিত` : 'ক্যাটাগরি বাছাই করুন');
+        summary.className = state.isAll ? 'text-sm font-bold text-green-700 truncate' : (state.list.length ? 'text-sm font-semibold text-blue-700 truncate' : 'text-sm text-gray-500 truncate');
+    }
+    if (persistent) {
+        persistent.textContent = countText;
+        persistent.className = state.isAll ? 'mb-1 text-sm font-bold text-green-700' : (state.list.length ? 'mb-1 text-sm font-semibold text-blue-700' : 'mb-1 text-sm text-gray-500');
+    }
+    if (preview) {
+        if (state.isAll) {
+            preview.innerHTML = '<span class="inline-block bg-green-50 border border-green-200 rounded px-2 py-0.5 text-xs text-green-700">ALL — সব ক্যাটাগরি</span>';
+        } else if (state.list.length) {
+            preview.innerHTML = state.list.map(x => `<span class="inline-block bg-gray-100 border rounded px-1.5 py-0.5 mr-1 mb-1 text-xs">${escapeCategoryHTML(x)}</span>`).join('');
+        } else {
+            preview.innerHTML = '<span class="text-xs text-gray-400">নির্বাচিত ক্যাটাগরি এখানে দেখা যাবে</span>';
+        }
+    }
+}
+
+function updateCategoryMultiselectSelectedPreview(fieldIdx) {
+    const box = document.getElementById(`gen_f${fieldIdx}_selected`);
+    if (!box) return;
+    const state = getCategoryPickerState(fieldIdx);
+    if (state.isAll) {
+        box.textContent = 'ALL — সব ক্যাটাগরি প্রযোজ্য';
+        box.classList.remove('hidden');
+    } else if (state.list.length) {
+        box.innerHTML = state.list.map(x => `<span class="inline-block bg-white border rounded px-1.5 py-0.5 mr-1 mb-1">${escapeCategoryHTML(x)}</span>`).join('');
+        box.classList.remove('hidden');
+    } else {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+    }
+}
+
+function closeCategoryMultiselect(fieldIdx, event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById(`gen_f${fieldIdx}_dropdown`);
+    if (dropdown) dropdown.classList.add('hidden');
+}
+
+function toggleCategoryMultiselect(fieldIdx) {
+    const config = SHEET_CONFIGS[currentEditSheet];
+    const f = config.fields[fieldIdx];
+
+    if (f.lockUntilField) {
+        const sourceIdx = config.fields.findIndex(x => x.id === f.lockUntilField);
+        if (!isCategorySourceDecided(sourceIdx)) {
+            Swal.fire({icon:'info', title:'আগে Applicable Category বাছাই করুন',
+                text:'Excluded Categories ব্যবহার করার আগে "Applicable Category"-তে অন্তত একটা ক্যাটাগরি বা ALL সিলেক্ট করুন।',
+                timer:2800, showConfirmButton:false});
+            return;
+        }
+    }
+
+    const dropdown = document.getElementById(`gen_f${fieldIdx}_dropdown`);
+    if (!dropdown) return;
+    document.querySelectorAll('[id^="gen_f"][id$="_dropdown"]').forEach(el => {
+        if (el !== dropdown) el.classList.add('hidden');
+    });
+    dropdown.classList.toggle('hidden');
+
+    if (!dropdown.classList.contains('hidden')) {
+        const search = document.getElementById(`gen_f${fieldIdx}_search`);
+        if (search) {
+            search.value = '';
+            setTimeout(() => search.focus(), 0);
+        }
+        renderCategoryMultiselectOptions(fieldIdx, '');
+    }
+}
+
+function filterCategoryMultiselect(fieldIdx, query) {
+    renderCategoryMultiselectOptions(fieldIdx, query);
+}
+
+function selectCategoryMultiselectAll(fieldIdx) {
+    const state = getCategoryPickerState(fieldIdx);
+    const turningOn = !state.isAll;               // আগে থেকে ALL থাকলে এবার বন্ধ হবে
+    setCategoryPickerState(fieldIdx, turningOn, turningOn ? [] : state.list);
+    const dropdown = document.getElementById(`gen_f${fieldIdx}_dropdown`);
+    if (dropdown) dropdown.classList.remove('hidden');
+    const config = SHEET_CONFIGS[currentEditSheet];
+    config.fields.forEach((other, i) => {
+        if (other.type === 'category-multiselect' && other.lockUntilField === config.fields[fieldIdx].id) {
+            refreshCategoryMultiselectLock(i, config);
+        }
+    });
+}
+
+function toggleCategoryMultiselectItem(fieldIdx, cat) {
+    const config = SHEET_CONFIGS[currentEditSheet];
+    const f = config.fields[fieldIdx];
+
+    if (f.lockUntilField) {
+        const sourceIdx = config.fields.findIndex(x => x.id === f.lockUntilField);
+        const sourceState = getCategoryPickerState(sourceIdx);
+
+        if (sourceState.isAll) {
+            // Applicable = ALL হলে Excluded-এ যেকোনো category বাছাই করা যাবে।
+        } else if (sourceState.list.includes(cat)) {
+            Swal.fire({icon:'info', title:'এটা আগে থেকেই Applicable-এ আছে',
+                text:`"${cat}" ক্যাটাগরিটা ইতিমধ্যে Applicable Category-তে সিলেক্ট করা আছে।`,
+                timer:3000, showConfirmButton:false});
+            return;
+        }
+    }
+
+    const state = getCategoryPickerState(fieldIdx);
+    if (state.isAll) return;
+
+    const next = state.list.slice();
+    const idx = next.indexOf(cat);
+    if (idx > -1) next.splice(idx, 1);
+    else next.push(cat);
+
+    setCategoryPickerState(fieldIdx, false, next);
+    const dropdown = document.getElementById(`gen_f${fieldIdx}_dropdown`);
+    if (dropdown) dropdown.classList.remove('hidden');
+
+    config.fields.forEach((other, i) => {
+        if (other.type === 'category-multiselect' && other.lockUntilField === f.id) {
+            refreshCategoryMultiselectLock(i, config);
+        }
+    });
+}
+
+function isCategorySourceDecided(sourceIdx) {
+    if (sourceIdx < 0) return false;
+    const state = getCategoryPickerState(sourceIdx);
+    return !!(state && (state.isAll || state.list.length > 0));
+}
+
+function getCategorySourceSelection(sourceIdx) {
+    const state = getCategoryPickerState(sourceIdx);
+    return state || { isAll:false, list:[] };
+}
+
+function collectCategoryMultiselectValue(fieldIdx) {
+    const state = getCategoryPickerState(fieldIdx);
+    if (state.isAll) return 'all';
+    return state.list.join(', ');
+}
+
+// Applicable-এর উপর নির্ভরশীল Excluded ফিল্ডের লক/স্ট্রাইকথ্রু অবস্থা রিফ্রেশ করে
+function refreshCategoryMultiselectLock(fieldIdx, config) {
+    const f = config.fields[fieldIdx];
+    if (!f.lockUntilField) return;
+
+    const picker = document.getElementById(`gen_f${fieldIdx}_picker`);
+    const display = document.getElementById(`gen_f${fieldIdx}_display`);
+    const hint = document.getElementById(`gen_f${fieldIdx}_lockhint`);
+    if (!picker || !display) return;
+
+    const sourceIdx = config.fields.findIndex(x => x.id === f.lockUntilField);
+    const decided = isCategorySourceDecided(sourceIdx);
+
+    if (!decided) {
+        picker.classList.add('opacity-40');
+        display.classList.add('cursor-not-allowed');
+        display.disabled = true;
+        if (hint) hint.classList.remove('hidden');
+        const dropdown = document.getElementById(`gen_f${fieldIdx}_dropdown`);
+        if (dropdown) dropdown.classList.add('hidden');
+        return;
+    }
+
+    picker.classList.remove('opacity-40');
+    display.classList.remove('cursor-not-allowed');
+    display.disabled = false;
+    if (hint) hint.classList.add('hidden');
+
+    renderCategoryMultiselectOptions(fieldIdx, document.getElementById(`gen_f${fieldIdx}_search`)?.value || '');
+}
+
+// পুরোনো checkbox-based inline handler-এর compatibility wrapper
+function onCategoryMultiselectChange(fieldIdx, checkboxEl) {
+    const cat = checkboxEl && checkboxEl.dataset ? checkboxEl.dataset.cat : '';
+    if (cat) toggleCategoryMultiselectItem(fieldIdx, cat);
+    else selectCategoryMultiselectAll(fieldIdx);
+}
+
+
 function openGenericModal(key, idx=null) {
     const config=SHEET_CONFIGS[key]; let rawData=localData[key]||[];
     if(key==='settings'&&!Array.isArray(rawData)) rawData=Object.entries(rawData).map(([k,v])=>[k,v]);
@@ -695,25 +1055,61 @@ function openGenericModal(key, idx=null) {
         const ro=f.readOnly?'readonly class="bg-gray-100 cursor-not-allowed"':'';
         if(f.type==='textarea') input=`<textarea id="gen_f${i}" ${ro} class="w-full border rounded-lg p-2.5 text-sm">${val}</textarea>`;
         else if(f.type==='select') input=`<select id="gen_f${i}" ${ro} class="w-full border rounded-lg p-2.5 text-sm">${f.options.map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>`;
+        else if(f.type==='category-multiselect') input=categoryMultiselectHTML(i, val, f);
         else input=`<input type="${f.type||'text'}" id="gen_f${i}" value="${val}" ${ro} class="w-full border rounded-lg p-2.5 text-sm">`;
         
         return `<div class="${f.colSpan?'col-span-'+f.colSpan:''}"><label class="font-bold block mb-1 text-xs text-gray-700">${f.label}</label>${input}${f.help?`<p class="text-[10px] text-blue-500 mt-1 leading-relaxed">${f.help}</p>`:''}</div>`;
     }).join('');
 
     document.getElementById('genericModalBody').innerHTML=`<div class="grid grid-cols-2 gap-x-5 gap-y-4">${html}</div>`;
+    // NEW: searchable category picker-এর initial state render
+    config.fields.forEach((f,i)=>{
+        if(f.type==='category-multiselect'){
+            renderCategoryMultiselectOptions(i, '');
+            updateCategoryMultiselectSummary(i);
+            if(f.lockUntilField) refreshCategoryMultiselectLock(i, config);
+        }
+    });
     document.getElementById('genericModal').classList.remove('hidden');document.getElementById('genericModal').classList.add('flex');
 }
+
+document.addEventListener('click', function(e) {
+    const insideProduct = e.target.closest && e.target.closest('#p_category_picker');
+    const insideCoupon = e.target.closest && e.target.closest('[id^="gen_f"][id$="_picker"]');
+    if (insideProduct || insideCoupon) return;
+
+    const pDrop = document.getElementById('p_category_dropdown');
+    if (pDrop) pDrop.classList.add('hidden');
+
+    document.querySelectorAll('[id^="gen_f"][id$="_dropdown"]').forEach(el => el.classList.add('hidden'));
+});
+
 function closeGenericModal(){document.getElementById('genericModal').classList.add('hidden');document.getElementById('genericModal').classList.remove('flex');}
 
 function saveGenericData() {
     const config=SHEET_CONFIGS[currentEditSheet];
     const dataArray=config.fields.map((f,i)=>{
+        if(f.type==='category-multiselect') return collectCategoryMultiselectValue(i);
         const el=document.getElementById(`gen_f${i}`);
         let val=el?el.value:'';
         if(currentEditSheet==='settings'&&i===0) val=val.trim().toLowerCase();
         return val;
     });
 
+    // NEW: কুপনের Applicable Category একদম ফাঁকা রেখে সেভ করতে গেলে সতর্ক করা —
+    // ফাঁকা থাকলে কুপনটা আসলে কোনো প্রোডাক্টেই কাজ করবে না
+    const applicableIdx = config.fields.findIndex(f=>f.id==='f9' && f.type==='category-multiselect');
+    if (currentEditSheet==='coupons' && applicableIdx>-1 && !String(dataArray[applicableIdx]||'').trim()) {
+        return Swal.fire({
+            title:'Applicable Category খালি!',
+            text:'কোনো ক্যাটাগরি/ALL বাছাই করা নেই — এভাবে সেভ করলে এই কুপনটা কোনো প্রোডাক্টেই কাজ করবে না। আপনি কি নিশ্চিত?',
+            icon:'warning', showCancelButton:true, confirmButtonText:'হ্যাঁ, এভাবেই সেভ করুন', cancelButtonText:'বাতিল', confirmButtonColor:'#d33'
+        }).then(r=>{ if(r.isConfirmed) doSaveGenericData(config, dataArray); });
+    }
+    doSaveGenericData(config, dataArray);
+}
+
+function doSaveGenericData(config, dataArray){
     Swal.fire({title:'Saving...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
     google.script.run.withSuccessHandler(res=>{
         if(res.success){
@@ -1581,6 +1977,8 @@ const VARIANT_LOCK_FIELD_IDS = ['p_id','p_name','p_category','p_price','p_discou
 
 function lockEntireProductModal() {
     VARIANT_LOCK_FIELD_IDS.forEach(fid => { const el = document.getElementById(fid); if (el) el.disabled = true; });
+    const catDisplay = document.getElementById('p_category_display');
+    if (catDisplay) catDisplay.disabled = true;
     document.getElementById('variantRowsContainer').innerHTML = '';
     document.getElementById('addVariantRowBtn').disabled = true;
     document.getElementById('variantSectionWrap').classList.add('opacity-40', 'pointer-events-none');
@@ -1610,6 +2008,9 @@ function setVariantFlag(hasVariant) {
 // প্রাসঙ্গিক কলাম চালু/বন্ধ করে
 function applyVariantModeUI(hasVariant) {
     VARIANT_LOCK_FIELD_IDS.forEach(fid => { const el = document.getElementById(fid); if (el) el.disabled = false; });
+    // p_category এখন hidden input + visible searchable picker; দুটোই sync করতে হবে।
+    const categoryPickerButton = document.getElementById('p_category_display');
+    if (categoryPickerButton) categoryPickerButton.disabled = false;
     const hint = document.getElementById('variantLockHint');
     if (hint) hint.classList.add('hidden');
 
@@ -1738,6 +2139,106 @@ function syncVariantsToHiddenField() {
 }
 
 
+// NEW: ক্যাটাগরি শীট থেকে searchable real-time dropdown
+function formatCategoryDisplayName(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ')
+        .toLowerCase()
+        .replace(/(^|\s)([a-z])/g, (_, p, c) => p + c.toUpperCase());
+}
+
+function populateCategoryDropdown(selectedVal) {
+    const hidden = document.getElementById('p_category');
+    const display = document.getElementById('p_category_display');
+    const displayText = document.getElementById('p_category_display_text');
+    const options = document.getElementById('p_category_options');
+    if (!hidden || !display || !displayText || !options) return;
+
+    const cats = (localData.categories || []).map(r => String(r[0] || '').trim()).filter(Boolean);
+    const sv = String(selectedVal || '').trim();
+
+    hidden.value = sv;
+    displayText.textContent = sv ? formatCategoryDisplayName(sv) : '-- ক্যাটাগরি বাছাই করুন --';
+    displayText.className = sv ? 'truncate text-gray-800' : 'truncate text-gray-500';
+
+    let html = cats.map(cat => {
+        const safe = escapeCategoryHTML(cat);
+        const selected = cat === sv;
+        return `<button type="button" class="w-full text-left px-3 py-2 rounded text-xs hover:bg-blue-50 ${selected ? 'bg-blue-50 text-blue-700 font-bold' : ''}"
+            data-cat="${safe}" onclick="selectProductCategory(this.dataset.cat)">
+            ${selected ? '<i class="fas fa-check mr-2 text-blue-600"></i>' : '<span class="inline-block w-3.5 mr-2"></span>'}${escapeCategoryHTML(formatCategoryDisplayName(cat))}
+        </button>`;
+    }).join('');
+
+    if (sv && !cats.includes(sv)) {
+        html += `<button type="button" class="w-full text-left px-3 py-2 rounded text-xs bg-amber-50 text-amber-800 font-bold"
+            data-cat="${escapeCategoryHTML(sv)}" onclick="selectProductCategory(this.dataset.cat)">
+            <i class="fas fa-triangle-exclamation mr-2"></i>${escapeCategoryHTML(sv)} (লিস্টে নেই)
+        </button>`;
+    }
+
+    if (!html) html = `<div class="p-3 text-xs text-gray-400 text-center">কোনো ক্যাটাগরি নেই</div>`;
+    options.innerHTML = html;
+
+    const search = document.getElementById('p_category_search');
+    if (search) search.value = '';
+}
+
+function toggleProductCategoryPicker() {
+    const display = document.getElementById('p_category_display');
+    const dropdown = document.getElementById('p_category_dropdown');
+    if (!display || !dropdown || display.disabled) return;
+
+    document.querySelectorAll('[id^="gen_f"][id$="_dropdown"], #p_category_dropdown').forEach(el => {
+        if (el !== dropdown) el.classList.add('hidden');
+    });
+    dropdown.classList.toggle('hidden');
+
+    if (!dropdown.classList.contains('hidden')) {
+        const search = document.getElementById('p_category_search');
+        if (search) {
+            search.value = '';
+            filterProductCategoryOptions('');
+            setTimeout(() => search.focus(), 0);
+        }
+    }
+}
+
+function filterProductCategoryOptions(query) {
+    const options = document.getElementById('p_category_options');
+    if (!options) return;
+
+    const q = String(query || '').trim().toLowerCase();
+    const selected = String(document.getElementById('p_category')?.value || '').trim();
+    const cats = (localData.categories || []).map(r => String(r[0] || '').trim()).filter(Boolean);
+    const filtered = cats.filter(cat => !q || cat.toLowerCase().includes(q));
+
+    let html = filtered.map(cat => {
+        const safe = escapeCategoryHTML(cat);
+        const isSelected = cat === selected;
+        return `<button type="button" class="w-full text-left px-3 py-2 rounded text-xs hover:bg-blue-50 ${isSelected ? 'bg-blue-50 text-blue-700 font-bold' : ''}"
+            data-cat="${safe}" onclick="selectProductCategory(this.dataset.cat)">
+            ${isSelected ? '<i class="fas fa-check mr-2 text-blue-600"></i>' : '<span class="inline-block w-3.5 mr-2"></span>'}${safe}
+        </button>`;
+    }).join('');
+
+    if (!filtered.length) html = `<div class="p-3 text-xs text-gray-400 text-center">কোনো ক্যাটাগরি পাওয়া যায়নি</div>`;
+    options.innerHTML = html;
+}
+
+function selectProductCategory(cat) {
+    const hidden = document.getElementById('p_category');
+    const displayText = document.getElementById('p_category_display_text');
+    const dropdown = document.getElementById('p_category_dropdown');
+    if (!hidden || !displayText) return;
+
+    hidden.value = String(cat || '').trim();
+    displayText.textContent = hidden.value ? formatCategoryDisplayName(hidden.value) : '-- ক্যাটাগরি বাছাই করুন --';
+    displayText.className = hidden.value ? 'truncate text-gray-800' : 'truncate text-gray-500';
+
+    if (dropdown) dropdown.classList.add('hidden');
+    filterProductCategoryOptions('');
+}
+
 function openProductModal(id=null){
     document.getElementById('productForm').reset();document.getElementById('p_stockstatus').value='In Stock';
     document.getElementById('productModalTitle').innerText=id?"Edit Product":"Add Product";
@@ -1747,8 +2248,10 @@ function openProductModal(id=null){
     modalOriginallyHadVariants = false;
     // NEW: প্রতিবার মডেল খোলার সময় প্রথমে সম্পূর্ণ লক করে শুরু করা (আগের এডিটের আনলক অবস্থা যেন থেকে না যায়)
     lockEntireProductModal();
+    // NEW: প্রতিবার মডেল খোলার সময় ক্যাটাগরি ড্রপডাউন লাইভ ক্যাটাগরি লিস্ট দিয়ে সাজানো হচ্ছে
+    populateCategoryDropdown('');
     // BUG FIX: String() দিয়ে টাইপ ম্যাচিং ঠিক করা হয়েছে (Number vs String সমস্যা সমাধান)
-    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;document.getElementById('p_category').value=p.category;document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';
+    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;populateCategoryDropdown(p.category);document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';
         // NEW: ভ্যারিয়েন্ট থাকলে প্রতিটার জন্য একটা স্ট্রাকচার্ড রো বসানো (regularprice ও costprice সহ — আগের বাগ যেটা এডিট করলে ডিসকাউন্ট মুছে দিত, সেটাও এখানেই ঠিক হয়ে গেল)
         const hasVariant = Array.isArray(p.variants) && p.variants.length>0;
         modalOriginallyHadVariants = hasVariant;
