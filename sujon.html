@@ -1584,6 +1584,7 @@ function buildPOSHistoryRows() {
         const actualReceived=isNaN(received)?(status.toLowerCase()==='paid'?sub:0):received, due=Math.max(0,parseFloat(o[9])||sub-actualReceived), profit=sub-cost;
         let itemsHtml=''; try { JSON.parse(o[4]||'[]').forEach(i=>itemsHtml+=`<div class="text-[10px]">${i.name}${i.variant?' ['+i.variant+']':''} × ${i.quantity}</div>`); } catch(e){}
         const safeId=String(o[1]||'').replace(/'/g,"\\'");
+        const safePhone=String(o[3]||'').replace(/^'/,'').replace(/'/g,"\\'");
         return `<tr class="border-b border-gray-100 hover:bg-gray-50">
             <td class="p-2 text-[10px] whitespace-nowrap">${dt}</td><td class="p-2 text-[10px] font-mono font-bold">${o[1]}</td>
             <td class="p-2 text-[10px]"><b>${o[2]||'Walk-in'}</b><br><span class="text-gray-400">${String(o[3]||'').replace(/^'/,'')}</span></td>
@@ -1591,7 +1592,7 @@ function buildPOSHistoryRows() {
             <td class="p-2 text-xs text-green-600">৳${actualReceived.toLocaleString()}</td><td class="p-2 text-xs font-bold ${due>0?'text-red-600':'text-gray-400'}">৳${due.toLocaleString()}</td>
             <td class="p-2 text-xs font-black ${status.toLowerCase()==='paid'?'text-green-600':'text-orange-500'}">${status.toLowerCase()==='paid'?'৳'+profit.toFixed(0):'Potential ৳'+profit.toFixed(0)}</td>
             <td class="p-2 text-xs"><span class="px-2 py-1 rounded-full ${status.toLowerCase()==='paid'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}">${status}</span></td>
-            <td class="p-2 whitespace-nowrap"><button onclick="viewOfflineInvoice('${safeId}')" class="text-blue-600 hover:text-blue-800 mr-2" title="Invoice"><i class="fas fa-file-invoice"></i></button>${due>0?`<button onclick="markOfflinePaid('${safeId}')" class="text-green-600 hover:text-green-800 font-bold text-[10px]" title="Mark Paid"><i class="fas fa-check"></i> Paid</button>`:''}</td>
+            <td class="p-2 whitespace-nowrap"><button onclick="viewOfflineInvoice('${safeId}')" class="text-blue-600 hover:text-blue-800 mr-2" title="Invoice"><i class="fas fa-file-invoice"></i></button>${due>0?`<button onclick="markOfflinePaid('${safeId}')" class="text-green-600 hover:text-green-800 font-bold text-[10px] mr-2" title="Mark Paid"><i class="fas fa-check"></i> Paid</button>`:''}${due>0&&safePhone?`<button onclick="viewCustomerDueInvoice('${safePhone}')" class="text-purple-600 hover:text-purple-800 font-bold text-[10px]" title="এই কাস্টমারের সব বাকি একসাথে দেখুন"><i class="fas fa-receipt"></i> সব বাকি</button>`:''}</td>
         </tr>`;
     }).join('');
 }
@@ -1733,7 +1734,7 @@ function posSubmitSale() {
         if(res.success){
             posCart.forEach(it=>{const p=localData.products.find(x=>String(x.id)===String(it.id));if(p){if(it.variant&&Array.isArray(p.variants)){const v=p.variants.find(vv=>vv.name===it.variant);if(v)v.stock=Math.max(0,v.stock-it.qty);}p.totalstock=Math.max(0,(p.totalstock||0)-it.qty);}});
             if(!Array.isArray(localData.offlineorders))localData.offlineorders=[];
-            localData.offlineorders.push([new Date().toISOString(),res.orderId,customerInfo.name||'Walk-in Customer',customerInfo.phone||'',JSON.stringify(res.items),res.subTotal,res.totalProductCost||0,res.paymentStatus,res.amountReceived,res.dueAmount,'',res.profitStatus]);
+            localData.offlineorders.push([new Date().toISOString(),res.orderId,customerInfo.name||'Walk-in Customer',customerInfo.phone||'',JSON.stringify(res.items),res.subTotal,res.totalProductCost||0,res.paymentStatus,res.amountReceived,res.dueAmount,'',res.profitStatus,JSON.stringify(res.paymentHistory||[])]);
             Swal.close(); posShowInvoice(res,customerInfo); posCart=[]; renderPOS(document.getElementById('contentArea'));
         }else Swal.fire('Error',res.error,'error');
     }).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminCreateOfflineOrder(adminSecret,posCart.map(it=>({id:it.id,price:it.price,variant:it.variant,qty:it.qty})),customerInfo);
@@ -1743,6 +1744,12 @@ function getInvoiceHtml(result, customerInfo, logoUrl) {
     const itemsHtml=(result.items||[]).map(it=>`<tr><td style="padding:4px 6px;border-bottom:1px solid #eee">${it.name}${it.variant?' ('+it.variant+')':''}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${it.price}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${(it.price*it.quantity).toFixed(2)}</td></tr>`).join('');
     const logo=logoUrl||localData.settings.sitelogo||'';
     const payment=result.paymentStatus||'Paid',due=Number(result.dueAmount||0),received=Number(result.amountReceived||0),profitStatus=result.profitStatus||'';
+    const paymentHistory=Array.isArray(result.paymentHistory)?result.paymentHistory:[];
+    const historyHtml=paymentHistory.length?`<div style="margin-top:10px;border-top:1px dashed #ccc;padding-top:8px">
+<p style="font-size:11px;font-weight:bold;margin:0 0 4px">পেমেন্ট হিস্ট্রি (কিস্তি অনুযায়ী):</p>
+<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="border-bottom:1px solid #ddd"><th style="text-align:left;padding:2px 4px">তারিখ</th><th style="text-align:right;padding:2px 4px">প্রদত্ত টাকা</th></tr></thead><tbody>${paymentHistory.map(p=>{let d='';try{d=new Date(p.date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}catch(e){}return `<tr><td style="padding:2px 4px">${d}</td><td style="text-align:right;padding:2px 4px">৳${Number(p.amount||0).toFixed(2)}</td></tr>`;}).join('')}</tbody></table>
+<p style="font-size:10px;color:#666;margin:4px 0 0">মোট ${paymentHistory.length} কিস্তিতে টাকা দেওয়া হয়েছে</p>
+</div>`:'';
     return `<div id="invoicePrintArea" style="font-family:Arial,sans-serif;max-width:380px;margin:auto;padding:16px;background:#fff;color:#111">
         ${logo?`<div style="text-align:center;margin-bottom:8px"><img src="${logo}" style="max-width:180px;max-height:70px;object-fit:contain"></div>`:''}
         <p style="text-align:center;margin:0 0 12px;font-size:12px;color:#666">অফলাইন বিক্রয় রশিদ</p>
@@ -1755,6 +1762,7 @@ function getInvoiceHtml(result, customerInfo, logoUrl) {
 বাকি: <b style="color:${due?'#dc2626':'#111'}">৳${due.toFixed(2)}</b><br>
 স্ট্যাটাস: <b>${payment}</b>
 </div>
+        ${historyHtml}
         <p style="text-align:center;font-size:11px;color:#999;margin-top:16px">ধন্যবাদ! আবার আসবেন।</p>
     </div>`;
 }
@@ -1889,7 +1897,43 @@ function posShowInvoice(result, customerInfo){ showInvoiceActions(getInvoiceHtml
 function viewOfflineInvoice(orderId){
     const row=(localData.offlineorders||[]).find(o=>String(o[1])===String(orderId)); if(!row)return;
     let items=[];try{items=JSON.parse(row[4]||'[]');}catch(e){}
-    showInvoiceActions(getInvoiceHtml({orderId:row[1],date:new Date(row[0]).toLocaleString('en-GB'),items,subTotal:Number(row[5])||0,paymentStatus:row[7]||'Paid',amountReceived:Number(row[8])||0,dueAmount:Number(row[9])||0,profitStatus:row[11]||((row[7]||'Paid')==='Paid'?'Realized':'Potential')},{name:row[2],phone:String(row[3]||'').replace(/^'/,'')},localData.settings.sitelogo),row[1]);
+    let paymentHistory=[];try{paymentHistory=JSON.parse(row[12]||'[]');if(!Array.isArray(paymentHistory))paymentHistory=[];}catch(e){}
+    showInvoiceActions(getInvoiceHtml({orderId:row[1],date:new Date(row[0]).toLocaleString('en-GB'),items,subTotal:Number(row[5])||0,paymentStatus:row[7]||'Paid',amountReceived:Number(row[8])||0,dueAmount:Number(row[9])||0,profitStatus:row[11]||((row[7]||'Paid')==='Paid'?'Realized':'Potential'),paymentHistory},{name:row[2],phone:String(row[3]||'').replace(/^'/,'')},localData.settings.sitelogo),row[1]);
+}
+
+function viewCustomerDueInvoice(phone){
+    const cleanPhone=String(phone||'').replace(/^'/,'').trim();
+    if(!cleanPhone){Swal.fire('ফোন নাম্বার নেই','এই কাস্টমারের কোনো ফোন নাম্বার সংরক্ষিত নেই, তাই আলাদা আলাদা অর্ডার একত্র করা যাচ্ছে না।','warning');return;}
+    const orders=(localData.offlineorders||[]).filter(o=>String(o[3]||'').replace(/^'/,'').trim()===cleanPhone && (Number(o[9])||0)>0);
+    if(orders.length===0){Swal.fire('বাকি নেই','এই কাস্টমারের কোনো বাকি অর্ডার পাওয়া যায়নি।','info');return;}
+    const customerName=orders[orders.length-1][2]||'Walk-in Customer';
+    showInvoiceActions(getConsolidatedInvoiceHtml(orders,{name:customerName,phone:cleanPhone},localData.settings.sitelogo),'DUE-'+cleanPhone);
+}
+
+function getConsolidatedInvoiceHtml(orders, customerInfo, logoUrl){
+    const logo=logoUrl||localData.settings.sitelogo||'';
+    let grandTotal=0, grandReceived=0, grandDue=0;
+    const sorted=[...orders].sort((a,b)=>new Date(a[0])-new Date(b[0]));
+    const rowsHtml=sorted.map(o=>{
+        const sub=Number(o[5])||0, received=Number(o[8])||0, due=Number(o[9])||0;
+        grandTotal+=sub; grandReceived+=received; grandDue+=due;
+        let dt=''; try{ dt=new Date(o[0]).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){}
+        let productsText=''; try{ productsText=JSON.parse(o[4]||'[]').map(i=>`${i.name}${i.variant?' ('+i.variant+')':''} ×${i.quantity}`).join(', '); }catch(e){}
+        return `<tr><td style="padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;white-space:nowrap">${dt}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;font-size:11px"><div>${productsText||'-'}</div><div style="font-size:9px;color:#999;font-family:monospace">${o[1]}</div></td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;white-space:nowrap">৳${sub.toFixed(2)}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;color:#16a34a;white-space:nowrap">৳${received.toFixed(2)}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;color:#dc2626;font-weight:bold;white-space:nowrap">৳${due.toFixed(2)}</td></tr>`;
+    }).join('');
+    return `<div id="invoicePrintArea" style="font-family:Arial,sans-serif;max-width:420px;margin:auto;padding:16px;background:#fff;color:#111">
+        ${logo?`<div style="text-align:center;margin-bottom:8px"><img src="${logo}" style="max-width:180px;max-height:70px;object-fit:contain"></div>`:''}
+        <p style="text-align:center;margin:0 0 12px;font-size:12px;color:#666">সামগ্রিক বকেয়া স্টেটমেন্ট</p>
+        ${customerInfo?.name?`<p style="font-size:12px;margin:2px 0"><b>কাস্টমার:</b> ${customerInfo.name}</p>`:''}${customerInfo?.phone?`<p style="font-size:12px;margin:2px 0"><b>ফোন:</b> ${customerInfo.phone}</p>`:''}
+        <p style="font-size:11px;margin:6px 0 0;color:#666">মোট বাকি অর্ডার: ${orders.length}টি</p>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr style="border-bottom:2px solid #333;font-size:10px"><th style="text-align:left;padding:4px 6px">তারিখ</th><th style="text-align:left;padding:4px 6px">কি কি পণ্য কিনেছিল</th><th style="text-align:right;padding:4px 6px">মোট মূল্য</th><th style="text-align:right;padding:4px 6px">প্রদত্ত</th><th style="text-align:right;padding:4px 6px">বাকি</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+        <div style="margin-top:10px;border-top:2px solid #333;padding-top:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between"><span>সর্বমোট কেনাকাটা:</span><b>৳${grandTotal.toFixed(2)}</b></div>
+            <div style="display:flex;justify-content:space-between;color:#16a34a;margin-top:2px"><span>সর্বমোট প্রদত্ত:</span><b>৳${grandReceived.toFixed(2)}</b></div>
+            <div style="display:flex;justify-content:space-between;color:#dc2626;font-size:15px;margin-top:6px;border-top:1px dashed #ccc;padding-top:6px"><span>সর্বমোট বাকি:</span><b>৳${grandDue.toFixed(2)}</b></div>
+        </div>
+        <p style="text-align:center;font-size:11px;color:#999;margin-top:16px">অনুরোধ করছি সুবিধামতো সময়ে সম্পূর্ণ বকেয়া পরিশোধ করুন। ধন্যবাদ।</p>
+    </div>`;
 }
 function getOnlineInvoiceHtml(order, customerInfo, logoUrl) {
     const itemsHtml = (order.items||[]).map(it=>`<tr><td style="padding:4px 6px;border-bottom:1px solid #eee">${it.name}${it.selectedVariant?' ('+it.selectedVariant+')':''}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${it.price}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${(it.price*it.quantity).toFixed(2)}</td></tr>`).join('');
@@ -1964,7 +2008,7 @@ function markOfflinePaid(orderId){
   if(payment>due){alert(`সর্বোচ্চ ৳${due.toFixed(2)} পর্যন্ত পেমেন্ট গ্রহণ করা যাবে।`);return;}
   google.script.run.withSuccessHandler(r=>{
     if(r&&r.success){
-      row[7]=r.paymentStatus||'Paid';row[8]=Number(r.totalAmountReceived);row[9]=Number(r.dueAmount)||0;row[10]=r.paymentDate||new Date().toISOString();row[11]=r.profitStatus||'Realized';
+      row[7]=r.paymentStatus||'Unpaid';row[8]=Number(r.totalAmountReceived);row[9]=Number(r.dueAmount)||0;row[10]=r.paymentDate||new Date().toISOString();row[11]=r.profitStatus||'Potential';row[12]=JSON.stringify(r.paymentHistory||[]);
       renderOfflineHistory();viewOfflineInvoice(orderId);
     }else alert((r&&r.error)||'Payment update failed');
   }).adminMarkOfflineOrderPaid(adminSecret,orderId,payment);
