@@ -439,7 +439,7 @@ function renderDashboard(c) {
     });
     let offlineRevenue = 0, offlineCost = 0, offlineProfit = 0, offlinePotentialProfit = 0, offlineDue = 0;
     filteredOfflineOrders.forEach(o => {
-        const revenue = parseFloat(o[5]) || 0;
+        const revenue = (parseFloat(o[5]) || 0) - (parseFloat(o[13]) || 0); // সর্বমোট ছাড় বাদ দিয়ে প্রকৃত বিক্রয়মূল্য
         const cost = parseFloat(o[6]) || 0;
         const status = String(o[7] || 'Paid').toLowerCase();
         const profit = revenue - cost;
@@ -497,13 +497,16 @@ function renderDashboard(c) {
     filteredOfflineOrders.forEach(o => {
         try {
             const items = JSON.parse(o[4] || "[]");
+            // সর্বমোট ছাড় থাকলে সেটা এই অর্ডারের সব পণ্যে আনুপাতিক হারে ভাগ হবে
+            const oSub = parseFloat(o[5]) || 0, oDiscount = parseFloat(o[13]) || 0;
+            const discountRatio = oSub > 0 ? (oDiscount / oSub) : 0;
             items.forEach(item => {
                 const pId = String(item.id || '').trim();
                 const vName = item.variant || 'DEFAULT';
                 const key = `${pId}__${vName}`;
                 if (productSalesMap[key]) {
                     const qty = parseInt(item.quantity) || 1;
-                    const revenue = parseFloat(item.price) || 0;
+                    const revenue = (parseFloat(item.price) || 0) * (1 - discountRatio);
                     productSalesMap[key].totalQty += qty;
                     productSalesMap[key].totalRevenue += (revenue * qty);
                 }
@@ -528,6 +531,7 @@ function renderDashboard(c) {
         else if (p.currentStock <= 5) stockBg = 'bg-yellow-50 text-yellow-700';
         const zeroSalesBadge = p.totalQty === 0 ? '<span class="bg-red-100 text-red-600 text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-2">বিক্রি নেই</span>' : '';
         const costDisplay = p.costPrice > 0 ? `৳${p.costPrice}` : '<span class="text-gray-400">N/A</span>';
+        const totalProfit = p.totalRevenue - (p.costPrice * p.totalQty);
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
                 <td class="p-2.5 text-center text-xs font-bold text-gray-400">${i + 1}</td>
@@ -550,6 +554,7 @@ function renderDashboard(c) {
                 </td>
                 <td class="p-2.5 text-right text-xs text-gray-600">${costDisplay}</td>
                 <td class="p-2.5 text-right text-sm font-bold text-green-700">৳${p.totalRevenue.toLocaleString()}</td>
+                <td class="p-2.5 text-right text-sm font-bold ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}">৳${totalProfit.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
             </tr>
         `;
     }).join('');
@@ -651,11 +656,12 @@ function renderDashboard(c) {
                             <th class="p-2.5 font-bold text-center">মোট বিক্রি</th>
                             <th class="p-2.5 font-bold text-right">ক্রয়মূল্য</th>
                             <th class="p-2.5 font-bold text-right">মোট আয়</th>
+                            <th class="p-2.5 font-bold text-right">প্রফিট</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${sortedProducts.length > 0 ? tableRows : `
-                            <tr><td colspan="7" class="p-8 text-center text-sm text-gray-400">${dashboardFilter === 'all' ? 'কোনো পণ্য নেই' : 'এই সময়ে কোনো বিক্রি হয়নি'}</td></tr>
+                            <tr><td colspan="8" class="p-8 text-center text-sm text-gray-400">${dashboardFilter === 'all' ? 'কোনো পণ্য নেই' : 'এই সময়ে কোনো বিক্রি হয়নি'}</td></tr>
                         `}
                     </tbody>
                 </table>
@@ -1531,10 +1537,15 @@ function renderPOS(c) {
                 <input type="text" id="posCustName" placeholder="কাস্টমারের নাম (ঐচ্ছিক)" class="border rounded-lg px-3 py-2 text-sm w-full">
                 <input type="text" id="posCustPhone" placeholder="ফোন নাম্বার (ঐচ্ছিক)" class="border rounded-lg px-3 py-2 text-sm w-full">
                 <select id="posPaymentStatus" onchange="posPaymentStatusChanged()" class="border rounded-lg px-3 py-2 text-sm w-full"><option value="Paid">Paid — পুরো টাকা পেয়েছি</option><option value="Unpaid">Unpaid — বাকি থাকবে</option></select>
+                <input type="number" id="posDiscount" min="0" step="0.01" placeholder="সর্বমোট ছাড় (ঐচ্ছিক)" oninput="posPaymentStatusChanged()" class="border rounded-lg px-3 py-2 text-sm w-full">
+                <div class="text-[10px] text-gray-500">কাস্টমার সর্বমোট থেকে কম দিলে এখানে ছাড়ের পরিমাণ লিখুন — এটা সব পণ্যে আনুপাতিক হারে ভাগ হয়ে যাবে।</div>
                 <input type="number" id="posAmountReceived" min="0" step="0.01" placeholder="আসলে কত টাকা পেলাম? (ডিফল্ট: মোট)" class="border rounded-lg px-3 py-2 text-sm w-full">
                 <div class="text-[10px] text-gray-500">Paid হলে পুরো টাকা, Unpaid হলে 0 বা যত টাকা পেয়েছেন লিখুন।</div>
                 <div class="flex justify-between items-center text-sm font-bold pt-1">
                     <span>সাবটোটাল:</span><span id="posSubtotal">৳0</span>
+                </div>
+                <div id="posNetTotalRow" class="flex justify-between items-center text-sm font-bold text-green-700" style="display:none">
+                    <span>প্রদেয় (ছাড়ের পর):</span><span id="posNetTotal">৳0</span>
                 </div>
                 <button onclick="posSubmitSale()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-bold text-sm">
                     <i class="fas fa-check-circle mr-1"></i> সেল সম্পন্ন করুন
@@ -1580,8 +1591,8 @@ function buildPOSHistoryRows() {
     if (rows.length === 0) return '<tr><td colspan="10" class="p-4 text-center text-gray-400 text-xs">কোনো অফলাইন অর্ডার পাওয়া যায়নি</td></tr>';
     return rows.map(o => {
         let dt=''; try { const d=new Date(o[0]); dt=d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+', '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:true}); } catch(e){}
-        const sub=parseFloat(o[5])||0, cost=parseFloat(o[6])||0, status=String(o[7]||'Paid'), received=parseFloat(o[8]);
-        const actualReceived=isNaN(received)?(status.toLowerCase()==='paid'?sub:0):received, due=Math.max(0,parseFloat(o[9])||sub-actualReceived), profit=sub-cost;
+        const sub=parseFloat(o[5])||0, cost=parseFloat(o[6])||0, discount=parseFloat(o[13])||0, status=String(o[7]||'Paid'), received=parseFloat(o[8]);
+        const actualReceived=isNaN(received)?(status.toLowerCase()==='paid'?sub:0):received, due=Math.max(0,parseFloat(o[9])||sub-actualReceived), profit=(sub-discount)-cost;
         let itemsHtml=''; try { JSON.parse(o[4]||'[]').forEach(i=>itemsHtml+=`<div class="text-[10px]">${i.name}${i.variant?' ['+i.variant+']':''} × ${i.quantity}</div>`); } catch(e){}
         const safeId=String(o[1]||'').replace(/'/g,"\\'");
         const safePhone=String(o[3]||'').replace(/^'/,'').replace(/'/g,"\\'");
@@ -1598,7 +1609,16 @@ function buildPOSHistoryRows() {
 }
 
 function renderOfflineHistory(){ const body=document.getElementById('offlineHistoryBody'); if(body) body.innerHTML=buildPOSHistoryRows(); }
-function posPaymentStatusChanged(){ const s=document.getElementById('posPaymentStatus'), a=document.getElementById('posAmountReceived'); if(!s||!a)return; if(s.value==='Paid'){ const total=posCart.reduce((x,it)=>x+(it.price*it.qty),0); a.value=total.toFixed(2); a.disabled=false; } else { a.value='0'; a.disabled=false; } }
+function posPaymentStatusChanged(){
+    const s=document.getElementById('posPaymentStatus'), a=document.getElementById('posAmountReceived'), d=document.getElementById('posDiscount');
+    if(!s||!a)return;
+    const subTotal=posCart.reduce((x,it)=>x+(it.price*it.qty),0);
+    let discount=Number(d?.value||0); if(!isFinite(discount)||discount<0) discount=0; if(discount>subTotal) discount=subTotal;
+    const netTotal=subTotal-discount;
+    const netRow=document.getElementById('posNetTotalRow'), netSpan=document.getElementById('posNetTotal');
+    if(netRow&&netSpan){ if(discount>0){ netRow.style.display='flex'; netSpan.innerText=`৳${netTotal.toFixed(2)}`; } else { netRow.style.display='none'; } }
+    if(s.value==='Paid'){ a.value=netTotal.toFixed(2); a.disabled=false; } else { a.value='0'; a.disabled=false; }
+}
 
 
 function posFilterProducts() {
@@ -1695,6 +1715,15 @@ function posChangeQty(index, delta) {
     posRenderCart();
 }
 
+function posChangePrice(index, newPrice) {
+    // কাস্টমার কোনো নির্দিষ্ট প্রোডাক্টে কম দাম দিলে এখান থেকে সেই আইটেমের দাম বদলে দেওয়া যাবে
+    const item = posCart[index];
+    if (!item) return;
+    const p = parseFloat(newPrice);
+    if (isFinite(p) && p >= 0) item.price = p;
+    posRenderCart();
+}
+
 function posRenderCart() {
     const wrap = document.getElementById('posCartList');
     if (!wrap) return;
@@ -1706,7 +1735,7 @@ function posRenderCart() {
             <div class="flex justify-between items-center border-b py-2 text-xs">
                 <div class="flex-1 pr-2">
                     <div class="font-semibold">${it.name}${it.variant ? ' (' + it.variant + ')' : ''}</div>
-                    <div class="text-gray-500">৳${it.price} x ${it.qty}</div>
+                    <div class="text-gray-500 flex items-center gap-1 mt-0.5">৳<input type="number" value="${it.price}" min="0" step="0.01" onchange="posChangePrice(${i},this.value)" title="দাম কম হলে এখানে বদলে দিন" class="w-16 border rounded px-1 py-0.5 text-xs"> x ${it.qty}</div>
                 </div>
                 <div class="flex items-center gap-1">
                     <button onclick="posChangeQty(${i},-1)" class="w-6 h-6 bg-gray-100 rounded">-</button>
@@ -1724,17 +1753,21 @@ function posRenderCart() {
 function posSubmitSale() {
     if(posCart.length===0){Swal.fire('কার্ট খালি','অন্তত একটা প্রোডাক্ট যোগ করুন।','warning');return;}
     const subTotal=posCart.reduce((sum,it)=>sum+(it.price*it.qty),0);
+    let discount=Number(document.getElementById('posDiscount').value||0);
+    if(!isFinite(discount)||discount<0) discount=0;
+    if(discount>subTotal) discount=subTotal;
+    const netTotal=subTotal-discount;
     const status=document.getElementById('posPaymentStatus').value;
     const amountReceived=Number(document.getElementById('posAmountReceived').value||0);
-    if(status==='Paid' && amountReceived < subTotal){Swal.fire('টাকা অসম্পূর্ণ',`Paid হলে পুরো ৳${subTotal.toFixed(2)} দিতে হবে।`,'warning');return;}
-    if(amountReceived>subTotal){Swal.fire('ভুল পরিমাণ',`প্রাপ্ত টাকা সর্বোচ্চ ৳${subTotal.toFixed(2)} হতে পারে।`,'warning');return;}
-    const customerInfo={name:document.getElementById('posCustName').value.trim(),phone:document.getElementById('posCustPhone').value.trim(),paymentStatus:status,amountReceived};
+    if(status==='Paid' && amountReceived < netTotal){Swal.fire('টাকা অসম্পূর্ণ',`Paid হলে পুরো ৳${netTotal.toFixed(2)} দিতে হবে।`,'warning');return;}
+    if(amountReceived>netTotal){Swal.fire('ভুল পরিমাণ',`প্রাপ্ত টাকা সর্বোচ্চ ৳${netTotal.toFixed(2)} হতে পারে।`,'warning');return;}
+    const customerInfo={name:document.getElementById('posCustName').value.trim(),phone:document.getElementById('posCustPhone').value.trim(),paymentStatus:status,amountReceived,discount};
     Swal.fire({title:'সেল সম্পন্ন হচ্ছে...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
     google.script.run.withSuccessHandler(res=>{
         if(res.success){
             posCart.forEach(it=>{const p=localData.products.find(x=>String(x.id)===String(it.id));if(p){if(it.variant&&Array.isArray(p.variants)){const v=p.variants.find(vv=>vv.name===it.variant);if(v)v.stock=Math.max(0,v.stock-it.qty);}p.totalstock=Math.max(0,(p.totalstock||0)-it.qty);}});
             if(!Array.isArray(localData.offlineorders))localData.offlineorders=[];
-            localData.offlineorders.push([new Date().toISOString(),res.orderId,customerInfo.name||'Walk-in Customer',customerInfo.phone||'',JSON.stringify(res.items),res.subTotal,res.totalProductCost||0,res.paymentStatus,res.amountReceived,res.dueAmount,'',res.profitStatus,JSON.stringify(res.paymentHistory||[])]);
+            localData.offlineorders.push([new Date().toISOString(),res.orderId,customerInfo.name||'Walk-in Customer',customerInfo.phone||'',JSON.stringify(res.items),res.subTotal,res.totalProductCost||0,res.paymentStatus,res.amountReceived,res.dueAmount,'',res.profitStatus,JSON.stringify(res.paymentHistory||[]),res.discount||0]);
             Swal.close(); posShowInvoice(res,customerInfo); posCart=[]; renderPOS(document.getElementById('contentArea'));
         }else Swal.fire('Error',res.error,'error');
     }).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminCreateOfflineOrder(adminSecret,posCart.map(it=>({id:it.id,price:it.price,variant:it.variant,qty:it.qty})),customerInfo);
@@ -1744,6 +1777,7 @@ function getInvoiceHtml(result, customerInfo, logoUrl) {
     const itemsHtml=(result.items||[]).map(it=>`<tr><td style="padding:4px 6px;border-bottom:1px solid #eee">${it.name}${it.variant?' ('+it.variant+')':''}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${it.price}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee">৳${(it.price*it.quantity).toFixed(2)}</td></tr>`).join('');
     const logo=logoUrl||localData.settings.sitelogo||'';
     const payment=result.paymentStatus||'Paid',due=Number(result.dueAmount||0),received=Number(result.amountReceived||0),profitStatus=result.profitStatus||'';
+    const invSubTotal=Number(result.subTotal||0),invDiscount=Number(result.discount||0),invNetTotal=invSubTotal-invDiscount;
     const paymentHistory=Array.isArray(result.paymentHistory)?result.paymentHistory:[];
     const historyHtml=paymentHistory.length>1?`<div style="margin-top:10px;border-top:1px dashed #ccc;padding-top:8px">
 <p style="font-size:11px;font-weight:bold;margin:0 0 4px">পেমেন্ট হিস্ট্রি (কিস্তি অনুযায়ী):</p>
@@ -1756,7 +1790,8 @@ function getInvoiceHtml(result, customerInfo, logoUrl) {
         <p style="font-size:12px;margin:2px 0"><b>অর্ডার আইডি:</b> ${result.orderId}</p><p style="font-size:12px;margin:2px 0"><b>তারিখ:</b> ${result.date||''}</p>
         ${customerInfo?.name?`<p style="font-size:12px;margin:2px 0"><b>কাস্টমার:</b> ${customerInfo.name}</p>`:''}${customerInfo?.phone?`<p style="font-size:12px;margin:2px 0"><b>ফোন:</b> ${customerInfo.phone}</p>`:''}
         <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px"><thead><tr style="border-bottom:2px solid #333"><th style="text-align:left;padding:4px 6px">প্রোডাক্ট</th><th style="padding:4px 6px">পরিমাণ</th><th style="text-align:right;padding:4px 6px">দাম</th><th style="text-align:right;padding:4px 6px">মোট</th></tr></thead><tbody>${itemsHtml}</tbody></table>
-        <div style="text-align:right;font-weight:bold;margin-top:10px;font-size:14px">সর্বমোট: ৳${Number(result.subTotal||0).toFixed(2)}</div>
+        ${invDiscount>0?`<div style="text-align:right;font-size:12px;margin-top:8px">মূল্য: ৳${invSubTotal.toFixed(2)} &nbsp; ছাড়: <span style="color:#dc2626">-৳${invDiscount.toFixed(2)}</span></div>`:''}
+        <div style="text-align:right;font-weight:bold;margin-top:4px;font-size:14px">সর্বমোট: ৳${invNetTotal.toFixed(2)}</div>
 <div style="margin-top:6px;font-size:12px;text-align:right">
 পেয়েছেন: <b>৳${received.toFixed(2)}</b><br>
 বাকি: <b style="color:${due?'#dc2626':'#111'}">৳${due.toFixed(2)}</b><br>
@@ -1934,7 +1969,7 @@ function viewOfflineInvoice(orderId){
     const row=(localData.offlineorders||[]).find(o=>String(o[1])===String(orderId)); if(!row)return;
     let items=[];try{items=JSON.parse(row[4]||'[]');}catch(e){}
     let paymentHistory=[];try{paymentHistory=JSON.parse(row[12]||'[]');if(!Array.isArray(paymentHistory))paymentHistory=[];}catch(e){}
-    showInvoiceActions(getInvoiceHtml({orderId:row[1],date:new Date(row[0]).toLocaleString('en-GB'),items,subTotal:Number(row[5])||0,paymentStatus:row[7]||'Paid',amountReceived:Number(row[8])||0,dueAmount:Number(row[9])||0,profitStatus:row[11]||((row[7]||'Paid')==='Paid'?'Realized':'Potential'),paymentHistory},{name:row[2],phone:String(row[3]||'').replace(/^'/,'')},localData.settings.sitelogo),row[1]);
+    showInvoiceActions(getInvoiceHtml({orderId:row[1],date:new Date(row[0]).toLocaleString('en-GB'),items,subTotal:Number(row[5])||0,discount:Number(row[13])||0,paymentStatus:row[7]||'Paid',amountReceived:Number(row[8])||0,dueAmount:Number(row[9])||0,profitStatus:row[11]||((row[7]||'Paid')==='Paid'?'Realized':'Potential'),paymentHistory},{name:row[2],phone:String(row[3]||'').replace(/^'/,'')},localData.settings.sitelogo),row[1]);
 }
 
 function viewCustomerDueInvoice(phone){
@@ -1951,11 +1986,11 @@ function getConsolidatedInvoiceHtml(orders, customerInfo, logoUrl){
     let grandTotal=0, grandReceived=0, grandDue=0;
     const sorted=[...orders].sort((a,b)=>new Date(a[0])-new Date(b[0]));
     const rowsHtml=sorted.map(o=>{
-        const sub=Number(o[5])||0, received=Number(o[8])||0, due=Number(o[9])||0;
-        grandTotal+=sub; grandReceived+=received; grandDue+=due;
+        const sub=Number(o[5])||0, discount=Number(o[13])||0, netSub=sub-discount, received=Number(o[8])||0, due=Number(o[9])||0;
+        grandTotal+=netSub; grandReceived+=received; grandDue+=due;
         let dt=''; try{ dt=new Date(o[0]).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){}
         let productsText=''; try{ productsText=JSON.parse(o[4]||'[]').map(i=>`${i.name}${i.variant?' ('+i.variant+')':''} ×${i.quantity}`).join(', '); }catch(e){}
-        return `<tr style="page-break-inside:avoid;break-inside:avoid"><td style="padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;white-space:nowrap">${dt}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;font-size:11px"><div>${productsText||'-'}</div><div style="font-size:9px;color:#999;font-family:monospace">${o[1]}</div></td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;white-space:nowrap">৳${sub.toFixed(2)}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;color:#16a34a;white-space:nowrap">৳${received.toFixed(2)}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;color:#dc2626;font-weight:bold;white-space:nowrap">৳${due.toFixed(2)}</td></tr>`;
+        return `<tr style="page-break-inside:avoid;break-inside:avoid"><td style="padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;white-space:nowrap">${dt}</td><td style="padding:4px 6px;border-bottom:1px solid #eee;font-size:11px"><div>${productsText||'-'}</div><div style="font-size:9px;color:#999;font-family:monospace">${o[1]}</div></td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;white-space:nowrap">৳${netSub.toFixed(2)}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;color:#16a34a;white-space:nowrap">৳${received.toFixed(2)}</td><td style="text-align:right;padding:4px 6px;border-bottom:1px solid #eee;font-size:11px;color:#dc2626;font-weight:bold;white-space:nowrap">৳${due.toFixed(2)}</td></tr>`;
     }).join('');
     return `<div id="invoicePrintArea" style="font-family:Arial,sans-serif;max-width:420px;margin:auto;padding:16px;background:#fff;color:#111">
         ${logo?`<div style="text-align:center;margin-bottom:8px"><img src="${logo}" style="max-width:180px;max-height:70px;object-fit:contain"></div>`:''}
@@ -2039,34 +2074,38 @@ function markOfflinePaid(orderId){
   if(due<=0){Swal.fire('বকেয়া নেই','এই অর্ডারের কোনো বকেয়া নেই।','info');return;}
   Swal.fire({
     title:'পেমেন্ট গ্রহণ করুন',
-    html:`<div style="text-align:left;font-size:13px;color:#555;margin-bottom:4px">বর্তমান বকেয়া: <b style="color:#dc2626">৳${due.toFixed(2)}</b></div>`,
-    input:'number',
-    inputLabel:'এইবার কত টাকা পেলেন?',
-    inputValue:due,
-    inputAttributes:{min:'0.01',max:String(due),step:'0.01'},
+    html:`<div style="text-align:left;font-size:13px;color:#555;margin-bottom:8px">বর্তমান বকেয়া: <b style="color:#dc2626">৳${due.toFixed(2)}</b></div>
+      <input id="swal-payment-amount" type="number" class="swal2-input" placeholder="এইবার কত টাকা পেলেন?" value="${due}" min="0.01" max="${due}" step="0.01" style="margin:0 0 10px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;text-align:left;cursor:pointer">
+        <input id="swal-forgive-remaining" type="checkbox" style="width:16px;height:16px;margin:0">
+        বাকি টাকা (যদি কিছু থেকে যায়) সম্পূর্ণ মাফ করে দিন
+      </label>`,
     showCancelButton:true,
     confirmButtonText:'জমা দিন',
     cancelButtonText:'বাতিল',
     confirmButtonColor:'#16a34a',
-    inputValidator:(value)=>{
-      const v=Number(value);
-      if(!value||!isFinite(v)||v<=0) return 'সঠিক পেমেন্টের পরিমাণ দিন।';
-      if(v>due) return `সর্বোচ্চ ৳${due.toFixed(2)} পর্যন্ত পেমেন্ট গ্রহণ করা যাবে।`;
+    focusConfirm:false,
+    preConfirm:()=>{
+      const v=Number(document.getElementById('swal-payment-amount').value);
+      const forgive=document.getElementById('swal-forgive-remaining').checked;
+      if(!v||!isFinite(v)||v<=0){Swal.showValidationMessage('সঠিক পেমেন্টের পরিমাণ দিন।');return false;}
+      if(v>due){Swal.showValidationMessage(`সর্বোচ্চ ৳${due.toFixed(2)} পর্যন্ত পেমেন্ট গ্রহণ করা যাবে।`);return false;}
+      return {payment:v,forgive:forgive};
     }
   }).then(result=>{
     if(!result.isConfirmed)return;
-    const payment=Number(result.value);
+    const payment=result.value.payment, forgive=result.value.forgive;
     Swal.fire({title:'সেভ হচ্ছে...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
     google.script.run.withSuccessHandler(r=>{
       if(r&&r.success){
-        row[7]=r.paymentStatus||'Unpaid';row[8]=Number(r.totalAmountReceived);row[9]=Number(r.dueAmount)||0;row[10]=r.paymentDate||new Date().toISOString();row[11]=r.profitStatus||'Potential';row[12]=JSON.stringify(r.paymentHistory||[]);
+        row[7]=r.paymentStatus||'Unpaid';row[8]=Number(r.totalAmountReceived);row[9]=Number(r.dueAmount)||0;row[10]=r.paymentDate||new Date().toISOString();row[11]=r.profitStatus||'Potential';row[12]=JSON.stringify(r.paymentHistory||[]);row[13]=Number(r.discount)||0;
         renderOfflineHistory();
         Swal.close();
         viewOfflineInvoice(orderId);
       }else{
         Swal.fire('Error',(r&&r.error)||'Payment update failed','error');
       }
-    }).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminMarkOfflineOrderPaid(adminSecret,orderId,payment);
+    }).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminMarkOfflineOrderPaid(adminSecret,orderId,payment,forgive);
   });
 }
 
