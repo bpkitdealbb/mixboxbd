@@ -2210,6 +2210,24 @@ function deleteOfflineOrder(orderId){
     Swal.fire({title:'ডিলিট হচ্ছে...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
     google.script.run.withSuccessHandler(r=>{
       if(r&&r.success){
+        // স্থানীয়ভাবেও স্টক ফেরত দেওয়া হচ্ছে (posSubmitSale-এ যেভাবে কমানো হয়, ঠিক তার উল্টো)
+        // যাতে ম্যানুয়াল Sync না করেই সাথে সাথে UI-তে সঠিক স্টক দেখা যায়
+        try{
+          const items=JSON.parse(row[4]||'[]');
+          if(Array.isArray(items)){
+            items.forEach(it=>{
+              const p=(localData.products||[]).find(x=>String(x.id)===String(it.id));
+              if(p){
+                const qty=Number(it.quantity||it.qty)||0;
+                if(it.variant && Array.isArray(p.variants)){
+                  const v=p.variants.find(vv=>vv.name===it.variant);
+                  if(v) v.stock=(v.stock||0)+qty;
+                }
+                p.totalstock=(p.totalstock||0)+qty;
+              }
+            });
+          }
+        }catch(e){ console.error('Local restock sync error:', e); }
         localData.offlineorders=(localData.offlineorders||[]).filter(x=>String(x[1])!==String(orderId));
         renderOfflineHistory();
         Swal.fire('ডিলিট হয়েছে!','অর্ডারটি মুছে ফেলা হয়েছে এবং স্টক ফেরত দেওয়া হয়েছে।','success');
