@@ -208,6 +208,671 @@ function calculateActualCourier(items) {
 }
 
 // ==========================================
+// CLOUDINARY: ছবি আপলোড করলে অটোমেটিক লিংক বসে যাবে (মোবাইল/কম্পিউটার দুটোতেই)
+// ==========================================
+const CLOUDINARY_CLOUD_NAME = 'dkowkawiq';     // Cloudinary ড্যাশবোর্ডের Cloud name
+const CLOUDINARY_UPLOAD_PRESET = 'products';   // Unsigned upload preset-এর নাম
+const IMG_MAX_SIDE = 1600;                     // এর চেয়ে বড় ছবি এই মাপে ছোট করা হবে (পিক্সেল)
+const IMG_JPEG_QUALITY = 0.85;                 // ছবির কোয়ালিটি (০-১)
+const IMG_MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // ছোট করা না গেলে সর্বোচ্চ ১০ MB পর্যন্ত আসল ফাইল পাঠানো হবে
+let imageUploadsInFlight = 0;
+
+function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('ছবি পড়া যায়নি')); };
+        img.src = url;
+    });
+}
+
+// আপলোডের আগে ছবি ছোট করা (মোবাইলের ৫-১০ MB ছবি ~৩০০-৫০০ KB হয়ে যায়) — Cloudinary কোটা ও সাইটের লোডিং দুটোই বাঁচে
+async function prepareImageForUpload(file) {
+    if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
+    try {
+        const img = await loadImageFromFile(file);
+        const w0 = img.naturalWidth, h0 = img.naturalHeight;
+        if (!w0 || !h0) return file;
+        const scale = Math.min(1, IMG_MAX_SIDE / Math.max(w0, h0));
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        const keepAlpha = (file.type === 'image/png' || file.type === 'image/webp');
+        if (!keepAlpha) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
+        ctx.drawImage(img, 0, 0, w, h);
+        const outType = keepAlpha ? 'image/png' : 'image/jpeg';
+        const blob = await new Promise(res => canvas.toBlob(res, outType, IMG_JPEG_QUALITY));
+        if (!blob) return file;
+        // ছোট করে যদি আসলের চেয়ে বড় হয়ে যায়, আসল ফাইলই পাঠানো ভালো
+        if (blob.size >= file.size && file.size <= IMG_MAX_UPLOAD_BYTES) return file;
+        return blob;
+    } catch (e) { return file; }
+}
+
+function uploadImageToCloudinary(blob, fileName, onProgress) {
+    return new Promise((resolve, reject) => {
+        const fd = new FormData();
+        fd.append('file', blob, fileName);
+        fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`);
+        xhr.timeout = 120000;
+        xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100)); };
+        xhr.onload = () => {
+            let json = {};
+            try { json = JSON.parse(xhr.responseText); } catch (e) {}
+            if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) resolve(json.secure_url);
+            else reject(new Error((json.error && json.error.message) || ('আপলোড ব্যর্থ হয়েছে (কোড ' + xhr.status + ')')));
+        };
+        xhr.onerror = () => reject(new Error('ইন্টারনেট সংযোগে সমস্যা, আবার চেষ্টা করুন'));
+        xhr.ontimeout = () => reject(new Error('আপলোডে অনেক সময় লাগছে, আবার চেষ্টা করুন'));
+        xhr.send(fd);
+    });
+}
+
+// ==========================================
+// ওভারলে: মূল ছবির ওপর সর্বোচ্চ ৩টি ছবি বসিয়ে Cloudinary-র চূড়ান্ত লিংক বানানো
+// লিংকের গঠন:  .../upload/[আগের ট্রান্সফরমেশন]/l_ID/c_scale,fl_relative,w_0.25/o_60/fl_layer_apply,g_north_east,x_-0.05,y_0.05/v123/মূল-ছবি.jpg
+// সাইজ ও শিফট মূল ছবির মাপের শতাংশে থাকে, তাই ছবির মাপ যা-ই হোক ওভারলে একই অনুপাতে বসে।
+// ==========================================
+const OVERLAY_MAX = 3;
+const OVERLAY_POSITIONS = [
+    ['center', 'মাঝখানে (center)'],
+    ['north', 'উপরে-মাঝে (north)'],
+    ['south', 'নিচে-মাঝে (south)'],
+    ['north_west', 'উপরে-বামে (north_west)'],
+    ['north_east', 'উপরে-ডানে (north_east)'],
+    ['south_west', 'নিচে-বামে (south_west)'],
+    ['south_east', 'নিচে-ডানে (south_east)']
+];
+const OVL_DEFAULT = { id: '', position: 'center', size: 25, opacity: 100, x: 0, y: 0 };
+const OVL_IMG_EXT_RE = /\.(jpe?g|png|webp|gif|avif|svg|heic|bmp|tiff?)$/i;
+const OVL_TRANSFORM_START_RE = /^(?:ar|b|bo|c|co|dn|dpr|e|f|fl|g|h|l|o|pg|q|r|t|u|w|x|y|z|a)_/;
+// Cloudinary নিয়ম: east-এর দিকের পজিশনে x উল্টো, south-এর দিকের পজিশনে y উল্টো চলে।
+// আমরা সবখানে একই নিয়ম দেখাই (x ধনাত্মক = ডানে, y ধনাত্মক = নিচে) — তাই লিংক বানানোর সময় চিহ্ন উল্টে দিই।
+const ovlFlipX = pos => (pos === 'north_east' || pos === 'south_east') ? -1 : 1;
+const ovlFlipY = pos => (pos === 'south' || pos === 'south_west' || pos === 'south_east') ? -1 : 1;
+
+function ovlClamp(v, min, max, fallback) {
+    v = parseFloat(v);
+    if (!isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+}
+function ovlFmtRatio(pct) { let s = String(Math.round(pct * 100) / 10000); if (s.indexOf('.') < 0) s += '.0'; return s; }
+function ovlFmtOffset(pct) { return String(Math.round(pct * 100) / 10000); }
+
+function parseCloudinaryUrl(url) {
+    const m = String(url || '').trim().match(/^https?:\/\/res\.cloudinary\.com\/([^\/?#]+)\/image\/upload\/([^?#]+)/i);
+    if (!m) return null;
+    const segs = m[2].split('/');
+    let trans = [], version = '', idSegs;
+    const vIdx = segs.findIndex(s => /^v\d+$/.test(s));
+    if (vIdx >= 0) { trans = segs.slice(0, vIdx); version = segs[vIdx]; idSegs = segs.slice(vIdx + 1); }
+    else {
+        let k = 0;
+        while (k < segs.length - 1 && OVL_TRANSFORM_START_RE.test(segs[k])) k++;
+        trans = segs.slice(0, k); idSegs = segs.slice(k);
+    }
+    if (!idSegs.length || !idSegs.join('')) return null;
+    let publicId = idSegs.join('/');
+    try { publicId = decodeURIComponent(publicId); } catch (e) {}
+    const extM = publicId.match(OVL_IMG_EXT_RE);
+    const ext = extM ? extM[0] : '';
+    if (ext) publicId = publicId.slice(0, -ext.length);
+    return { cloud: m[1], trans, version, publicId, ext };
+}
+
+// ওভারলে ঘরে ID বা পুরো লিংক যা-ই বসানো হোক, শুধু public ID বের করে
+function normalizeOverlayId(v) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    const p = parseCloudinaryUrl(v);
+    if (p) return p.publicId;
+    return v.replace(/^\/+|\/+$/g, '').replace(/:/g, '/').replace(OVL_IMG_EXT_RE, '');
+}
+
+// লিংক থেকে মূল ছবি + আগে বসানো ওভারলেগুলো ফিরিয়ে আনে (আবার এডিট করার জন্য)
+function parseOverlayState(url) {
+    const info = parseCloudinaryUrl(url);
+    if (!info) return null;
+    const segs = info.trans, leading = [], overlays = [];
+    let i = 0;
+    while (i < segs.length) {
+        const s = segs[i];
+        if (/^l_/.test(s) && !/^l_(?:text|fetch|subtitles|video|audio)[:_]/i.test(s)) {
+            let j = i + 1;
+            const comps = [];
+            while (j < segs.length && !/^fl_layer_apply/.test(segs[j])) { comps.push(segs[j]); j++; }
+            let ok = j < segs.length && overlays.length < OVERLAY_MAX;
+            const ov = { ...OVL_DEFAULT };
+            if (ok) {
+                let idv = s.slice(2).replace(/:/g, '/');
+                try { idv = decodeURIComponent(idv); } catch (e) {}
+                ov.id = idv;
+                let sawSize = false;
+                comps.forEach(c => {
+                    let mm;
+                    if ((mm = c.match(/^c_scale,fl_relative,w_([\d.]+)$/))) { ov.size = Math.round(parseFloat(mm[1]) * 10000) / 100; sawSize = true; }
+                    else if ((mm = c.match(/^o_(\d+)$/))) { ov.opacity = parseInt(mm[1], 10); }
+                    else ok = false;
+                });
+                if (!sawSize) ok = false;
+                const am = ok ? segs[j].match(/^fl_layer_apply(?:,g_([a-z_]+))?(?:,x_(-?[\d.]+))?(?:,y_(-?[\d.]+))?$/) : null;
+                const pos = am ? (am[1] || 'center') : '';
+                if (!am || !OVERLAY_POSITIONS.some(p => p[0] === pos)) ok = false;
+                else {
+                    ov.position = pos;
+                    ov.x = am[2] ? Math.round(parseFloat(am[2]) * 1000) / 10 * ovlFlipX(pos) : 0;
+                    ov.y = am[3] ? Math.round(parseFloat(am[3]) * 1000) / 10 * ovlFlipY(pos) : 0;
+                }
+            }
+            if (ok) { overlays.push(ov); i = j + 1; }
+            else { const end = j < segs.length ? j + 1 : segs.length; leading.push(...segs.slice(i, end)); i = end; }
+        } else { leading.push(s); i++; }
+    }
+    return { info, leading, overlays };
+}
+
+// state = { info, leading, overlays:[{id,position,size,opacity,x,y} x৩] } থেকে Cloudinary লিংক বানায়।
+// ID খালি থাকা ওভারলে বাদ যায়। preview=true হলে শেষে ছোট মাপের (700px) সীমা বসে — শুধু প্রিভিউর জন্য।
+function buildOverlayUrl(state, preview) {
+    const info = state.info;
+    const segs = state.leading.slice();
+    (state.overlays || []).slice(0, OVERLAY_MAX).forEach(o => {
+        const id = normalizeOverlayId(o.id);
+        if (!id) return;
+        const pos = OVERLAY_POSITIONS.some(p => p[0] === o.position) ? o.position : 'center';
+        segs.push('l_' + id.split('/').map(encodeURIComponent).join(':'));
+        segs.push('c_scale,fl_relative,w_' + ovlFmtRatio(ovlClamp(o.size, 1, 100, OVL_DEFAULT.size)));
+        const op = Math.round(ovlClamp(o.opacity, 1, 100, 100));
+        if (op < 100) segs.push('o_' + op);
+        let apply = 'fl_layer_apply,g_' + pos;
+        const x = ovlClamp(o.x, -99, 99, 0) * ovlFlipX(pos);
+        const y = ovlClamp(o.y, -99, 99, 0) * ovlFlipY(pos);
+        if (x) apply += ',x_' + ovlFmtOffset(x);
+        if (y) apply += ',y_' + ovlFmtOffset(y);
+        segs.push(apply);
+    });
+    if (preview) segs.push('c_limit,w_700');
+    const pid = info.publicId.split('/').map(encodeURIComponent).join('/');
+    return 'https://res.cloudinary.com/' + info.cloud + '/image/upload/' + (segs.length ? segs.join('/') + '/' : '') + (info.version ? info.version + '/' : '') + pid + info.ext;
+}
+
+let ovlCtx = null, ovlTimer = null, ovlPreviewToken = 0;
+const OVL_STEP = 1, OVL_HOLD_STEP = 5;              // ট্যাপে ১ ধাপ, চেপে ধরে রাখলে দ্রুত ৫ ধাপ করে বাড়ে
+let ovlHoldTimer = null, ovlHoldInterval = null, ovlHeld = false;
+
+// প্লাস/মাইনাস বাটনে X বা Y শিফট এক ধাপ বাড়ায়/কমায় এবং সাথে সাথে প্রিভিউ আপডেট করে
+function ovlStepValue(card, axis, dir, amount) {
+    const input = card.querySelector('.ovl-' + axis);
+    const cur = ovlClamp(input.value, -99, 99, 0);
+    input.value = Math.round(ovlClamp(cur + dir * (amount || OVL_STEP), -99, 99, 0));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function ovlStopHold() { clearTimeout(ovlHoldTimer); clearInterval(ovlHoldInterval); ovlHoldTimer = null; ovlHoldInterval = null; }
+
+// ==========================================
+// ড্র্যাগ স্টেজ: প্রতিটি ওভারলে ছবি সরাসরি আঙুল/মাউস দিয়ে টেনে বসানো যায়।
+// এখানকার পজিশন CSS দিয়ে তাৎক্ষণিক (নেটওয়ার্ক ছাড়াই) দেখানো হয়, নিচের 'Cloudinary চূড়ান্ত প্রিভিউ' আসল রেজাল্ট নিশ্চিত করে।
+// buildOverlayUrl-এর মতোই ovlFlipX/ovlFlipY ব্যবহার হয়, তাই এই প্রিভিউ ও আসল লিংক সবসময় একই হিসাব মেনে চলে।
+// ==========================================
+const OVL_X_ANCHOR = { north_west: 'left', south_west: 'left', north_east: 'right', south_east: 'right', center: 'centerX', north: 'centerX', south: 'centerX' };
+const OVL_Y_ANCHOR = { north_west: 'top', north_east: 'top', north: 'top', south_west: 'bottom', south_east: 'bottom', south: 'bottom', center: 'centerY' };
+let ovlDrag = null;
+
+function ovlPositionThumb(el, pos, size, x, y) {
+    const rawX = x * ovlFlipX(pos), rawY = y * ovlFlipY(pos);
+    el.style.width = size + '%';
+    el.style.left = el.style.right = el.style.top = el.style.bottom = '';
+    let tx = '', ty = '';
+    if (OVL_X_ANCHOR[pos] === 'left') el.style.left = rawX + '%';
+    else if (OVL_X_ANCHOR[pos] === 'right') el.style.right = rawX + '%';
+    else { el.style.left = '50%'; tx = 'translateX(calc(-50% + ' + rawX + '%))'; }
+    if (OVL_Y_ANCHOR[pos] === 'top') el.style.top = rawY + '%';
+    else if (OVL_Y_ANCHOR[pos] === 'bottom') el.style.bottom = rawY + '%';
+    else { el.style.top = '50%'; ty = 'translateY(calc(-50% + ' + rawY + '%))'; }
+    el.style.transform = (tx + ' ' + ty).trim();
+}
+
+function ovlThumbEls() { return Array.from(document.querySelectorAll('#overlayModal .ovl-thumb-wrap')); }
+
+// স্টেজের মূল ছবি ও ৩টি ওভারলে থাম্বনেইলের CSS পজিশন হালনাগাদ করে (ফিল্ড বদলালে বা ড্র্যাগ করলে)
+function renderDragStage() {
+    if (!ovlCtx) return;
+    const info = ovlCtx.st.info;
+    const baseImg = document.getElementById('ovlStageBase');
+    const leadPrefix = ovlCtx.st.leading.length ? ovlCtx.st.leading.join('/') + '/' : '';
+    const baseSrc = 'https://res.cloudinary.com/' + info.cloud + '/image/upload/' + leadPrefix + 'c_limit,w_720/' + info.version + '/' + info.publicId.split('/').map(encodeURIComponent).join('/') + info.ext;
+    if (baseImg.dataset.src !== baseSrc) { baseImg.dataset.src = baseSrc; baseImg.src = baseSrc; }
+    const cards = document.getElementById('overlayModal')._cards();
+    ovlThumbEls().forEach((wrap, i) => {
+        const card = cards[i];
+        const id = normalizeOverlayId(card.querySelector('.ovl-id').value);
+        if (!id) { wrap.classList.add('hidden'); return; }
+        wrap.classList.remove('hidden');
+        const img = wrap.querySelector('.ovl-thumb-img');
+        const thumbSrc = 'https://res.cloudinary.com/' + info.cloud + '/image/upload/f_auto,c_limit,w_300/' + id.split('/').map(encodeURIComponent).join('/');
+        if (img.dataset.src !== thumbSrc) { img.dataset.src = thumbSrc; img.src = thumbSrc; }
+        const pos = card.querySelector('.ovl-pos').value;
+        const size = ovlClamp(card.querySelector('.ovl-size').value, 1, 100, OVL_DEFAULT.size);
+        const x = ovlClamp(card.querySelector('.ovl-x').value, -99, 99, 0);
+        const y = ovlClamp(card.querySelector('.ovl-y').value, -99, 99, 0);
+        ovlPositionThumb(wrap, pos, size, x, y);
+    });
+}
+// প্রতিটা পরিবর্তনের পর স্টেজ সাথে সাথে (বিনা নেটওয়ার্কে) এবং Cloudinary প্রিভিউ কিছুক্ষণ পর (ডিবাউন্স করে) আপডেট হয়
+function ovlRefresh(delay) { renderDragStage(); ovlSchedulePreview(delay); }
+
+function ovlDragStart(e, wrap) {
+    if (!ovlCtx) return;
+    e.preventDefault();
+    const n = parseInt(wrap.dataset.n, 10);
+    const card = document.getElementById('overlayModal')._cards()[n - 1];
+    const rect = document.getElementById('ovlStage').getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    ovlDrag = {
+        card, wrap, pointerId: e.pointerId,
+        startClientX: e.clientX, startClientY: e.clientY,
+        startX: ovlClamp(card.querySelector('.ovl-x').value, -99, 99, 0),
+        startY: ovlClamp(card.querySelector('.ovl-y').value, -99, 99, 0),
+        stageW: rect.width, stageH: rect.height
+    };
+    try { wrap.setPointerCapture(e.pointerId); } catch (err) {}
+    wrap.classList.add('opacity-90');
+    card.open = true;
+}
+function ovlDragMove(e) {
+    if (!ovlDrag || e.pointerId !== ovlDrag.pointerId) return;
+    e.preventDefault();
+    const dx = e.clientX - ovlDrag.startClientX, dy = e.clientY - ovlDrag.startClientY;
+    const nx = ovlClamp(ovlDrag.startX + (dx / ovlDrag.stageW) * 100, -99, 99, 0);
+    const ny = ovlClamp(ovlDrag.startY + (dy / ovlDrag.stageH) * 100, -99, 99, 0);
+    const card = ovlDrag.card;
+    card.querySelector('.ovl-x').value = Math.round(nx * 10) / 10;
+    card.querySelector('.ovl-y').value = Math.round(ny * 10) / 10;
+    ovlUpdateCardUI(card);
+    ovlRefresh();
+}
+function ovlDragEnd(e) {
+    if (!ovlDrag || (e.pointerId !== undefined && e.pointerId !== ovlDrag.pointerId)) return;
+    ovlDrag.wrap.classList.remove('opacity-90');
+    try { ovlDrag.wrap.releasePointerCapture(ovlDrag.pointerId); } catch (err) {}
+    ovlDrag = null;
+    ovlSchedulePreview(150);
+}
+
+function ensureOverlayModal() {
+    let m = document.getElementById('overlayModal');
+    if (m) return m;
+    m = document.createElement('div');
+    m.id = 'overlayModal';
+    m.className = 'fixed inset-0 bg-gray-900/60 z-[70] hidden items-end sm:items-center justify-center';
+    const posOpts = OVERLAY_POSITIONS.map(p => `<option value="${p[0]}">${p[1]}</option>`).join('');
+    let cards = '';
+    for (let n = 1; n <= OVERLAY_MAX; n++) {
+        cards += `
+        <details class="ovl-card border rounded-xl bg-gray-50" data-n="${n}">
+            <summary class="cursor-pointer select-none px-3 py-2.5 flex items-center justify-between font-bold text-sm">
+                <span>ওভারলে ${n}</span><span class="ovl-state text-[10px] font-bold text-gray-400">খালি</span>
+            </summary>
+            <div class="p-3 pt-1 space-y-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-600 mb-1">ওভারলে ছবি (Cloudinary ID বা লিংক)</label>
+                    <div class="flex items-center gap-2">
+                        <img class="ovl-thumb hidden w-10 h-10 rounded-md object-contain bg-white border" alt="">
+                        <input type="text" class="ovl-id flex-1 min-w-0 border rounded-lg p-2 text-xs" placeholder="ID/লিংক বসান অথবা নিচে আপলোড করুন">
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 mt-1.5">
+                        <button type="button" class="ovl-up px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold"><i class="fas fa-camera mr-1"></i>ছবি আপলোড</button>
+                        <button type="button" class="ovl-reset px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 text-[11px] font-bold"><i class="fas fa-trash mr-1"></i>এটা মুছুন</button>
+                        <span class="ovl-up-status text-[10px] text-gray-500"></span>
+                        <input type="file" accept="image/*" class="ovl-file hidden">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-600 mb-1">পজিশন</label>
+                    <select class="ovl-pos w-full border rounded-lg p-2 text-xs bg-white">${posOpts}</select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-600 mb-1">সাইজ (মূল ছবির প্রস্থের %)</label>
+                    <div class="flex items-center gap-2"><input type="range" min="1" max="100" step="1" class="ovl-size-r flex-1"><input type="number" min="1" max="100" step="1" class="ovl-size w-16 border rounded-lg p-1.5 text-xs text-center"></div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-600 mb-1">অপাসিটি (১০০ = পুরো স্পষ্ট, কম মানে ঝাপসা)</label>
+                    <div class="flex items-center gap-2"><input type="range" min="1" max="100" step="1" class="ovl-op-r flex-1"><input type="number" min="1" max="100" step="1" class="ovl-op w-16 border rounded-lg p-1.5 text-xs text-center"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-600 mb-1">X শিফট (%)</label>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" data-axis="x" data-dir="-1" class="ovl-step-btn shrink-0 w-9 h-9 rounded-lg border bg-white text-base font-bold text-gray-700 active:bg-gray-200 select-none">−</button>
+                            <input type="number" min="-99" max="99" step="1" class="ovl-x flex-1 min-w-0 border rounded-lg p-2 text-xs text-center">
+                            <button type="button" data-axis="x" data-dir="1" class="ovl-step-btn shrink-0 w-9 h-9 rounded-lg border bg-white text-base font-bold text-gray-700 active:bg-gray-200 select-none">+</button>
+                        </div>
+                        <p class="text-[10px] text-blue-500 mt-0.5">ধনাত্মক = ডানে, ঋণাত্মক = বামে</p>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-600 mb-1">Y শিফট (%)</label>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" data-axis="y" data-dir="-1" class="ovl-step-btn shrink-0 w-9 h-9 rounded-lg border bg-white text-base font-bold text-gray-700 active:bg-gray-200 select-none">−</button>
+                            <input type="number" min="-99" max="99" step="1" class="ovl-y flex-1 min-w-0 border rounded-lg p-2 text-xs text-center">
+                            <button type="button" data-axis="y" data-dir="1" class="ovl-step-btn shrink-0 w-9 h-9 rounded-lg border bg-white text-base font-bold text-gray-700 active:bg-gray-200 select-none">+</button>
+                        </div>
+                        <p class="text-[10px] text-blue-500 mt-0.5">ধনাত্মক = নিচে, ঋণাত্মক = উপরে</p>
+                    </div>
+                </div>
+            </div>
+        </details>`;
+    }
+    m.innerHTML = `
+    <div class="bg-white w-full sm:max-w-xl max-h-[94vh] flex flex-col rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b flex items-center justify-between">
+            <h3 class="font-bold text-sm"><i class="fas fa-layer-group mr-1.5 text-purple-600"></i>ওভারলে সেট করুন</h3>
+            <button type="button" id="ovlCloseBtn" class="text-gray-400 hover:text-gray-700 text-lg leading-none px-1">&times;</button>
+        </div>
+        <div class="overflow-y-auto flex-1 overscroll-contain">
+            <div class="sticky top-0 z-10 bg-gray-100 border-b p-2">
+                <div id="ovlStage" class="relative mx-auto max-w-full touch-none select-none rounded-lg overflow-hidden bg-white border" style="width:min(100%,360px)">
+                    <img id="ovlStageBase" class="block w-full h-auto pointer-events-none" alt="মূল ছবি">
+                    <div data-n="1" class="ovl-thumb-wrap hidden absolute touch-none" style="top:0;left:0"><img class="ovl-thumb-img block w-full h-auto rounded-sm ring-2 ring-purple-500/80 shadow-lg cursor-grab active:cursor-grabbing" alt="ওভারলে 1"><span class="absolute -top-2 -left-2 w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-bold flex items-center justify-center leading-none pointer-events-none">1</span></div>
+                    <div data-n="2" class="ovl-thumb-wrap hidden absolute touch-none" style="top:0;left:0"><img class="ovl-thumb-img block w-full h-auto rounded-sm ring-2 ring-purple-500/80 shadow-lg cursor-grab active:cursor-grabbing" alt="ওভারলে 2"><span class="absolute -top-2 -left-2 w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-bold flex items-center justify-center leading-none pointer-events-none">2</span></div>
+                    <div data-n="3" class="ovl-thumb-wrap hidden absolute touch-none" style="top:0;left:0"><img class="ovl-thumb-img block w-full h-auto rounded-sm ring-2 ring-purple-500/80 shadow-lg cursor-grab active:cursor-grabbing" alt="ওভারলে 3"><span class="absolute -top-2 -left-2 w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-bold flex items-center justify-center leading-none pointer-events-none">3</span></div>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-1 text-center">ওভারলে ছবিতে আঙুল/মাউস দিয়ে চেপে ধরে টেনে জায়গামতো বসান</p>
+                <details class="mt-1 text-center">
+                    <summary class="text-[10px] text-purple-600 cursor-pointer inline-block">Cloudinary চূড়ান্ত প্রিভিউ দেখুন</summary>
+                    <div class="mt-1"><img id="ovlPreview" class="max-h-40 max-w-full object-contain rounded-lg bg-white border inline-block" alt="প্রিভিউ"></div>
+                    <p id="ovlPreviewMsg" class="text-[10px] text-gray-500 mt-1"></p>
+                </details>
+            </div>
+            <div class="p-3 space-y-2.5">
+                <p class="text-[11px] text-gray-500 leading-relaxed">মূল ছবির ওপর সর্বোচ্চ ৩টি ছবি বসাতে পারবেন। যে ওভারলেতে ছবি দেওয়া হবে শুধু সেটাই বসবে, খালি ওভারলে বাদ যাবে। সাইজ ও শিফট মূল ছবির মাপের শতাংশে।</p>
+                ${cards}
+            </div>
+        </div>
+        <div class="px-4 py-3 border-t flex flex-wrap gap-2 justify-end bg-white">
+            <button type="button" id="ovlClearAll" class="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-xs font-bold mr-auto">সব ওভারলে সরান</button>
+            <button type="button" id="ovlCancel" class="px-4 py-2 rounded-lg border text-xs font-bold text-gray-600">বাতিল</button>
+            <button type="button" id="ovlApply" class="px-4 py-2 rounded-lg bg-purple-600 text-white text-xs font-bold">প্রয়োগ করুন</button>
+        </div>
+    </div>`;
+    document.body.appendChild(m);
+
+    const cardsEls = () => Array.from(m.querySelectorAll('.ovl-card'));
+    m._cards = cardsEls;
+
+    // রেঞ্জ ও নম্বর ঘর একে অপরের সাথে মেলানো + লাইভ প্রিভিউ
+    m.addEventListener('input', e => {
+        const t = e.target, card = t.closest && t.closest('.ovl-card');
+        if (!card) return;
+        if (t.classList.contains('ovl-size-r')) card.querySelector('.ovl-size').value = t.value;
+        else if (t.classList.contains('ovl-size')) card.querySelector('.ovl-size-r').value = t.value;
+        else if (t.classList.contains('ovl-op-r')) card.querySelector('.ovl-op').value = t.value;
+        else if (t.classList.contains('ovl-op')) card.querySelector('.ovl-op-r').value = t.value;
+        ovlUpdateCardUI(card);
+        ovlRefresh();
+    });
+    m.addEventListener('change', e => {
+        const t = e.target, card = t.closest && t.closest('.ovl-card');
+        if (!card) return;
+        if (t.classList.contains('ovl-id')) t.value = normalizeOverlayId(t.value);
+        ovlUpdateCardUI(card);
+        ovlRefresh();
+    });
+    m.addEventListener('click', e => {
+        const t = e.target.closest && e.target.closest('button');
+        if (!t) return;
+        const card = t.closest('.ovl-card');
+        if (t.classList.contains('ovl-step-btn')) {
+            // দ্রুত অনেকবার চেপে ধরার পর যে 'click' ইভেন্টটা শেষে আসে, সেটা বাদ দিতে হবে —
+            // নাহলে চেপে-ধরে যতগুলো ধাপ হয়েছে তার সাথে আরেকটা বাড়তি ধাপ যোগ হয়ে যাবে
+            if (ovlHeld) { ovlHeld = false; return; }
+            if (card) ovlStepValue(card, t.dataset.axis, parseInt(t.dataset.dir, 10));
+            return;
+        }
+        if (t.classList.contains('ovl-up') && card) card.querySelector('.ovl-file').click();
+        else if (t.classList.contains('ovl-reset') && card) { ovlFillCard(card, OVL_DEFAULT); ovlRefresh(); }
+    });
+    // বাটন চেপে ধরে রাখলে বারবার (দ্রুত) বাড়তে/কমতে থাকবে — মোবাইলে লিখে সংখ্যা বদলানোর ঝামেলা এড়াতে
+    m.addEventListener('pointerdown', e => {
+        const t = e.target.closest && e.target.closest('.ovl-step-btn');
+        if (!t) return;
+        const card = t.closest('.ovl-card');
+        if (!card) return;
+        const axis = t.dataset.axis, dir = parseInt(t.dataset.dir, 10);
+        ovlStopHold(); ovlHeld = false;
+        ovlHoldTimer = setTimeout(() => {
+            ovlHeld = true;
+            ovlHoldInterval = setInterval(() => ovlStepValue(card, axis, dir, OVL_HOLD_STEP), 100);
+        }, 400);
+    });
+    m.addEventListener('pointerleave', ovlStopHold, true);
+    document.addEventListener('pointerup', ovlStopHold);
+    document.addEventListener('pointercancel', ovlStopHold);
+    m.addEventListener('change', e => {
+        const t = e.target;
+        if (t.classList && t.classList.contains('ovl-file')) {
+            const card = t.closest('.ovl-card'), file = t.files && t.files[0];
+            t.value = '';
+            if (file && card) ovlUploadForCard(card, file);
+        }
+    });
+    document.getElementById('ovlCloseBtn').onclick = closeOverlayEditor;
+    document.getElementById('ovlCancel').onclick = closeOverlayEditor;
+    document.getElementById('ovlClearAll').onclick = () => { cardsEls().forEach(c => ovlFillCard(c, OVL_DEFAULT)); ovlRefresh(); };
+    document.getElementById('ovlApply').onclick = applyOverlayEditor;
+    document.getElementById('ovlPreview').onload = () => {
+        const msg = document.getElementById('ovlPreviewMsg'); if (msg) { msg.textContent = 'প্রিভিউ (সাইটে যেমন দেখাবে)'; msg.className = 'text-[10px] text-gray-500 mt-1'; }
+    };
+    document.getElementById('ovlPreview').onerror = () => {
+        const msg = document.getElementById('ovlPreviewMsg'); if (msg) { msg.textContent = 'প্রিভিউ আসেনি — ওভারলের ID ঠিক আছে কিনা দেখুন'; msg.className = 'text-[10px] text-red-600 mt-1'; }
+    };
+    ovlThumbEls().forEach(wrap => {
+        const img = wrap.querySelector('.ovl-thumb-img');
+        img.onerror = () => wrap.classList.add('hidden');
+        wrap.addEventListener('pointerdown', e => ovlDragStart(e, wrap));
+        wrap.addEventListener('pointermove', ovlDragMove);
+        wrap.addEventListener('pointerup', ovlDragEnd);
+        wrap.addEventListener('pointercancel', ovlDragEnd);
+    });
+    return m;
+}
+
+function ovlFillCard(card, o) {
+    card.querySelector('.ovl-id').value = o.id || '';
+    card.querySelector('.ovl-pos').value = o.position || 'center';
+    const size = ovlClamp(o.size, 1, 100, OVL_DEFAULT.size), op = ovlClamp(o.opacity, 1, 100, 100);
+    card.querySelector('.ovl-size').value = size; card.querySelector('.ovl-size-r').value = size;
+    card.querySelector('.ovl-op').value = op; card.querySelector('.ovl-op-r').value = op;
+    card.querySelector('.ovl-x').value = o.x || 0;
+    card.querySelector('.ovl-y').value = o.y || 0;
+    ovlUpdateCardUI(card);
+}
+function ovlReadCard(card) {
+    return {
+        id: normalizeOverlayId(card.querySelector('.ovl-id').value),
+        position: card.querySelector('.ovl-pos').value,
+        size: ovlClamp(card.querySelector('.ovl-size').value, 1, 100, OVL_DEFAULT.size),
+        opacity: ovlClamp(card.querySelector('.ovl-op').value, 1, 100, 100),
+        x: ovlClamp(card.querySelector('.ovl-x').value, -99, 99, 0),
+        y: ovlClamp(card.querySelector('.ovl-y').value, -99, 99, 0)
+    };
+}
+function ovlUpdateCardUI(card) {
+    const id = normalizeOverlayId(card.querySelector('.ovl-id').value);
+    const st = card.querySelector('.ovl-state'), th = card.querySelector('.ovl-thumb');
+    st.textContent = id ? '✔ ব্যবহার হবে' : 'খালি';
+    st.className = 'ovl-state text-[10px] font-bold ' + (id ? 'text-green-600' : 'text-gray-400');
+    if (id && ovlCtx) {
+        const src = 'https://res.cloudinary.com/' + ovlCtx.st.info.cloud + '/image/upload/f_auto,c_limit,w_120/' + id.split('/').map(encodeURIComponent).join('/');
+        if (th.getAttribute('src') !== src) th.setAttribute('src', src);
+        th.classList.remove('hidden');
+        th.onerror = () => th.classList.add('hidden');
+    } else { th.removeAttribute('src'); th.classList.add('hidden'); }
+}
+function ovlCurrentState() {
+    const m = document.getElementById('overlayModal');
+    return { info: ovlCtx.st.info, leading: ovlCtx.st.leading, overlays: m._cards().map(ovlReadCard) };
+}
+function ovlSchedulePreview(delay) {
+    if (!ovlCtx) return;
+    clearTimeout(ovlTimer);
+    ovlTimer = setTimeout(() => {
+        if (!ovlCtx) return;
+        const msg = document.getElementById('ovlPreviewMsg');
+        msg.textContent = 'প্রিভিউ লোড হচ্ছে...'; msg.className = 'text-[10px] text-gray-500 mt-1';
+        document.getElementById('ovlPreview').src = buildOverlayUrl(ovlCurrentState(), true);
+    }, delay === undefined ? 500 : delay);
+}
+
+function openOverlayEditor(input) {
+    const st = parseOverlayState(input.value);
+    if (!st) return Swal.fire('আগে মূল ছবি লাগবে', 'প্রথমে "ছবি আপলোড" দিয়ে মূল ছবি আপলোড করুন (অথবা Cloudinary ছবির লিংক বসান), তারপর ওভারলে দিন।', 'info');
+    if (st.info.cloud !== CLOUDINARY_CLOUD_NAME) return Swal.fire('এই ছবিতে ওভারলে দেওয়া যাবে না', 'ছবিটি আপনার Cloudinary অ্যাকাউন্টের (' + CLOUDINARY_CLOUD_NAME + ') নয়। ওভারলে শুধু নিজের অ্যাকাউন্টের ছবিতে দেওয়া যায়।', 'info');
+    const m = ensureOverlayModal();
+    ovlCtx = { input, st };
+    m._cards().forEach((card, i) => {
+        ovlFillCard(card, st.overlays[i] || OVL_DEFAULT);
+        card.open = (i === 0) || !!(st.overlays[i] && st.overlays[i].id);
+        card.querySelector('.ovl-up-status').textContent = '';
+    });
+    m.classList.remove('hidden'); m.classList.add('flex');
+    ovlRefresh(0);
+}
+function closeOverlayEditor() {
+    const m = document.getElementById('overlayModal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+    clearTimeout(ovlTimer); ovlStopHold(); ovlCtx = null;
+}
+function applyOverlayEditor() {
+    if (!ovlCtx) return;
+    if (imageUploadsInFlight > 0) return Swal.fire('অপেক্ষা করুন', 'ছবি আপলোড চলছে। শেষ হলে প্রয়োগ করুন।', 'info');
+    const url = buildOverlayUrl(ovlCurrentState(), false);
+    const input = ovlCtx.input;
+    input.value = url;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    closeOverlayEditor();
+}
+
+async function ovlUploadForCard(card, file) {
+    const status = card.querySelector('.ovl-up-status'), btn = card.querySelector('.ovl-up');
+    const setStatus = (t, cls) => { status.textContent = t; status.className = 'ovl-up-status text-[10px] ' + (cls || 'text-gray-500'); };
+    if (!/^image\//i.test(file.type)) { setStatus('শুধু ছবি ফাইল দিন', 'text-red-600'); return; }
+    btn.disabled = true; btn.classList.add('opacity-50');
+    imageUploadsInFlight++;
+    try {
+        setStatus('ছবি ছোট করা হচ্ছে...');
+        const blob = await prepareImageForUpload(file);
+        if (blob.size > IMG_MAX_UPLOAD_BYTES) throw new Error('ছবির সাইজ অনেক বড় (সর্বোচ্চ ১০ MB)। ছোট ছবি দিন।');
+        const ext = (blob.type === 'image/png') ? 'png' : (blob.type === 'image/jpeg' ? 'jpg' : ((file.name.split('.').pop() || 'jpg').toLowerCase()));
+        const baseName = (file.name.replace(/\.[^.]+$/, '') || 'overlay').replace(/[^a-zA-Z0-9_-]/g, '_') || 'overlay';
+        setStatus('আপলোড হচ্ছে... 0%');
+        const url = await uploadImageToCloudinary(blob, baseName + '.' + ext, p => setStatus('আপলোড হচ্ছে... ' + p + '%'));
+        const p = parseCloudinaryUrl(url);
+        card.querySelector('.ovl-id').value = p ? p.publicId : url;
+        ovlUpdateCardUI(card);
+        setStatus('✔ আপলোড হয়েছে', 'text-green-600');
+        ovlRefresh(0);
+    } catch (err) {
+        setStatus('আপলোড হয়নি', 'text-red-600');
+        Swal.fire('আপলোড হয়নি', String(err && err.message ? err.message : err), 'error');
+    } finally {
+        imageUploadsInFlight = Math.max(0, imageUploadsInFlight - 1);
+        btn.disabled = false; btn.classList.remove('opacity-50');
+    }
+}
+
+// যেকোনো লিংক-ইনপুটের নিচে "ছবি আপলোড" বাটন + প্রিভিউ বসায়। আপলোড শেষে লিংক নিজে ইনপুটে বসে যায়।
+function attachImageUploader(input) {
+    if (!input || input.dataset.uploaderAttached === '1') return;
+    input.dataset.uploaderAttached = '1';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'flex flex-wrap items-center gap-2 mt-1.5';
+    wrap.innerHTML =
+        '<button type="button" class="img-upload-btn px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-100 whitespace-nowrap"><i class="fas fa-camera mr-1"></i>ছবি আপলোড</button>' +
+        '<button type="button" class="img-overlay-btn px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold hover:bg-purple-100 whitespace-nowrap"><i class="fas fa-layer-group mr-1"></i>ওভারলে</button>' +
+        '<span class="img-overlay-badge text-[10px] font-bold text-purple-600"></span>' +
+        '<span class="img-upload-status text-[10px] text-gray-500"></span>' +
+        '<img class="img-upload-preview hidden w-9 h-9 rounded-md object-cover border border-gray-200" alt="">' +
+        '<input type="file" accept="image/*" class="hidden">';
+    input.insertAdjacentElement('afterend', wrap);
+
+    const btn = wrap.querySelector('.img-upload-btn');
+    const status = wrap.querySelector('.img-upload-status');
+    const preview = wrap.querySelector('.img-upload-preview');
+    const overlayBadge = wrap.querySelector('.img-overlay-badge');
+    const overlayBtn = wrap.querySelector('.img-overlay-btn');
+    const fileInput = wrap.querySelector('input[type=file]');
+
+    const refreshPreview = () => {
+        const v = String(input.value || '').trim();
+        if (/^https?:\/\//i.test(v)) { preview.src = v; preview.classList.remove('hidden'); }
+        else { preview.removeAttribute('src'); preview.classList.add('hidden'); }
+        const stt = parseOverlayState(v);
+        overlayBadge.textContent = (stt && stt.overlays.length) ? ('✨ ' + stt.overlays.length + 'টি ওভারলে') : '';
+    };
+    preview.onerror = () => preview.classList.add('hidden');
+    input._refreshUploaderPreview = refreshPreview;
+    input.addEventListener('input', refreshPreview);
+    refreshPreview();
+
+    const setStatus = (text, cls) => { status.textContent = text; status.className = 'img-upload-status text-[10px] ' + (cls || 'text-gray-500'); };
+
+    btn.addEventListener('click', () => {
+        if (input.disabled) {
+            return Swal.fire('ফর্ম লক আছে', 'আগে "ভ্যারিয়েন্ট আছে কিনা" (হ্যাঁ/না) বাছাই করুন, তারপর ছবি আপলোড করুন।', 'info');
+        }
+        fileInput.click();
+    });
+
+    overlayBtn.addEventListener('click', () => {
+        if (input.disabled) {
+            return Swal.fire('ফর্ম লক আছে', 'আগে "ভ্যারিয়েন্ট আছে কিনা" (হ্যাঁ/না) বাছাই করুন, তারপর ওভারলে দিন।', 'info');
+        }
+        openOverlayEditor(input);
+    });
+
+    fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        fileInput.value = '';
+        if (!file) return;
+        if (!/^image\//i.test(file.type)) { setStatus('শুধু ছবি ফাইল দিন', 'text-red-600'); return; }
+
+        btn.disabled = true; btn.classList.add('opacity-50');
+        imageUploadsInFlight++;
+        try {
+            setStatus('ছবি ছোট করা হচ্ছে...');
+            const blob = await prepareImageForUpload(file);
+            if (blob.size > IMG_MAX_UPLOAD_BYTES) throw new Error('ছবির সাইজ অনেক বড় (সর্বোচ্চ ১০ MB)। ছোট ছবি দিন।');
+            const ext = (blob.type === 'image/png') ? 'png' : (blob.type === 'image/jpeg' ? 'jpg' : ((file.name.split('.').pop() || 'jpg').toLowerCase()));
+            const baseName = (file.name.replace(/\.[^.]+$/, '') || 'photo').replace(/[^a-zA-Z0-9_-]/g, '_') || 'photo';
+            setStatus('আপলোড হচ্ছে... 0%');
+            const url = await uploadImageToCloudinary(blob, baseName + '.' + ext, p => setStatus('আপলোড হচ্ছে... ' + p + '%'));
+            input.value = url;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            setStatus('✔ আপলোড হয়েছে, লিংক বসে গেছে', 'text-green-600');
+        } catch (err) {
+            setStatus('আপলোড হয়নি', 'text-red-600');
+            Swal.fire('আপলোড হয়নি', String(err && err.message ? err.message : err), 'error');
+        } finally {
+            imageUploadsInFlight = Math.max(0, imageUploadsInFlight - 1);
+            btn.disabled = false; btn.classList.remove('opacity-50');
+        }
+    });
+}
+
+const PRODUCT_IMAGE_INPUT_IDS = ['p_image', 'p_image2', 'p_image3', 'p_image4', 'p_image5'];
+function initProductImageUploaders() { PRODUCT_IMAGE_INPUT_IDS.forEach(id => attachImageUploader(document.getElementById(id))); }
+function refreshProductImagePreviews() {
+    PRODUCT_IMAGE_INPUT_IDS.forEach(id => { const el = document.getElementById(id); if (el && el._refreshUploaderPreview) el._refreshUploaderPreview(); });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initProductImageUploaders);
+else initProductImageUploaders();
+
+// ==========================================
 // SHEET CONFIGS (f10 HIDDEN ADDED FOR USERS)
 // ==========================================
 const SHEET_CONFIGS = {
@@ -231,9 +896,9 @@ const SHEET_CONFIGS = {
     ]},
     categories: { title:'Categories', keyCol:0, fields:[
         {label:'Category Name*', id:'f0', type:'text', help:'মূল: Nuts। সাব: Nuts > Badam (অবশ্যই > চিহ্ন দিন)'},
-        {label:'Image URL', id:'f1', type:'url'},
+        {label:'Image URL', id:'f1', type:'url', upload:true},
         {label:'Is Top*', id:'f2', type:'select', options:['yes','no','brand'], help:'হোমপেজে দেখাতে yes, ব্র্যান্ড হলে brand'},
-        {label:'Inline Banner', id:'f3', type:'url', help:'ক্যাটাগরি পেজের ভেতরের ব্যানার লিংক'}
+        {label:'Inline Banner', id:'f3', type:'url', upload:true, help:'ক্যাটাগরি পেজের ভেতরের ব্যানার লিংক'}
     ]},
     coupons: { title:'Coupons', keyCol:0, fields:[
         {label:'Coupon Code*', id:'f0', type:'text', help:'ইংরেজি ছোট হাতে, স্পেস ছাড়া (যেমন: wellcome10)'},
@@ -252,7 +917,7 @@ const SHEET_CONFIGS = {
     ]},
     banners: { title:'Banners', keyCol:0, fields:[
         {label:'Banner Title*', id:'f0', type:'text'},
-        {label:'Image URL*', id:'f1', type:'url'},
+        {label:'Image URL*', id:'f1', type:'url', upload:true},
         {label:'Link To Category', id:'f2', type:'text', help:'ক্লিক করলে যে ক্যাটাগরিতে যাবে'},
         {label:'Order Sequence*', id:'f3', type:'number', help:'ক্রম (1, 2, 3...)'},
         {label:'Redirect URL', id:'f4', type:'url', help:'বাইরের লিংকে নিতে চাইলে'}
@@ -281,7 +946,7 @@ const SHEET_CONFIGS = {
     ]},
     popups: { title:'Popups', keyCol:0, fields:[
         {label:'Popup Message', id:'f0', type:'text'},
-        {label:'Popup Image', id:'f1', type:'url'},
+        {label:'Popup Image', id:'f1', type:'url', upload:true},
         {label:'Target Type*', id:'f2', type:'select', options:['all','product','category','brand'], help:'সবার কাছে দেখাতে all'},
         {label:'Target Value', id:'f3', type:'text', help:'all হলে ফাঁকা রাখুন। নির্দিষ্ট আইডি/নাম দিন'},
         {label:'Status*', id:'f4', type:'select', options:['active','inactive']}
@@ -460,7 +1125,7 @@ function renderDashboard(c) {
                 const vCost = parseProductCost(p.costprice, v.name) || parseFloat(p.costprice) || 0;
                 const vStock = v.stock || 0;
                 productSalesMap[key] = { 
-                    id: String(p.id).trim(), variant: v.name, totalQty: 0, totalRevenue: 0, 
+                    id: String(p.id).trim(), variant: v.name, totalQty: 0, totalRevenue: 0, totalCost: 0, 
                     currentStock: vStock,
                     costPrice: vCost,
                     inventoryValue: vCost * vStock,
@@ -472,7 +1137,7 @@ function renderDashboard(c) {
             const dCost = parseFloat(p.costprice) || 0;
             const dStock = p.totalstock || 0;
             productSalesMap[key] = { 
-                id: String(p.id).trim(), variant: 'নেই', totalQty: 0, totalRevenue: 0, 
+                id: String(p.id).trim(), variant: 'নেই', totalQty: 0, totalRevenue: 0, totalCost: 0, 
                 currentStock: dStock,
                 costPrice: dCost,
                 inventoryValue: dCost * dStock,
@@ -481,19 +1146,45 @@ function renderDashboard(c) {
         }
     });
 
+    // প্রফিটের জন্য কস্ট: বিক্রির সময় অর্ডারে যে কস্ট সেভ হয়েছিল সেটাই ব্যবহার হবে (পণ্যের বর্তমান কস্ট প্রাইস নয়),
+    // তাই পরে কস্ট প্রাইস বদলালেও আগের বিক্রির লাভ-ক্ষতি একই থাকবে।
+    // - নতুন অর্ডারে প্রতিটি আইটেমের unitCost সেভ থাকে
+    // - পুরাতন অর্ডারে (unitCost নেই) অর্ডারের মোট সেভ-করা কস্ট আইটেমগুলোতে ভাগ করে নেওয়া হয়
+    const allocateSoldCost = (items, snapshotTotal, variantKey) => {
+        const rows = items.map(item => {
+            const pId = String(item.id || '').trim();
+            const vName = item[variantKey] || 'DEFAULT';
+            const key = `${pId}__${vName}`;
+            const qty = parseInt(item.quantity || item.qty) || 1;
+            const savedRaw = item.unitCost;
+            const hasSaved = savedRaw !== undefined && savedRaw !== null && savedRaw !== '' && isFinite(parseFloat(savedRaw));
+            const entry = productSalesMap[key];
+            return { item, key, qty, hasSaved, saved: hasSaved ? parseFloat(savedRaw) : 0, currentUnit: entry ? (entry.costPrice || 0) : 0, unit: 0 };
+        });
+        const savedTotal = rows.reduce((s, r) => s + (r.hasSaved ? r.saved * r.qty : 0), 0);
+        const unsaved = rows.filter(r => !r.hasSaved);
+        const remaining = Math.max(0, (parseFloat(snapshotTotal) || 0) - savedTotal);
+        const weightSum = unsaved.reduce((s, r) => s + r.currentUnit * r.qty, 0);
+        const qtySum = unsaved.reduce((s, r) => s + r.qty, 0);
+        rows.forEach(r => {
+            if (r.hasSaved) r.unit = r.saved;
+            else if (weightSum > 0) r.unit = (remaining * (r.currentUnit * r.qty / weightSum)) / r.qty;
+            else if (qtySum > 0) r.unit = remaining / qtySum;
+        });
+        return rows;
+    };
+
     filteredOrders.forEach(o => {
         if (String(o[10]).toLowerCase() !== 'delivered' && String(o[10]).toLowerCase() !== 'shipped') return;
         try {
             const items = JSON.parse(o[7] || "[]");
-            items.forEach(item => {
-                const pId = String(item.id || '').trim();
-                const vName = item.selectedVariant || 'DEFAULT';
-                const key = `${pId}__${vName}`;
-                if (productSalesMap[key]) {
-                    const qty = parseInt(item.quantity || item.qty) || 1;
-                    const revenue = parseFloat(item.price) || 0;
-                    productSalesMap[key].totalQty += qty;
-                    productSalesMap[key].totalRevenue += (revenue * qty);
+            allocateSoldCost(items, o[20], 'selectedVariant').forEach(r => {
+                const entry = productSalesMap[r.key];
+                if (entry) {
+                    const revenue = parseFloat(r.item.price) || 0;
+                    entry.totalQty += r.qty;
+                    entry.totalRevenue += (revenue * r.qty);
+                    entry.totalCost += (r.unit * r.qty);
                 }
             });
         } catch(e) {}
@@ -506,15 +1197,13 @@ function renderDashboard(c) {
             // সর্বমোট ছাড় থাকলে সেটা এই অর্ডারের সব পণ্যে আনুপাতিক হারে ভাগ হবে
             const oSub = parseFloat(o[5]) || 0, oDiscount = parseFloat(o[13]) || 0;
             const discountRatio = oSub > 0 ? (oDiscount / oSub) : 0;
-            items.forEach(item => {
-                const pId = String(item.id || '').trim();
-                const vName = item.variant || 'DEFAULT';
-                const key = `${pId}__${vName}`;
-                if (productSalesMap[key]) {
-                    const qty = parseInt(item.quantity) || 1;
-                    const revenue = (parseFloat(item.price) || 0) * (1 - discountRatio);
-                    productSalesMap[key].totalQty += qty;
-                    productSalesMap[key].totalRevenue += (revenue * qty);
+            allocateSoldCost(items, o[6], 'variant').forEach(r => {
+                const entry = productSalesMap[r.key];
+                if (entry) {
+                    const revenue = (parseFloat(r.item.price) || 0) * (1 - discountRatio);
+                    entry.totalQty += r.qty;
+                    entry.totalRevenue += (revenue * r.qty);
+                    entry.totalCost += (r.unit * r.qty);
                 }
             });
         } catch(e) {}
@@ -537,7 +1226,7 @@ function renderDashboard(c) {
         else if (p.currentStock <= 5) stockBg = 'bg-yellow-50 text-yellow-700';
         const zeroSalesBadge = p.totalQty === 0 ? '<span class="bg-red-100 text-red-600 text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-2">বিক্রি নেই</span>' : '';
         const costDisplay = p.costPrice > 0 ? `৳${p.costPrice}` : '<span class="text-gray-400">N/A</span>';
-        const totalProfit = p.totalRevenue - (p.costPrice * p.totalQty);
+        const totalProfit = p.totalRevenue - p.totalCost;
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
                 <td class="p-2.5 text-center text-xs font-bold text-gray-400">${i + 1}</td>
@@ -1076,6 +1765,8 @@ function openGenericModal(key, idx=null) {
     }).join('');
 
     document.getElementById('genericModalBody').innerHTML=`<div class="grid grid-cols-2 gap-x-5 gap-y-4">${html}</div>`;
+    // ছবির লিংকের ঘরে "ছবি আপলোড" বাটন বসানো
+    config.fields.forEach((f,i)=>{ if(f.upload) attachImageUploader(document.getElementById(`gen_f${i}`)); });
     // NEW: searchable category picker-এর initial state render
     config.fields.forEach((f,i)=>{
         if(f.type==='category-multiselect'){
@@ -1101,6 +1792,7 @@ document.addEventListener('click', function(e) {
 function closeGenericModal(){document.getElementById('genericModal').classList.add('hidden');document.getElementById('genericModal').classList.remove('flex');}
 
 function saveGenericData() {
+    if (imageUploadsInFlight > 0) return Swal.fire('অপেক্ষা করুন', 'ছবি আপলোড চলছে। শেষ হলে আবার সেভ করুন।', 'info');
     const config=SHEET_CONFIGS[currentEditSheet];
     const dataArray=config.fields.map((f,i)=>{
         if(f.type==='category-multiselect') return collectCategoryMultiselectValue(i);
@@ -1285,6 +1977,24 @@ function copyCustomerAddress(id){
 }
 
 function updateExtraCost(id,cost){Swal.fire({title:'Update Extra Cost?',icon:'question',showCancelButton:true}).then(r=>{if(r.isConfirmed){google.script.run.withSuccessHandler(res=>{if(res.success){const o=localData.orders.find(x=>x[1]===id);if(o)o[19]=cost;renderOrders(document.getElementById('contentArea'));}}).adminUpdateOrderExtraCost(adminSecret,id,cost);}else renderOrders(document.getElementById('contentArea'));});}
+// অর্ডার ক্যান্সেল/রিটার্নে ব্যাকএন্ড স্টক ফেরত দেয়; লোকাল ডাটায়ও সাথে সাথে সেটা প্রতিফলিত করার জন্য
+function restockLocalFromOrderItems(itemsJson){
+    try{
+        const items=JSON.parse(itemsJson||'[]');
+        if(!Array.isArray(items)) return;
+        items.forEach(it=>{
+            const p=(localData.products||[]).find(x=>String(x.id)===String(it.id));
+            if(!p) return;
+            const qty=Number(it.quantity||it.qty)||0;
+            if(it.variant && Array.isArray(p.variants)){
+                const v=p.variants.find(vv=>vv.name===it.variant);
+                if(v) v.stock=(v.stock||0)+qty;
+            }
+            p.totalstock=(p.totalstock||0)+qty;
+        });
+    }catch(e){ console.error('Local restock error:',e); }
+}
+
 function updateOrderStatus(id,st){
     if(!st)return;
 
@@ -1366,7 +2076,7 @@ function updateOrderStatus(id,st){
                                 google.script.run.withSuccessHandler(res3=>{
                                     if(res3.success){
                                         const o=localData.orders.find(x=>x[1]===id);
-                                        if(o){o[10]='Return';o[19]=totalCost;}
+                                        if(o){ if(String(o[10]||'').trim().toLowerCase()!=='cancelled' && String(o[10]||'').trim().toLowerCase()!=='return') restockLocalFromOrderItems(o[7]); o[10]='Return';o[19]=totalCost;}
                                         renderOrders(document.getElementById('contentArea'));
                                         
                                         const finalLoss = existingLoss + r.value.courier;
@@ -1539,7 +2249,14 @@ function updateOrderStatus(id,st){
             google.script.run.withSuccessHandler(res=>{
                 if(res.success){
                     const o=localData.orders.find(x=>x[1]===id);
-                    if(o)o[10]=st;
+                    if(o){
+                        const prevSt=String(o[10]||'').trim().toLowerCase();
+                        o[10]=st;
+                        const nowIso=new Date().toISOString();
+                        if(st==='Shipped') o[16]=nowIso;
+                        if(st==='Delivered') o[17]=nowIso;
+                        if(st==='Cancelled' && prevSt!=='cancelled' && prevSt!=='return' && prevSt!=='returned') restockLocalFromOrderItems(o[7]);
+                    }
                     renderOrders(document.getElementById('contentArea'));
                     // লোডার বন্ধ হয়ে সাকসেস মেসেজ ১.৫ সেকেন্ড দেখাবে
                     Swal.fire({
@@ -2530,11 +3247,13 @@ function openProductModal(id=null){
         }
         applyVariantModeUI(hasVariant);
     }}else{document.getElementById('p_id').readOnly=false;}
+    refreshProductImagePreviews();
     document.getElementById('productModal').classList.remove('hidden');document.getElementById('productModal').classList.add('flex');
 }
 function closeProductModal(){document.getElementById('productModal').classList.add('hidden');document.getElementById('productModal').classList.remove('flex');}
 
 function saveProduct(){
+    if (imageUploadsInFlight > 0) return Swal.fire('অপেক্ষা করুন', 'ছবি আপলোড চলছে। শেষ হলে আবার সেভ করুন।', 'info');
     if (!syncVariantsToHiddenField()) return;
     const hasVariant = document.getElementById('p_has_variant_flag').value === 'true';
 
@@ -2558,13 +3277,36 @@ function saveProduct(){
     doSaveProduct(hasVariant);
 }
 
+// সেভের পর লোকাল ডাটায় ভ্যারিয়েন্ট স্ট্রিং নয়, ব্যাকএন্ডের মতোই অবজেক্টের অ্যারে বসানোর জন্য (parseVariants-এর হুবহু লজিক)
+function parseVariantsLocal(variantsStr, mainPrice){
+    if(!variantsStr || String(variantsStr).trim()==='') return [];
+    const out=[];
+    String(variantsStr).replace(/\s*,\s*/g,',').replace(/\s*:\s*/g,':').split(',').forEach(item=>{
+        const parts=item.trim().split(':');
+        if(parts.length>=3){
+            const name=parts[0].trim();
+            let price=mainPrice;
+            if(parts[1] && parts[1].trim()!=='') price=parseFloat(parts[1].trim());
+            const stock=parseInt(parts[2].trim())||0;
+            const extra=(parts.length>=4 && parts[3] && parts[3].trim()!=='')?parseFloat(parts[3].trim()):0;
+            let regular=price;
+            if(parts.length>=5 && parts[4] && parts[4].trim()!==''){
+                const r=parseFloat(parts[4].trim());
+                if(!isNaN(r) && r>0) regular=r;
+            }
+            out.push({name,price,stock,extradeliverycharge:extra,regularprice:regular});
+        }
+    });
+    return out;
+}
+
 function doSaveProduct(hasVariant){
     const d={id:document.getElementById('p_id').value.trim(),name:document.getElementById('p_name').value.trim(),category:document.getElementById('p_category').value.trim(),price:parseFloat(document.getElementById('p_price').value)||0,discountprice:parseFloat(document.getElementById('p_discount').value)||0,totalstock:parseInt(document.getElementById('p_stock').value)||0,stockstatus:document.getElementById('p_stockstatus').value,costprice:document.getElementById('p_costprice').value.trim(),extradeliverycharge:parseFloat(document.getElementById('p_extra_delivery').value)||0,imagemain:document.getElementById('p_image').value.trim(),image2:document.getElementById('p_image2').value.trim(),image3:document.getElementById('p_image3').value.trim(),image4:document.getElementById('p_image4').value.trim(),image5:document.getElementById('p_image5').value.trim(),videourl:document.getElementById('p_video').value.trim(),description:document.getElementById('p_desc').value.trim(),variants:document.getElementById('p_variants').value.trim()};
     if(!d.id||!d.name)return Swal.fire('Warning','ID, Name required','warning');
     // ভ্যারিয়েন্ট প্রোডাক্টের ক্ষেত্রে বেস Price লাগে না (প্রতিটা ভ্যারিয়েন্টের নিজস্ব দাম আছে),
     // তাই শুধু non-variant প্রোডাক্টের জন্যই Price আবশ্যক রাখা হলো
     if(!hasVariant && !d.price)return Swal.fire('Warning','ID, Name, Price required','warning');
-    Swal.fire({title:'Syncing...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});google.script.run.withSuccessHandler(res=>{if(res.success){Swal.fire('Saved!','','success');closeProductModal();const idx=localData.products.findIndex(x=>String(x.id)===String(d.id));if(idx>-1)localData.products[idx]={...localData.products[idx],...d};else localData.products.unshift(d);renderProducts(document.getElementById('contentArea'));}else Swal.fire('Error',res.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminSaveProduct(adminSecret,d);
+    Swal.fire({title:'Syncing...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});google.script.run.withSuccessHandler(res=>{if(res.success){Swal.fire('Saved!','','success');closeProductModal();const ld={...d,variants:parseVariantsLocal(d.variants,d.price)};const idx=localData.products.findIndex(x=>String(x.id)===String(d.id));if(idx>-1)localData.products[idx]={...localData.products[idx],...ld};else localData.products.unshift(ld);renderProducts(document.getElementById('contentArea'));}else Swal.fire('Error',res.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminSaveProduct(adminSecret,d);
 }
 
 
