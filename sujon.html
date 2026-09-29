@@ -263,7 +263,7 @@ function uploadImageToCloudinary(blob, fileName, onProgress) {
         xhr.onload = () => {
             let json = {};
             try { json = JSON.parse(xhr.responseText); } catch (e) {}
-            if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) resolve(json.secure_url);
+            if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) resolve(cldAddAutoDelivery(json.secure_url));
             else reject(new Error((json.error && json.error.message) || ('আপলোড ব্যর্থ হয়েছে (কোড ' + xhr.status + ')')));
         };
         xhr.onerror = () => reject(new Error('ইন্টারনেট সংযোগে সমস্যা, আবার চেষ্টা করুন'));
@@ -302,6 +302,17 @@ function ovlClamp(v, min, max, fallback) {
 }
 function ovlFmtRatio(pct) { let s = String(Math.round(pct * 100) / 10000); if (s.indexOf('.') < 0) s += '.0'; return s; }
 function ovlFmtOffset(pct) { return String(Math.round(pct * 100) / 10000); }
+
+// Cloudinary delivery optimization: f_auto (best format) + q_auto (best quality/size) - always at the END of the chain
+const CLD_AUTO_DEFAULT = 'f_auto,q_auto';
+const CLD_AUTO_SEG_RE = /^(?:f_auto|q_auto(?::[a-z]+)?)(?:,(?:f_auto|q_auto(?::[a-z]+)?))*$/i;
+function cldAddAutoDelivery(url) {
+    const s = String(url || '');
+    const m = s.match(/^(https?:\/\/res\.cloudinary\.com\/[^\/?#]+\/image\/upload\/)(.*)$/i);
+    if (!m) return s;
+    if (m[2].split('/').some(x => CLD_AUTO_SEG_RE.test(x))) return s;
+    return m[1] + CLD_AUTO_DEFAULT + '/' + m[2];
+}
 
 function parseCloudinaryUrl(url) {
     const m = String(url || '').trim().match(/^https?:\/\/res\.cloudinary\.com\/([^\/?#]+)\/image\/upload\/([^?#]+)/i);
@@ -379,7 +390,9 @@ function parseOverlayState(url) {
 // ID খালি থাকা ওভারলে বাদ যায়। preview=true হলে শেষে ছোট মাপের (700px) সীমা বসে — শুধু প্রিভিউর জন্য।
 function buildOverlayUrl(state, preview) {
     const info = state.info;
-    const segs = state.leading.slice();
+    let autoSeg = CLD_AUTO_DEFAULT;
+    const segs = [];
+    state.leading.forEach(s => { if (CLD_AUTO_SEG_RE.test(s)) autoSeg = s; else segs.push(s); });
     (state.overlays || []).slice(0, OVERLAY_MAX).forEach(o => {
         const id = normalizeOverlayId(o.id);
         if (!id) return;
@@ -396,6 +409,7 @@ function buildOverlayUrl(state, preview) {
         segs.push(apply);
     });
     if (preview) segs.push('c_limit,w_700');
+    segs.push(autoSeg);
     const pid = info.publicId.split('/').map(encodeURIComponent).join('/');
     return 'https://res.cloudinary.com/' + info.cloud + '/image/upload/' + (segs.length ? segs.join('/') + '/' : '') + (info.version ? info.version + '/' : '') + pid + info.ext;
 }
