@@ -4071,6 +4071,8 @@ function validateCouponLocally(rawCode, selectedItems) {
     let discountAmount = 0;
     if (coupon.type === 'flat') {
         discountAmount = parseFloat(coupon.discountamount) || 0;
+        // নিরাপত্তা: Flat ছাড় কখনো প্রযোজ্য কার্ট-মূল্যের বেশি হতে পারবে না (backend এর মতো)
+        if (discountAmount > applicableSubTotal) discountAmount = applicableSubTotal;
     } else if (coupon.type === 'percentage') {
         const percentage = parseFloat(coupon.discountamount) || 0;
         discountAmount = (applicableSubTotal * percentage) / 100;
@@ -4213,10 +4215,10 @@ if (isFreeDeliveryActive && !hasPartialDelDiscount && hasEligibleItem) {
     let finalTotal;
     if (isPartialDelDiscount) {
         // PARTIAL: ডিসকাউন্ট টোটাল থেকে বাদ
-        finalTotal = (subTotal + totalShipping) - productDiscountAmount - deliveryDiscountAmount - appData.pointsDiscount;
+        finalTotal = Math.max(0, (subTotal + totalShipping) - productDiscountAmount - deliveryDiscountAmount - appData.pointsDiscount);
     } else {
         // FULL FREE বা NO COUPON: ডিসকাউন্ট ইতিমধ্যে বাদ (চার্জেই কম আসছে)
-        finalTotal = (subTotal + totalShipping) - productDiscountAmount - appData.pointsDiscount;
+        finalTotal = Math.max(0, (subTotal + totalShipping) - productDiscountAmount - appData.pointsDiscount);
     }
     // ==========================================
 
