@@ -423,17 +423,49 @@ const OVL_Y_ANCHOR = { north_west: 'top', north_east: 'top', north: 'top', south
 let ovlDrag = null;
 
 function ovlPositionThumb(el, pos, size, x, y) {
+    // সব অফসেট স্টেজ-এর (মূল ছবির) মাপের শতাংশে বসে — left/top/right/bottom এর % সবসময় কন্টেইনারের মাপ ধরে।
+    // translate(%) ব্যবহার হয় শুধু নিজের অর্ধেক মাপ (-50%) দিয়ে মাঝ-বরাবর করতে; অফসেট কখনো translate-এ যায় না
+    // (translate-এর % ওভারলের নিজের মাপ ধরে, তাই আগে প্রিভিউ Cloudinary-র সাথে মিলত না)।
     const rawX = x * ovlFlipX(pos), rawY = y * ovlFlipY(pos);
     el.style.width = size + '%';
     el.style.left = el.style.right = el.style.top = el.style.bottom = '';
     let tx = '', ty = '';
     if (OVL_X_ANCHOR[pos] === 'left') el.style.left = rawX + '%';
     else if (OVL_X_ANCHOR[pos] === 'right') el.style.right = rawX + '%';
-    else { el.style.left = '50%'; tx = 'translateX(calc(-50% + ' + rawX + '%))'; }
+    else { el.style.left = (50 + rawX) + '%'; tx = 'translateX(-50%)'; }
     if (OVL_Y_ANCHOR[pos] === 'top') el.style.top = rawY + '%';
     else if (OVL_Y_ANCHOR[pos] === 'bottom') el.style.bottom = rawY + '%';
-    else { el.style.top = '50%'; ty = 'translateY(calc(-50% + ' + rawY + '%))'; }
+    else { el.style.top = (50 + rawY) + '%'; ty = 'translateY(-50%)'; }
     el.style.transform = (tx + ' ' + ty).trim();
+}
+
+// ওভারলে যেন কখনো মূল ছবির ফ্রেমের বাইরে না যায়: পজিশন অনুযায়ী X/Y-এর সীমা বের করে ঘরের মান সেই সীমায় আটকায়।
+// (X ধনাত্মক = ডানে, Y ধনাত্মক = নিচে — ঘরে যেভাবে দেখানো হয়।) ওভারলের উচ্চতা তার আসল অনুপাত থেকে হিসাব হয়।
+function ovlClampCardPos(card) {
+    const n = Array.from(document.getElementById('overlayModal')._cards()).indexOf(card) + 1;
+    const wrap = document.querySelector('#overlayModal .ovl-thumb-wrap[data-n="' + n + '"]');
+    const img = wrap && wrap.querySelector('.ovl-thumb-img');
+    const stage = document.getElementById('ovlStage');
+    const pos = card.querySelector('.ovl-pos').value;
+    const w = ovlClamp(card.querySelector('.ovl-size').value, 1, 100, OVL_DEFAULT.size);
+    const xi = card.querySelector('.ovl-x'), yi = card.querySelector('.ovl-y');
+    let x = ovlClamp(xi.value, -99, 99, 0), y = ovlClamp(yi.value, -99, 99, 0);
+    const xa = OVL_X_ANCHOR[pos], ya = OVL_Y_ANCHOR[pos];
+    const room = 100 - w;
+    if (xa === 'left') x = Math.min(Math.max(x, 0), room);
+    else if (xa === 'right') x = Math.min(Math.max(x, -room), 0);
+    else { const h = room / 2; x = Math.min(Math.max(x, -h), h); }
+    const rect = stage && stage.getBoundingClientRect();
+    if (img && img.naturalWidth && rect && rect.width && rect.height) {
+        const hPct = (w / 100) * rect.width * (img.naturalHeight / img.naturalWidth) / rect.height * 100;
+        const roomY = Math.max(0, 100 - hPct);
+        if (ya === 'top') y = Math.min(Math.max(y, 0), roomY);
+        else if (ya === 'bottom') y = Math.min(Math.max(y, -roomY), 0);
+        else { const h = roomY / 2; y = Math.min(Math.max(y, -h), h); }
+    }
+    x = Math.round(x * 10) / 10; y = Math.round(y * 10) / 10;
+    if (parseFloat(xi.value) !== x) xi.value = x;
+    if (parseFloat(yi.value) !== y) yi.value = y;
 }
 
 function ovlThumbEls() { return Array.from(document.querySelectorAll('#overlayModal .ovl-thumb-wrap')); }
@@ -455,6 +487,7 @@ function renderDragStage() {
         const img = wrap.querySelector('.ovl-thumb-img');
         const thumbSrc = 'https://res.cloudinary.com/' + info.cloud + '/image/upload/f_auto,c_limit,w_300/' + id.split('/').map(encodeURIComponent).join('/');
         if (img.dataset.src !== thumbSrc) { img.dataset.src = thumbSrc; img.src = thumbSrc; }
+        ovlClampCardPos(card);
         const pos = card.querySelector('.ovl-pos').value;
         const size = ovlClamp(card.querySelector('.ovl-size').value, 1, 100, OVL_DEFAULT.size);
         const x = ovlClamp(card.querySelector('.ovl-x').value, -99, 99, 0);
@@ -672,6 +705,7 @@ function ensureOverlayModal() {
     ovlThumbEls().forEach(wrap => {
         const img = wrap.querySelector('.ovl-thumb-img');
         img.onerror = () => wrap.classList.add('hidden');
+        img.onload = () => { if (ovlCtx) ovlRefresh(); };
         wrap.addEventListener('pointerdown', e => ovlDragStart(e, wrap));
         wrap.addEventListener('pointermove', ovlDragMove);
         wrap.addEventListener('pointerup', ovlDragEnd);
@@ -691,6 +725,7 @@ function ovlFillCard(card, o) {
     ovlUpdateCardUI(card);
 }
 function ovlReadCard(card) {
+    ovlClampCardPos(card);
     return {
         id: normalizeOverlayId(card.querySelector('.ovl-id').value),
         position: card.querySelector('.ovl-pos').value,
