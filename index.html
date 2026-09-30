@@ -3824,6 +3824,7 @@ function loadAllProductsSection(pageNum, shouldScrollToTop = true) {
     // ==========================================
     const heroSection = document.getElementById('homeHeroSection');
     const featuredSection = document.getElementById('featuredProducts');
+    const brandSection = document.getElementById('ourBrandSection');
     const titleRow = document.getElementById('homeAllProductsTitleRow');
     const pageLabel = document.getElementById('currentPageLabel');
 
@@ -3832,10 +3833,14 @@ function loadAllProductsSection(pageNum, shouldScrollToTop = true) {
     if (pageNum > 1) {
         if (heroSection) heroSection.style.display = 'none';
         if (featuredSection) featuredSection.style.display = 'none';
+        // ২য়, ৩য়... পেজে Our Brands সেকশন দেখানো হবে না
+        if (brandSection) brandSection.style.display = 'none';
         if (titleRow) titleRow.classList.remove('hidden');
     } else {
         if (heroSection) heroSection.style.display = '';
         if (featuredSection) featuredSection.style.display = '';
+        // ১ম পেজে ফিরলে আগের মতো দেখাবে (ব্র্যান্ড না থাকলে 'hidden' ক্লাসই লুকিয়ে রাখবে)
+        if (brandSection) brandSection.style.display = '';
         if (titleRow) titleRow.classList.remove('hidden');
     }
 
@@ -5450,7 +5455,25 @@ function loadFeaturedProducts() {
     if (!container) return;
     
     // ১. শীটের ঠিক প্রথম ৬টি প্রোডাক্ট নিয়ে নেওয়া হচ্ছে (র‍্যান্ডম নয়, ফিক্সড)
-    const fixedFeaturedProds = appData.products.slice(0, 6); 
+    // settings শিটের featuredproductids (যেমন: 105,203,12,88) অনুযায়ী প্রোডাক্ট দেখানো হবে।
+    // যতগুলো ID থাকবে ততগুলোই দেখাবে (১টা হলে ১টা, ২০টা হলে ২০টা)।
+    // key না থাকলে/ফাঁকা থাকলে/কোনো ID মিললে না — আগের মতো প্রথম ৬টি দেখাবে।
+    const rawFeaturedIds = String((appData.settings && appData.settings.featuredproductids) || '').trim();
+    let fixedFeaturedProds = [];
+    if (rawFeaturedIds) {
+        const productById = new Map((appData.products || []).map(p => [String(p.id).trim(), p]));
+        const seenIds = new Set();
+        rawFeaturedIds.split(/[\s,]+/).filter(Boolean).forEach(id => {
+            if (seenIds.has(id)) return;
+            seenIds.add(id);
+            const prod = productById.get(id);
+            if (prod) fixedFeaturedProds.push(prod);
+        });
+    }
+    if (fixedFeaturedProds.length === 0) {
+        fixedFeaturedProds = appData.products.slice(0, 6);
+    }
+
 
     const usedProductIds = new Set(); 
     let html = '';
@@ -7494,7 +7517,7 @@ function searchProducts(query) {
     if (results.length > 0) {
         container.classList.remove('hidden');
         container.innerHTML = results.map(p => `
-            <div onclick="navigateTo('/product?id=${p.id}'); toggleSearch();" 
+            <div onclick="closeSearchBar(); navigateTo('/product?id=${p.id}');" 
                  class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 transition-colors group">
                 <div class="relative w-12 h-12 shrink-0">
                     <img src="${p.imagemain}" 
@@ -7522,6 +7545,14 @@ function searchProducts(query) {
 }
         
         function toggleSearch() { const sb = document.getElementById('searchBar'); sb.classList.toggle('hidden'); if(!sb.classList.contains('hidden')) document.getElementById('searchInput').focus(); }
+        // সবসময় সার্চ বার লুকায় (toggle নয়) — পণ্যে ক্লিক করলে navigateTo() আগেই বারটা লুকিয়ে দেয়,
+        // তাই toggleSearch() ব্যবহার করলে সেটা উল্টো আবার খুলে দিত।
+        function closeSearchBar() {
+            const sb = document.getElementById('searchBar');
+            if (sb) sb.classList.add('hidden');
+            const sr = document.getElementById('searchResults');
+            if (sr) sr.classList.add('hidden');
+        }
         function clearSearch() { document.getElementById('searchInput').value = ''; document.getElementById('searchResults').classList.add('hidden'); }
 
 function initFilterOptions() {
@@ -7608,16 +7639,24 @@ function initFilterOptions() {
             if (priceRange !== 'all') {
                 const [minStr, maxStr] = priceRange.split('-');
                 const min = parseInt(minStr);
-                
-                if (priceRange === '2001-above') {
-                    filtered = filtered.filter(p => getDisplayPricing(p).price > 2000);
-                } else {
-                    const max = parseInt(maxStr);
-                    filtered = filtered.filter(p => {
-                        const price = getDisplayPricing(p).price;
-                        return price >= min && price <= max;
-                    });
-                }
+                // "2001-above" হলে max অসীম ধরা হচ্ছে
+                const max = (priceRange === '2001-above') ? Infinity : parseInt(maxStr);
+
+                // ভ্যারিয়েন্ট প্রোডাক্টের যেকোনো একটি ভ্যারিয়েন্টের দাম রেঞ্জে পড়লেই প্রোডাক্টটি দেখাবে।
+                // স্টকে থাকা ভ্যারিয়েন্ট থাকলে শুধু সেগুলো ধরা হবে, সব স্টকআউট হলে সবগুলো ধরা হবে
+                // (getDisplayPricing-এর লজিকের সাথে মিল রেখে)।
+                filtered = filtered.filter(p => {
+                    if (Array.isArray(p.variants) && p.variants.length > 0) {
+                        const inStock = p.variants.filter(v => Number(v.stock) > 0);
+                        const pool = inStock.length > 0 ? inStock : p.variants;
+                        return pool.some(v => {
+                            const vp = parseFloat(v.price);
+                            return !isNaN(vp) && vp >= min && vp <= max;
+                        });
+                    }
+                    const price = getDisplayPricing(p).price;
+                    return price >= min && price <= max;
+                });
             }
 
             if (sortOrder === 'low-high') {
@@ -7628,6 +7667,8 @@ function initFilterOptions() {
 
             document.getElementById('homeHeroSection').style.display = 'none';
             document.getElementById('featuredProducts').style.display = 'none';
+            const brandSecF = document.getElementById('ourBrandSection');
+            if (brandSecF) brandSecF.style.display = 'none';
             titleRow.classList.remove('hidden');
 
             if (filtered.length === 0) {
