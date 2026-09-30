@@ -7791,17 +7791,68 @@ function getSocialBrandColor(iconClass) {
             </footer>`;
         }
 
-        function showPolicy(name) {
-            const policy = appData.policies.find(p => p.pagename === name);
-            if(policy) {
-                Swal.fire({
-                    title: name.toUpperCase(),
-                    html: `<div class="text-left text-sm max-h-60 overflow-y-auto text-gray-900 font-normal leading-relaxed">${policy.content}</div>`,
-                    confirmButtonColor: appData.settings.themecolor
-                });
-            }
-        }
+function showPolicy(name) {
+    const policy = appData.policies.find(p => p.pagename === name);
+    if (!policy) return;
 
+    // পলিসি পপআপের স্টাইল (একবারই যোগ হবে)
+    if (!document.getElementById('policyPopupStyle')) {
+        const st = document.createElement('style');
+        st.id = 'policyPopupStyle';
+        st.textContent = `
+            .swal2-container.policy-container {
+                padding: 8px !important;
+                align-items: flex-start !important;
+                overflow-y: auto !important;
+            }
+            .swal-policy-popup {
+                width: 100% !important;
+                max-width: 900px !important;
+                padding: 16px 12px 0 !important;
+                border-radius: 14px !important;
+                margin: 0 auto !important;
+            }
+            .swal-policy-popup .swal2-title {
+                font-size: 1.25rem; padding: 0; margin: 0 0 8px;
+            }
+            .swal-policy-popup .swal2-html-container {
+                margin: 0 !important; padding: 0 !important;
+                overflow: visible !important;
+            }
+            .swal-policy-body {
+                text-align: left; font-size: 16px; line-height: 1.8;
+                color: #111827; font-weight: 400; word-break: break-word;
+            }
+            .swal-policy-body img, .swal-policy-body iframe, .swal-policy-body video { max-width: 100%; height: auto; }
+            .swal-policy-body table { display: block; max-width: 100%; overflow-x: auto; }
+
+            /* ক্রস বাটন: নিচে আটকে থাকবে, লম্বা লেখাতেও স্ক্রল না করেই চাপা যাবে */
+            .swal-policy-popup .swal2-actions {
+                position: sticky; bottom: 0;
+                width: 100%; margin: 12px 0 0 !important;
+                padding: 10px 0 12px; background: #fff;
+            }
+            .swal-policy-popup .swal2-confirm {
+                width: 44px; height: 44px; padding: 0 !important;
+                border-radius: 50% !important;
+                font-size: 22px; line-height: 44px;
+            }
+        `;
+        document.head.appendChild(st);
+    }
+
+    Swal.fire({
+        title: name.toUpperCase(),
+        html: `<div class="swal-policy-body">${policy.content}</div>`,
+        width: '100%',
+        heightAuto: false,
+        showCloseButton: false,
+        confirmButtonText: '&#10005;',
+        confirmButtonAriaLabel: 'Close',
+        confirmButtonColor: appData.settings.themecolor,
+        customClass: { container: 'policy-container', popup: 'swal-policy-popup' }
+    });
+}
         function checkAndOpenComplaint() {
             if(!appData.user) {
                 Swal.fire({
