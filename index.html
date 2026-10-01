@@ -1615,7 +1615,73 @@ if (!window.google.script) {
         
         // NEW: State for Order Filtering
         let currentOrderFilter = 'All'; 
-        let allOrdersCache = []; // Cache orders so we don't need to refetch from server when switching tabs
+        let allOrdersCache = []; // Memory cache for Orders page and filters
+        let ordersServerRefreshInProgress = false;
+        let ordersRefreshFailed = false; // ব্যাকগ্রাউন্ড রিফ্রেশ ফেইল করলে স্পিনারের বদলে "—" দেখাতে
+        const ORDERS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes: avoid repeated server calls
+
+        function getOrdersCacheKey() {
+            return appData.user && appData.user.userid ? `ordersCache_${appData.user.userid}` : null;
+        }
+
+        function readOrdersLocalCache() {
+            const key = getOrdersCacheKey();
+            if (!key) return null;
+
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return null;
+                const cached = JSON.parse(raw);
+                if (!cached || cached.userId !== appData.user.userid || !Array.isArray(cached.orders) || !cached.updatedAt) {
+                    localStorage.removeItem(key);
+                    return null;
+                }
+                return cached;
+            } catch (e) {
+                console.warn('Orders local cache read failed:', e);
+                return null;
+            }
+        }
+
+        function saveOrdersLocalCache(orders) {
+            const key = getOrdersCacheKey();
+            if (!key || !appData.user || !appData.user.userid) return;
+
+            try {
+                localStorage.setItem(key, JSON.stringify({
+                    userId: appData.user.userid,
+                    updatedAt: Date.now(),
+                    orders: Array.isArray(orders) ? orders : []
+                }));
+            } catch (e) {
+                console.warn('Orders local cache save failed:', e);
+            }
+        }
+
+        function clearOrdersLocalCache() {
+            try {
+                const key = getOrdersCacheKey();
+                if (key) localStorage.removeItem(key);
+            } catch (e) {
+                console.warn('Orders local cache clear failed:', e);
+            }
+        }
+
+        // ক্যাশ মুছে না ফেলে "পুরনো" চিহ্নিত করা: ইউজার সাথে সাথে লিস্ট দেখবে (লোডিং ছাড়া),
+        // আর My Orders খুললে ব্যাকগ্রাউন্ডে একবার সার্ভার থেকে সঠিক ডাটা আসবে।
+        let ordersCacheStale = false;
+
+        function markOrdersCacheStale() {
+            ordersCacheStale = true;
+            const key = getOrdersCacheKey();
+            const cached = readOrdersLocalCache();
+            if (!key || !cached) return;
+            try {
+                // updatedAt = 1 (০ নয়, কারণ ০ হলে readOrdersLocalCache ক্যাশটি অবৈধ ধরে মুছে দেয়)
+                localStorage.setItem(key, JSON.stringify({ ...cached, updatedAt: 1 }));
+            } catch (e) {}
+        }
+
         const trackCache = {};
         let cachedPointsResult = null;
         let searchTimeout;
@@ -2824,69 +2890,118 @@ function loadMyOrdersPage() {
     const listEl = document.getElementById('myOrdersList');
     const errorText = document.getElementById('myOrdersErrorText');
 
-    // লোডিং স্টেটাস অন
     if(loadingEl) loadingEl.classList.remove('hidden');
     if(errorEl) errorEl.classList.add('hidden');
     if(emptyEl) emptyEl.classList.add('hidden');
     listEl.innerHTML = '';
 
-    // ৩. ক্যাশ চেক (সাধারণ প্রক্রিয়া)
-    if (allOrdersCache && allOrdersCache.length > 0) {
-        console.log("Loading Orders from Cache...");
-        setTimeout(() => {
-            loadingEl.classList.add('hidden');
-            renderFilteredOrders();
-        }, 400);
-        return;
+    // ==========================================================
+    // ORDERS CACHE OPTIMIZATION
+    // ১) Memory cache থাকলে সরাসরি দেখাবে; server call করবে না।
+    // ২) Memory cache না থাকলে localStorage cache দেখাবে।
+    // ৩) Local cache valid হলে server call করবে না।
+    // ৪) Local cache expired হলে আগে cache দেখাবে, তারপর background refresh করবে।
+    // ==========================================================
+    let cachedOrders = null;
+    let cachedAt = 0;
+
+    if (Array.isArray(allOrdersCache) && allOrdersCache.length > 0) {
+        cachedOrders = allOrdersCache;
+        cachedAt = ordersCacheStale ? 1 : Date.now(); // Memory cache is fresh unless marked stale (e.g. after a new order).
+    } else {
+        const localCache = readOrdersLocalCache();
+        if (localCache) {
+            cachedOrders = localCache.orders;
+            cachedAt = localCache.updatedAt;
+            allOrdersCache = localCache.orders;
+        }
     }
 
-    // ৪. সার্ভার কল (FETCH)
+    if (cachedOrders !== null) {
+        // Cache-এ [] থাকলেও সেটি valid cache; empty state-ও cache করা হবে।
+        loadingEl.classList.add('hidden');
+        renderFilteredOrders();
+
+        const cacheAge = Date.now() - cachedAt;
+        if (cacheAge < ORDERS_CACHE_TTL) {
+            console.log("Orders loaded from fresh cache. Server call skipped.");
+            return;
+        }
+
+        // Expired cache: UI already visible; refresh only once in background.
+        if (ordersServerRefreshInProgress) {
+            console.log("Orders background refresh already in progress.");
+            return;
+        }
+        ordersServerRefreshInProgress = true;
+        console.log("Orders cache expired. Starting background server refresh...");
+    } else {
+        // No cache at all: first load must fetch from server.
+        console.log("No Orders cache found. Fetching from server...");
+        loadingEl.classList.remove('hidden');
+    }
+
+    // ==========================================================
+    // SERVER FETCH
+    // ==========================================================
+    ordersRefreshFailed = false;
     google.script.run
         .withSuccessHandler(res => {
+            ordersServerRefreshInProgress = false;
+
+            // If this was the first load, hide loading now. If background refresh,
+            // cached UI was already visible and remains visible until updated.
             loadingEl.classList.add('hidden');
             console.log("My Orders Response:", res);
             
-                 // ROBUST SUCCESS HANDLER ERROR CHECK
-                 if (!res.success) {
-                     const errorMsg = (res.error || '').toLowerCase();
-                     console.log("Error detected in Success Handler:", errorMsg);
-                     
-                     // শুধুমাত্র ব্যাকএন্ডের এক্স্যাক্ট সেশন এরর মেসেজটিকে সেশন এরর হিসেবে ধরবে
-                     if (errorMsg.includes('unauthorized') || errorMsg.includes('invalid session')) {
-                         handleSessionError();
-                         return;
-                     }
-                     // অন্যান্য এরর (ডাটাবেস লোড ফেইল, নেটওয়ার্ক ইত্যাদি) হলে দেখান
-                     errorEl.classList.remove('hidden');
-                     errorText.innerText = res.error || t('error_loading');
-                     return;
-                 }
+            if (!res.success) {
+                const errorMsg = (res.error || '').toLowerCase();
+                console.log("Error detected in Success Handler:", errorMsg);
+
+                if (errorMsg.includes('unauthorized') || errorMsg.includes('invalid session')) {
+                    handleSessionError();
+                    return;
+                }
+
+                // Keep cached orders visible if a background refresh fails.
+                if (cachedOrders !== null) {
+                    console.warn("Background Orders refresh failed. Keeping cached data.");
+                    ordersRefreshFailed = true;
+                    renderFilteredOrders(); // স্পিনার সরিয়ে "—" দেখাবে
+                    return;
+                }
+
+                errorEl.classList.remove('hidden');
+                errorText.innerText = res.error || t('error_loading');
+                return;
+            }
 
             if (res.success) {
-                allOrdersCache = res.orders || [];
+                allOrdersCache = Array.isArray(res.orders) ? res.orders : [];
+                ordersCacheStale = false;
+                saveOrdersLocalCache(allOrdersCache);
                 renderFilteredOrders();
             }
         })
-        // ==========================================
-        // IMPORTANT: FAILURE HANDLER (Exception Case)
-        // ==========================================
         .withFailureHandler(err => {
+            ordersServerRefreshInProgress = false;
             loadingEl.classList.add('hidden');
             console.error("Orders fetch failed (Server Exception):", err);
             
-            // এরর স্ট্রিং কনভার্ট করে চেক করা
             const errStr = String(err).toLowerCase();
             
-            // যদি সার্ভার সাইড এররেও 'Session', 'Unauthorized' ইত্যাদি থাকে
             if (errStr.includes('session') || errStr.includes('token') || errStr.includes('unauthorized') || errStr.includes('expired') || errStr.includes('access')) {
                 handleSessionError();
-            } else {
-                // সাধারণ এরর দেখান
+            } else if (cachedOrders === null) {
                 errorEl.classList.remove('hidden');
                 errorText.innerText = err.message || t('error_loading');
+            } else {
+                // Background refresh failed: keep showing cached data.
+                console.warn("Background Orders refresh failed. Keeping cached data.");
+                ordersRefreshFailed = true;
+                renderFilteredOrders(); // স্পিনার সরিয়ে "—" দেখাবে
             }
         })
-        // ==========================================
         .getUserOrders(appData.user.userid, appData.sessionToken, appData.user.email);
 }
 
@@ -2934,6 +3049,12 @@ function loadMyOrdersPage() {
             }
 
             emptyEl.classList.add('hidden');
+
+            // রেন্ডারের আগে কোন কার্ডগুলো খোলা ছিল মনে রাখা
+            const openOrderIds = Array.from(listEl.querySelectorAll('[id^="order-details-"]'))
+                .filter(el => !el.classList.contains('hidden'))
+                .map(el => el.id.replace('order-details-', ''));
+
             listEl.innerHTML = ''; 
 
             let hasRenderError = false;
@@ -2950,6 +3071,14 @@ function loadMyOrdersPage() {
                         </div>
                     `;
                 }
+            });
+
+            // রেন্ডারের পর আগের খোলা কার্ডগুলো আবার খুলে দেওয়া
+            openOrderIds.forEach(id => {
+                const d = document.getElementById('order-details-' + id);
+                const ic = document.getElementById('icon-' + id);
+                if (d) d.classList.remove('hidden');
+                if (ic) ic.style.transform = 'rotate(180deg)';
             });
 
             if (hasRenderError) {
@@ -3078,6 +3207,13 @@ function createOrderCard(order) {
     const pointsDisc = parseFloat(order.pointsdiscount) || 0;
     const deliveryDisc = parseFloat(order.deliverydiscount) || 0;
 
+    // সার্ভার ডাটা আসার আগে (অপটিমিস্টিক অর্ডার) ডেলিভারি/ডিসকাউন্ট আসল নয়: স্পিনার দেখাও।
+    // রিফ্রেশ ফেইল করলে স্পিনারের বদলে "—" দেখাও।
+    const isPending = order._pending === true;
+    const pendingMark = '<i class="fas fa-circle-notch fa-spin text-gray-400 text-[11px]"></i>';
+    const pendingFail = '<span class="text-gray-400">—</span>';
+    const pendingHtml = ordersRefreshFailed ? pendingFail : pendingMark;
+
     const initialSummaryHtml = `
     <div class="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
         <div class="flex justify-between items-center text-xs">
@@ -3086,7 +3222,7 @@ function createOrderCard(order) {
         </div>
         <div class="flex justify-between items-center text-xs">
             <span class="text-gray-600 font-medium">${t('delivery')}</span>
-            <span class="font-medium text-gray-800">${deliveryCharge === 0 ? 'FREE' : '৳' + deliveryCharge.toFixed(2)}</span>
+            <span class="font-medium text-gray-800">${isPending ? pendingHtml : (deliveryCharge === 0 ? 'FREE' : '৳' + deliveryCharge.toFixed(2))}</span>
         </div>
     </div>
     `;
@@ -3095,15 +3231,15 @@ function createOrderCard(order) {
     <div class="bg-gray-50 rounded-lg p-3 mt-2 border border-gray-100 space-y-2">
         <div class="flex justify-between items-center text-xs">
             <span class="text-gray-600 font-medium">${t('product_discount')}</span>
-            <span class="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">-৳${couponDisc.toFixed(2)}</span>
+            ${isPending ? pendingHtml : `<span class="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">-৳${couponDisc.toFixed(2)}</span>`}
         </div>
         <div class="flex justify-between items-center text-xs">
             <span class="text-gray-600 font-medium">${t('delivery_discount')}</span>
-            <span class="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">-৳${deliveryDisc.toFixed(2)}</span>
+            ${isPending ? pendingHtml : `<span class="font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">-৳${deliveryDisc.toFixed(2)}</span>`}
         </div>
         <div class="flex justify-between items-center text-xs">
             <span class="text-gray-600 font-medium">${t('points_discount')}</span>
-            <span class="font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">-৳${pointsDisc.toFixed(2)}</span>
+            ${isPending ? pendingHtml : `<span class="font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">-৳${pointsDisc.toFixed(2)}</span>`}
         </div>
     </div>
     `;
@@ -3257,6 +3393,7 @@ function createOrderCard(order) {
         // ২. যদি অর্ডারটি পাওয়া যায়, তাহলে তার স্ট্যাটাস পরিবর্তন করা হচ্ছে
         if (orderIndex !== -1) {
             allOrdersCache[orderIndex].status = 'Cancelled';
+            saveOrdersLocalCache(allOrdersCache);
         }
         
         // ৩. সার্ভার থেকে নতুন করে লোড না করে, পুরাতন ডাটা দিয়েই আবার রেন্ডার করা হচ্ছে
@@ -6905,7 +7042,60 @@ async function placeOrder() {
             // যে আইটেমগুলো অর্ডার করা হয়নি সেগুলো কার্টে রেখে দেওয়া  
             appData.cart = appData.cart.filter(item => item.selected === false);  
 
-            allOrdersCache = [];   
+            // নতুন অর্ডারটি ক্যাশের শুরুতে বসানো হচ্ছে, যাতে My Orders খুললে লোডিং ছাড়াই দেখা যায়।
+            // ক্যাশ "পুরনো" চিহ্নিত থাকে, তাই My Orders খুললে ব্যাকগ্রাউন্ডে সার্ভার থেকে সঠিক ডাটা এসে বসবে।
+            try {
+                const __baseOrders = (Array.isArray(allOrdersCache) && allOrdersCache.length > 0)
+                    ? allOrdersCache
+                    : ((readOrdersLocalCache() || {}).orders || []);
+
+                const __subtotal = selectedItems.reduce((sum, item) =>
+                    sum + Number(item.quantity || item.qty || 1) * Number(item.price || 0), 0);
+
+                const __now = new Date();
+                const __months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const __h12 = (__now.getHours() % 12) || 12;
+                const __orderDate = String(__now.getDate()).padStart(2, '0') + ' ' +
+                    __months[__now.getMonth()] + ' ' + __now.getFullYear() + ', ' +
+                    String(__h12).padStart(2, '0') + ':' + String(__now.getMinutes()).padStart(2, '0') + ' ' +
+                    (__now.getHours() >= 12 ? 'PM' : 'AM');
+
+                const __newOrder = {
+                    orderid: String(res.orderId),
+                    orderdate: __orderDate,
+                    productdetails: JSON.stringify(selectedItems.map(item => ({
+                        id: item.id,
+                        name: item.name,
+                        price: item.price,
+                        quantity: item.quantity || item.qty,
+                        image: item.imagemain,
+                        selectedVariant: item.selectedVariant || ''
+                    }))),
+                    status: 'Processing',
+                    totalamount: Number(res.total) || 0,
+                    district: district,
+                    upazila: upazila,
+                    address: address,
+                    coupondiscount: 0,
+                    pointsdiscount: 0,
+                    deliverydiscount: 0,
+                    subtotal: __subtotal,
+                    deliverycharge: 0,
+                    _pending: true, // সার্ভার ডাটা না আসা পর্যন্ত ডেলিভারি/ডিসকাউন্টে স্পিনার দেখাবে
+                    pointsearned: 0,
+                    shippeddate: '',
+                    deliverydate: ''
+                };
+
+                allOrdersCache = [__newOrder, ...__baseOrders];
+                saveOrdersLocalCache(allOrdersCache);
+                markOrdersCacheStale();
+            } catch (e) {
+                // কোনো কারণে ব্যর্থ হলে আগের মতো ক্যাশ মুছে দেওয়া হবে (পরের বার সার্ভার থেকে আসবে)
+                console.warn('Optimistic order cache failed:', e);
+                allOrdersCache = [];
+                clearOrdersLocalCache();
+            }
             appData.coupon = null;  
             appData.pointsDiscount = 0;  
             appData.user.currentpoints -= res.pointsUsed;  
@@ -7070,6 +7260,7 @@ function handleSessionError() {
     }).then((result) => {
         if (result.isConfirmed) {
             // logout() কল করা হচ্ছে না — এটাই মূল সমাধান
+            allOrdersCache = [];
             appData.user = null;
             appData.sessionToken = null;
             localStorage.removeItem('user');
@@ -7316,6 +7507,7 @@ function silentPointsRefresh() {
 // ✅ নতুন
 function logout() { 
     const userEmail = appData.user ? appData.user.email : null;
+    allOrdersCache = [];
     appData.user = null; 
     appData.sessionToken = null;
     localStorage.removeItem('user'); 
