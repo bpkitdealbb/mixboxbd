@@ -3906,6 +3906,14 @@ window.addEventListener('scroll', () => {
             sessionStorage.setItem('homeScrollPos', scrollY);
         } catch (e) {}
     }
+    // ১.১ প্রোডাক্ট ডিটেলস পেজের স্ক্রল সেভ করা
+    else if (currentPath.startsWith('/product')) {
+        if (!appData.restoringProductScroll) {
+            try {
+                sessionStorage.setItem('scrollPos_' + currentPath, window.scrollY);
+            } catch (e) {}
+        }
+    }
     // ২. ক্যাটাগরি পেজের স্ক্রল সেভ করা
     else if (currentPath.includes('category') || currentPath.includes('brand')) {
         const scrollY = window.scrollY;
@@ -5825,6 +5833,15 @@ function getYouTubeEmbedUrl(url) {
 
 function loadProductDetails(id) {
     const content = document.getElementById('content');
+
+    // ব্যাক চাপলে আগের স্ক্রল পজিশন পড়ে নাও (scrollTo(0,0) এর আগেই)
+    let __restoreY = 0;
+    if (appData.isBackNav) {
+        try {
+            __restoreY = parseInt(sessionStorage.getItem('scrollPos_' + window.location.pathname + window.location.search), 10) || 0;
+        } catch (e) {}
+    }
+
     content.innerHTML = ''; 
     window.scrollTo(0,0);
 
@@ -6025,10 +6042,26 @@ schema: {
         }, viewEventId); // CAPI তে একই আইডি পাস করুন
     }
     // ===========================
-    loadRelatedProducts(p.category, p.id);
+loadRelatedProducts(p.category, p.id);
     renderReviews(p.id);
     setupStarInteraction();
     document.getElementById('content').insertAdjacentHTML('beforeend', getFooterHTML());
+
+    // আগের স্ক্রল পজিশনে ফিরে যাওয়া (ছবি লোড হয়ে পেজ লম্বা হলেও ঠিক থাকবে)
+    if (__restoreY > 0) {
+        appData.restoringProductScroll = true;
+        let tries = 0;
+        const restore = () => {
+            window.scrollTo(0, __restoreY);
+            tries++;
+            if (Math.abs(window.scrollY - __restoreY) > 2 && tries < 8) {
+                setTimeout(restore, 120);
+            } else {
+                setTimeout(() => { appData.restoringProductScroll = false; }, 200);
+            }
+        };
+        requestAnimationFrame(restore);
+    }
 }
 
         // ==========================================
@@ -8370,7 +8403,9 @@ window.onpopstate = function(event) {
         // single visual transition instead of first rendering the current
         // Product Details page at scrollTop=0 and then moving again.
         const currentPath = window.location.pathname + window.location.search;
+        appData.isBackNav = true;   // এটা ব্যাক নেভিগেশন
         loadRoute(currentPath);
+        appData.isBackNav = false;
     }
 };
 // ==========================================
