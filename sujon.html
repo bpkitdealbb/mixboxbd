@@ -138,6 +138,17 @@
                     <div><label class="font-bold block mb-1">Image 4</label><input type="url" id="p_image4" class="w-full border rounded-lg p-2.5" disabled></div>
                     <div><label class="font-bold block mb-1">Image 5</label><input type="url" id="p_image5" class="w-full border rounded-lg p-2.5" disabled></div>
                     <div class="col-span-2"><label class="font-bold block mb-1">Video URL</label><input type="url" id="p_video" class="w-full border rounded-lg p-2.5" disabled></div>
+                    <div class="col-span-1">
+                        <style>
+                            .featured-circle{appearance:none;-webkit-appearance:none;width:22px;height:22px;border:2px solid #9ca3af;border-radius:9999px;background:#fff;cursor:pointer;flex-shrink:0;transition:all .15s;position:relative}
+                            .featured-circle:checked{border-color:#f59e0b;background:#f59e0b;box-shadow:inset 0 0 0 4px #fff}
+                        </style>
+                        <label class="font-bold block mb-1">Featured</label>
+                        <label class="flex items-center gap-2 border rounded-lg p-2.5 cursor-pointer bg-white">
+                            <input type="checkbox" id="p_featured" class="featured-circle">
+                            <span class="text-xs text-gray-700">ফিচার্ড সেকশনে দেখান</span>
+                        </label>
+                    </div>
                     <div class="col-span-3" id="variantSectionWrap">
                         <label class="font-bold block mb-1">Variants</label>
                         <div class="grid grid-cols-12 gap-1.5 text-[10px] font-bold text-gray-500 uppercase px-1 mb-1">
@@ -3273,6 +3284,23 @@ function selectProductCategory(cat) {
     filterProductCategoryOptions('');
 }
 
+// ==========================================
+// FEATURED PRODUCTS (settings -> featuredproductids) লোকাল হেল্পার
+// ==========================================
+function getFeaturedIdList(){
+    return String((localData.settings && localData.settings.featuredproductids) || '')
+        .split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
+}
+function syncLocalFeaturedIds(productId, isFeatured){
+    const id=String(productId).trim();
+    let ids=getFeaturedIdList();
+    const has=ids.indexOf(id)!==-1;
+    if(isFeatured && !has) ids.push(id);
+    else if(!isFeatured && has) ids=ids.filter(x=>x!==id);
+    if(!localData.settings || Array.isArray(localData.settings)) return;
+    localData.settings.featuredproductids=ids.join(',');
+}
+
 function openProductModal(id=null){
     document.getElementById('productForm').reset();document.getElementById('p_stockstatus').value='In Stock';
     document.getElementById('productModalTitle').innerText=id?"Edit Product":"Add Product";
@@ -3285,7 +3313,7 @@ function openProductModal(id=null){
     // NEW: প্রতিবার মডেল খোলার সময় ক্যাটাগরি ড্রপডাউন লাইভ ক্যাটাগরি লিস্ট দিয়ে সাজানো হচ্ছে
     populateCategoryDropdown('');
     // BUG FIX: String() দিয়ে টাইপ ম্যাচিং ঠিক করা হয়েছে (Number vs String সমস্যা সমাধান)
-    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;populateCategoryDropdown(p.category);document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';
+    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;populateCategoryDropdown(p.category);document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';document.getElementById('p_featured').checked=getFeaturedIdList().indexOf(String(p.id).trim())!==-1;
         // NEW: ভ্যারিয়েন্ট থাকলে প্রতিটার জন্য একটা স্ট্রাকচার্ড রো বসানো (regularprice ও costprice সহ — আগের বাগ যেটা এডিট করলে ডিসকাউন্ট মুছে দিত, সেটাও এখানেই ঠিক হয়ে গেল)
         const hasVariant = Array.isArray(p.variants) && p.variants.length>0;
         modalOriginallyHadVariants = hasVariant;
@@ -3350,19 +3378,19 @@ function parseVariantsLocal(variantsStr, mainPrice){
 }
 
 function doSaveProduct(hasVariant){
-    const d={id:document.getElementById('p_id').value.trim(),name:document.getElementById('p_name').value.trim(),category:document.getElementById('p_category').value.trim(),price:parseFloat(document.getElementById('p_price').value)||0,discountprice:parseFloat(document.getElementById('p_discount').value)||0,totalstock:parseInt(document.getElementById('p_stock').value)||0,stockstatus:document.getElementById('p_stockstatus').value,costprice:document.getElementById('p_costprice').value.trim(),extradeliverycharge:parseFloat(document.getElementById('p_extra_delivery').value)||0,imagemain:document.getElementById('p_image').value.trim(),image2:document.getElementById('p_image2').value.trim(),image3:document.getElementById('p_image3').value.trim(),image4:document.getElementById('p_image4').value.trim(),image5:document.getElementById('p_image5').value.trim(),videourl:document.getElementById('p_video').value.trim(),description:document.getElementById('p_desc').value.trim(),variants:document.getElementById('p_variants').value.trim()};
+    const d={id:document.getElementById('p_id').value.trim(),name:document.getElementById('p_name').value.trim(),category:document.getElementById('p_category').value.trim(),price:parseFloat(document.getElementById('p_price').value)||0,discountprice:parseFloat(document.getElementById('p_discount').value)||0,totalstock:parseInt(document.getElementById('p_stock').value)||0,stockstatus:document.getElementById('p_stockstatus').value,costprice:document.getElementById('p_costprice').value.trim(),extradeliverycharge:parseFloat(document.getElementById('p_extra_delivery').value)||0,imagemain:document.getElementById('p_image').value.trim(),image2:document.getElementById('p_image2').value.trim(),image3:document.getElementById('p_image3').value.trim(),image4:document.getElementById('p_image4').value.trim(),image5:document.getElementById('p_image5').value.trim(),videourl:document.getElementById('p_video').value.trim(),description:document.getElementById('p_desc').value.trim(),variants:document.getElementById('p_variants').value.trim(),featured:document.getElementById('p_featured').checked};
     if(!d.id||!d.name)return Swal.fire('Warning','ID, Name required','warning');
     // ভ্যারিয়েন্ট প্রোডাক্টের ক্ষেত্রে বেস Price লাগে না (প্রতিটা ভ্যারিয়েন্টের নিজস্ব দাম আছে),
     // তাই শুধু non-variant প্রোডাক্টের জন্যই Price আবশ্যক রাখা হলো
     if(!hasVariant && !d.price)return Swal.fire('Warning','ID, Name, Price required','warning');
-    Swal.fire({title:'Syncing...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});google.script.run.withSuccessHandler(res=>{if(res.success){Swal.fire('Saved!','','success');closeProductModal();const ld={...d,variants:parseVariantsLocal(d.variants,d.price)};const idx=localData.products.findIndex(x=>String(x.id)===String(d.id));if(idx>-1)localData.products[idx]={...localData.products[idx],...ld};else localData.products.unshift(ld);renderProducts(document.getElementById('contentArea'));}else Swal.fire('Error',res.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminSaveProduct(adminSecret,d);
+    Swal.fire({title:'Syncing...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});google.script.run.withSuccessHandler(res=>{if(res.success){Swal.fire('Saved!','','success');closeProductModal();syncLocalFeaturedIds(d.id,d.featured);const ld={...d,variants:parseVariantsLocal(d.variants,d.price)};const idx=localData.products.findIndex(x=>String(x.id)===String(d.id));if(idx>-1)localData.products[idx]={...localData.products[idx],...ld};else localData.products.unshift(ld);renderProducts(document.getElementById('contentArea'));}else Swal.fire('Error',res.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).adminSaveProduct(adminSecret,d);
 }
 
 
 function deleteProduct(id){
     Swal.fire({title:'Delete?',icon:'warning',showCancelButton:true,confirmButtonColor:'#d33'}).then(r=>{
         // BUG FIX: String() দিয়ে টাইপ ম্যাচিং ঠিক করা হয়েছে
-        if(r.isConfirmed){google.script.run.withSuccessHandler(res=>{if(res.success){localData.products=localData.products.filter(x=>String(x.id)!==String(id));renderProducts(document.getElementById('contentArea'));}}).adminDeleteProduct(adminSecret,id);}
+        if(r.isConfirmed){google.script.run.withSuccessHandler(res=>{if(res.success){localData.products=localData.products.filter(x=>String(x.id)!==String(id));syncLocalFeaturedIds(id,false);renderProducts(document.getElementById('contentArea'));}}).adminDeleteProduct(adminSecret,id);}
     });
 }
 function triggerManualDeploy(){
