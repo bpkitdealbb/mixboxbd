@@ -5458,36 +5458,32 @@ function stopSlider() {
             else if (url) window.open(url, '_blank');
         }
 
-        function loadTopCategories() {
-            const container = document.getElementById('topCategories');
-            if (!container) return;
-            
-            const topCats = appData.categories.filter(c => c.istop === 'yes');
-            const allMainCats = topCats.map(c => c.categoryname.split(' > ')[0]);
-            const uniqueMainCats = [...new Set(allMainCats)];
-            const cats = uniqueMainCats.map(mainName => topCats.find(c => c.categoryname === mainName || c.categoryname.startsWith(mainName + ' > '))).filter(c => c);
-            
-        let html = cats.map(c => {
-            const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
-            return `
-<div onclick="navigateTo('/category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer group">
-                <div class="aspect-square rounded-xl overflow-hidden border border-gray-100 group-hover:border-primary/30 transition">
-                    <img src="${c.categoryimageurl}" class="w-full h-full object-cover transform group-hover:scale-110 transition" loading="lazy">
-                </div>
-            </div>
-            `;
-        }).join('');
-            
-            const remainder = cats.length % 4;
-            if (remainder > 0) {
-                const emptySpaces = 4 - remainder;
-                for (let i = 0; i < emptySpaces; i++) {
-                    html += `<div class="invisible"></div>`;
-                }
-            }
-            
-            container.innerHTML = html;
-        }
+function loadTopCategories() {
+    const container = document.getElementById('topCategories');
+    if (!container) return;
+
+    const topCats = appData.categories.filter(c => c.istop === 'yes');
+    const allMainCats = topCats.map(c => c.categoryname.split(' > ')[0]);
+    const uniqueMainCats = [...new Set(allMainCats)];
+    const cats = uniqueMainCats
+        .map(mainName => topCats.find(c => c.categoryname === mainName || c.categoryname.startsWith(mainName + ' > ')))
+        .filter(c => c);
+
+    // সব সারি মাঝখান থেকে সাজবে, প্রতি সারিতে সর্বোচ্চ ৪টা
+    container.className = '';
+    container.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:center;gap:0.75rem;';
+
+    container.innerHTML = cats.map(c => {
+        const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
+        return `
+<div onclick="navigateTo('/category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer group" style="width:calc((100% - 2.25rem) / 4);">
+    <div class="aspect-square rounded-xl overflow-hidden border border-gray-100 group-hover:border-primary/30 transition">
+        <img src="${c.categoryimageurl}" class="w-full h-full object-cover transform group-hover:scale-110 transition" loading="lazy">
+    </div>
+</div>
+`;
+    }).join('');
+}
 let brandSliderInterval = null; // গ্লোবাল ভেরিয়েবলে কোথাও বসাতে পারেন
 
 function loadOurBrandSection() {
