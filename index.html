@@ -1158,6 +1158,15 @@ font-weight: bold;
                         <div class="flex-1 overflow-hidden">
                             <h3 id="userFullName" class="font-bold text-lg truncate"></h3>
                             <p id="userEmail" class="text-xs text-gray-500 truncate"></p>
+                            <!-- ইমেইল ছাড়া রেজিস্টার করা ইউজারের জন্য: ইনপুট বক্স নেই, শুধু Continue with Google -->
+                            <div id="addEmailWrap" class="hidden relative my-1 w-[220px] max-w-full min-h-[32px] overflow-hidden rounded-lg cursor-pointer border border-[var(--primary-color)] bg-[var(--primary-color)] text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.99]">
+                                <div class="absolute inset-0 z-20 flex items-center justify-center opacity-[0.01]">
+                                    <div id="addEmailGoogleBtn" class="w-full flex justify-center"></div>
+                                </div>
+                                <div class="relative z-10 flex items-center justify-center gap-1 min-h-[32px] px-3 text-xs font-semibold text-white pointer-events-none select-none">
+                                    <i class="fas fa-envelope"></i><span data-i18n="add_your_email">Add your email</span>
+                                </div>
+                            </div>
                             <p id="userPhone" class="text-xs text-gray-500"></p>
                         </div>
                     </div>
@@ -1280,7 +1289,7 @@ font-weight: bold;
             <!-- name + autocomplete যোগ করা হলো যাতে ব্রাউজার এটিকে ফর্ম-ফিল্ড হিসেবে চিনে সাজেশন দেখাতে পারে -->
             <input type="text" id="registerName" name="name" autocomplete="name" data-placeholder-ph="full_name_ph" placeholder="Full Name" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- Registration Email: browser saved-email autofill বন্ধ রেখে Google account chooser ব্যবহার করা হবে -->
-            <div class="relative">
+            <div class="relative" id="registerEmailWrap">
                 <input type="email" id="registerEmail" name="register_email" autocomplete="email" data-placeholder-ph="email_ph" placeholder="Email Address" maxlength="50" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
                 <div id="googleEmailChooserHint" class="hidden relative mt-1 w-full min-h-[36px] overflow-hidden rounded-lg cursor-pointer border border-[var(--primary-color)] bg-[var(--primary-color)] text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.99]" aria-label="লগইন থাকা Email থেকে নির্বাচন করতে ক্লিক করুন">
                     <div class="absolute inset-0 z-20 flex items-center justify-center opacity-[0.01]">
@@ -1293,16 +1302,20 @@ font-weight: bold;
             </div>
             <!-- UPDATED: type="tel" and maxlength="11" -->
             <input type="tel" id="registerPhone" name="phone" autocomplete="tel" data-placeholder-ph="phone_ph" placeholder="Mobile Number" maxlength="11" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            <!-- মোবাইল-মোডে OTP ভেরিফাই হলে এই লেখা দেখাবে -->
+            <p id="registerPhoneVerified" class="hidden text-xs font-bold text-green-600 -mt-1 px-1"><i class="fas fa-check-circle mr-1"></i><span data-i18n="phone_verified">Mobile number verified</span></p>
             <!-- UPDATED: maxlength="15" -->
+            <div id="registerPasswordWrap" class="space-y-3">
             <input type="password" id="registerPassword" name="new-password" autocomplete="new-password" data-placeholder-ph="pass_ph" placeholder="Password (Min 6 chars)" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
             <!-- UPDATED: maxlength="15" -->
             <input type="password" id="registerConfirmPassword" name="confirm-password" autocomplete="new-password" data-placeholder-ph="confirm_pass_ph" placeholder="Confirm Password" maxlength="15" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none">
+            </div>
             
             <!-- NEW: OTP Section (Hidden by default) -->
             <div id="otpVerificationContainer" class="hidden space-y-4 pt-4 border-t border-gray-200">
                 <div class="text-center mb-2 text-sm text-gray-600">
-                    <i class="fas fa-envelope-open-text text-primary text-xl mb-1 block"></i>
-                    We sent a code to your email.
+                    <i id="registerOtpIcon" class="fas fa-envelope-open-text text-primary text-xl mb-1 block"></i>
+                    <span id="registerOtpHint">We sent a code to your email.</span>
                 </div>
                 <div class="relative">
                     <input type="text" id="registerOtp" autocomplete="one-time-code" placeholder="Enter 6-digit OTP" class="w-full border rounded-lg p-3 focus:ring-1 focus:ring-primary outline-none text-center tracking-widest text-lg font-bold bg-gray-50">
@@ -1311,12 +1324,17 @@ font-weight: bold;
                     <span id="otpTimerDisplay" class="text-primary font-bold">05:00</span>
                     <button type="button" id="resendOtpBtn" onclick="handleResendOtp()" class="text-gray-400 underline cursor-not-allowed" disabled>Resend OTP</button>
                 </div>
+                <!-- শুধু মোবাইল-মোডে: ভুল নাম্বার দিলে পরিবর্তনের জন্য -->
+                <div class="text-center">
+                    <button type="button" id="registerChangePhoneBtn" onclick="resetMobileRegisterFlow()" class="hidden text-xs text-gray-500 underline" data-i18n="change_number">Change number</button>
+                </div>
             </div>
             <!-- END OTP Section -->
 
             <button type="button" id="registerBtn" onclick="performRegistration()" class="w-full bg-primary text-white py-3 rounded-lg font-bold hover:opacity-90 mt-2" data-i18n="create_acc_btn">Create Account</button>
 
             <!-- Create Account বাটনের নিচে Google বাটন -->
+            <div id="registerGoogleWrap" class="space-y-3">
             <div class="flex items-center gap-2 text-xs text-gray-400 py-1">
                 <div class="flex-1 h-px bg-gray-200"></div>
                 <span data-i18n="or_google">অথবা</span>
@@ -1324,6 +1342,7 @@ font-weight: bold;
             </div>
             <!-- Google থেকে শুধু ইমেইল আনার বাটন: সিলেক্ট করলে ইমেইল ফিল্ড অটো-ফিল হবে (নতুন ট্যাব/পেজ খুলবে না) -->
             <div id="googleSignInDiv" class="w-full flex justify-center"></div>
+            </div>
 
             <div class="text-center text-sm"><span data-i18n="already_acc">Already have an account?</span> <button type="button" onclick="navigateTo('/login')" class="text-primary font-bold" data-i18n="login">Login</button></div>
         </form>
@@ -1467,8 +1486,15 @@ if (!window.google.script) {
 
         let googleSignInInitialized = false;
         let googleEmailChooserHintBound = false;
+        // Google credential কোন কাজে ব্যবহার হবে: 'register' = রেজিস্টার ফর্মের ইমেইল ফিল্ডে বসবে,
+        // 'addEmail' = মাই অ্যাকাউন্টে "Add your email" (সার্ভারে ভেরিফাই হয়ে শিটে সেভ হবে)
+        let googleCredentialPurpose = 'register';
 
         function handleGoogleEmailResponse(response) {
+            if (googleCredentialPurpose === 'addEmail') {
+                if (response && response.credential) handleAddEmailCredential(response.credential);
+                return;
+            }
             try {
                 if (!response || !response.credential) return;
                 const base64Payload = response.credential.split('.')[1];
@@ -1573,7 +1599,69 @@ if (!window.google.script) {
             return true;
         }
 
+        // একবারই initialize হয় (callback একটাই - উপরের purpose দিয়ে কাজ ভাগ হয়)
+        function ensureGoogleInitialized() {
+            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) return false;
+            if (!googleSignInInitialized) {
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleGoogleEmailResponse,
+                    use_fedcm_for_button: true,
+                    button_auto_select: false
+                });
+                googleSignInInitialized = true;
+            }
+            return true;
+        }
+
+        // মাই অ্যাকাউন্টের "Add your email" বাটনের উপর আসল Google বাটন (প্রায় স্বচ্ছ) বসানো
+        function initAddEmailGoogleButton() {
+            googleCredentialPurpose = 'addEmail';
+            const tryRender = () => {
+                const box = document.getElementById('addEmailGoogleBtn');
+                if (!box) return true; // পেজ বদলে গেছে - আর চেষ্টা দরকার নেই
+                if (!ensureGoogleInitialized()) return false;
+                box.innerHTML = '';
+                google.accounts.id.renderButton(box, {
+                    theme: 'outline', size: 'large', width: 220, text: 'continue_with',
+                    locale: appData.language === 'bn' ? 'bn' : 'en'
+                });
+                return true;
+            };
+            if (tryRender()) return;
+            let attempts = 0;
+            const iv = setInterval(() => {
+                attempts++;
+                if (tryRender() || attempts > 20) clearInterval(iv);
+            }, 250);
+        }
+
+        function handleAddEmailCredential(credential) {
+            if (!appData.user || !appData.user.userid) { handleSessionError(); return; }
+            Swal.fire({ title: t('adding_email'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            google.script.run
+                .withSuccessHandler(res => {
+                    Swal.close();
+                    if (res && res.success && res.email) {
+                        appData.user.email = res.email;
+                        localStorage.setItem('user', JSON.stringify(appData.user));
+                        const emailEl = document.getElementById('userEmail');
+                        const wrap = document.getElementById('addEmailWrap');
+                        if (emailEl) { emailEl.textContent = res.email; emailEl.classList.remove('hidden'); }
+                        if (wrap) wrap.classList.add('hidden');
+                        Swal.fire({ icon: 'success', title: t('email_added'), text: res.email, timer: 2000, showConfirmButton: false });
+                    } else {
+                        const msg = (res && res.error) ? res.error : 'Failed';
+                        if (/unauthorized|session/i.test(msg)) handleSessionError();
+                        else Swal.fire('Error', msg, 'error');
+                    }
+                })
+                .withFailureHandler(handleAppError)
+                .linkGoogleEmail(appData.user.userid, appData.sessionToken, credential);
+        }
+
         function waitAndInitGoogleSignIn() {
+            googleCredentialPurpose = 'register';
             setupRegistrationEmailChooser();
             if (initGoogleSignInButton()) return;
             let attempts = 0;
@@ -1982,6 +2070,19 @@ ask_buy_whatsapp: "WhatsApp-এ অর্ডার বা জিজ্ঞাস�
                 pass_weak: "Weak password",
                 otp_sent_msg: "OTP Sent!",
                 check_inbox: "Please check your email inbox",
+                check_phone_sms: "Please check the SMS on your mobile number",
+                otp_sent_to_email: "We sent a code to your email.",
+                otp_sent_to_mobile: "We sent a code to your mobile number by SMS.",
+                email_optional_ph: "Email Address (Optional)",
+                verify_otp_btn: "Verify OTP",
+                verifying: "Verifying...",
+                phone_verified: "Mobile number verified",
+                change_number: "Change number",
+                enter_mobile: "Enter mobile number to receive OTP",
+                add_your_email: "Add your email",
+                adding_email: "Adding email...",
+                email_added: "Email added successfully",
+                verify_expired_retry: "Verification expired. Please verify your mobile number again.",
                 reset_success: "Password reset successful!",
                 please_login: "Please login",
                 order_placed: "Order Placed!",
@@ -2127,6 +2228,19 @@ our_brands: "আমাদের ব্র্যান্ডসমূহ",
                 pass_weak: "দুর্বল পাসওয়ার্ড",
                 otp_sent_msg: "ওটিপি পাঠানো হয়েছে!",
                 check_inbox: "অনুগ্রহ করে আপনার ইমেইল ইনবক্স চেক করুন",
+                check_phone_sms: "অনুগ্রহ করে আপনার মোবাইল নাম্বারের এসএমএস চেক করুন",
+                otp_sent_to_email: "আমরা আপনার ইমেইলে একটি কোড পাঠিয়েছি।",
+                otp_sent_to_mobile: "আমরা আপনার মোবাইল নাম্বারে এসএমএসে একটি কোড পাঠিয়েছি।",
+                email_optional_ph: "ইমেইল ঠিকানা (ঐচ্ছিক)",
+                verify_otp_btn: "ওটিপি যাচাই করুন",
+                verifying: "যাচাই হচ্ছে...",
+                phone_verified: "মোবাইল নাম্বার ভেরিফাই হয়েছে",
+                change_number: "নাম্বার পরিবর্তন করুন",
+                enter_mobile: "ওটিপি পেতে মোবাইল নাম্বার লিখুন",
+                add_your_email: "আপনার ইমেইল যোগ করুন",
+                adding_email: "ইমেইল যোগ হচ্ছে...",
+                email_added: "ইমেইল সফলভাবে যোগ হয়েছে",
+                verify_expired_retry: "ভেরিফিকেশনের মেয়াদ শেষ। অনুগ্রহ করে মোবাইল নাম্বার আবার ভেরিফাই করুন।",
                 reset_success: "পাসওয়ার্ড রিসেট সফল হয়েছে!",
                 please_login: "অনুগ্রহ করে লগইন করুন",
                 order_placed: "অর্ডার সফল হয়েছে!",
@@ -2858,7 +2972,24 @@ case 'brand':
             document.getElementById('content').appendChild(tpl.content.cloneNode(true));
             updateUIText(); // Ensure static content in templates is translated
             if (id === 'registerTemplate') {
+                // টেমপ্লেট প্রতিবার নতুন তৈরি হয়, তাই ইমেইল-চুজার লিসেনার আবার বাইন্ড হতে হবে
+                googleEmailChooserHintBound = false;
+                setupRegisterUiForOtpMethod();
                 waitAndInitGoogleSignIn();
+            }
+            if (id === 'forgotPasswordTemplate') {
+                // otpmethod 'mobile' হলে ইমেইল ইনপুটকে মোবাইল নাম্বার ইনপুটে বদলে দেওয়া হচ্ছে
+                const otpMethod = (appData.settings.otpmethod || 'email').toLowerCase();
+                const inp = document.getElementById('forgotEmail');
+                if (inp && otpMethod === 'mobile') {
+                    inp.type = 'text';
+                    inp.setAttribute('maxlength', '11');
+                    inp.setAttribute('placeholder', t('phone_ph') + ' (01XXXXXXXXX)');
+                    inp.removeAttribute('data-placeholder-ph');
+                    // "ওটিপি পেতে ইমেইল লিখুন" লেখাটাও মোবাইল-মোডে বদলে যাবে
+                    const sub = document.querySelector('[data-i18n="enter_email"]');
+                    if (sub) { sub.setAttribute('data-i18n', 'enter_mobile'); sub.innerText = t('enter_mobile'); }
+                }
             }
         }
 
@@ -3002,7 +3133,7 @@ function loadMyOrdersPage() {
                 renderFilteredOrders(); // স্পিনার সরিয়ে "—" দেখাবে
             }
         })
-        .getUserOrders(appData.user.userid, appData.sessionToken, appData.user.email);
+        .getUserOrders(appData.user.userid, appData.sessionToken);
 }
 
         function filterOrders(status) {
@@ -3449,18 +3580,207 @@ function createOrderCard(order) {
             }, 1000);
         }
 
+        // ==========================================================
+        // OTP পাঠানোর পর পপ-আপে কী লেখা দেখাবে (ইমেইল নাকি মোবাইল)
+        // ==========================================================
+        function otpSentHintText() {
+            const m = (appData.settings.otpmethod || 'email').toLowerCase();
+            return m === 'mobile' ? t('check_phone_sms') : t('check_inbox');
+        }
+
+        // ==========================================================
+        // মোবাইল (SMS) মোডে রেজিস্টার পেজের UI:
+        // ধাপ ১ (phone) : Full Name + Mobile Number → Send OTP
+        // ধাপ ২ (otp)   : OTP + ঐচ্ছিক ইমেইল + পাসওয়ার্ড → এক কলেই যাচাই ও অ্যাকাউন্ট তৈরি
+        // ইমেইল-মোডে কিছুই বদলায় না (আগের মতো একই ফর্ম)
+        // ==========================================================
+        let registerMobileStep = 'phone';
+
+        function setupRegisterUiForOtpMethod() {
+            const otpMethod = (appData.settings.otpmethod || 'email').toLowerCase();
+            const hintEl = document.getElementById('registerOtpHint');
+            const iconEl = document.getElementById('registerOtpIcon');
+
+            if (otpMethod !== 'mobile') {
+                if (hintEl) hintEl.textContent = t('otp_sent_to_email');
+                return;
+            }
+
+            registerMobileStep = 'phone';
+
+            if (hintEl) hintEl.textContent = t('otp_sent_to_mobile');
+            if (iconEl) iconEl.className = 'fas fa-sms text-primary text-xl mb-1 block';
+
+            // ইমেইল ফিল্ড ঐচ্ছিক - প্লেসহোল্ডারেও সেটা লেখা
+            const emailInput = document.getElementById('registerEmail');
+            if (emailInput) {
+                emailInput.setAttribute('data-placeholder-ph', 'email_optional_ph');
+                emailInput.placeholder = t('email_optional_ph');
+            }
+
+            ['registerEmailWrap', 'registerPasswordWrap', 'registerGoogleWrap'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+
+            const btn = document.getElementById('registerBtn');
+            if (btn) { btn.removeAttribute('data-i18n'); btn.textContent = t('send_otp_btn'); }
+        }
+
+        function showMobileOtpStep(remainingSeconds) {
+            registerMobileStep = 'otp';
+            const otpSection = document.getElementById('otpVerificationContainer');
+            const otpInput = document.getElementById('registerOtp');
+            const btn = document.getElementById('registerBtn');
+            document.getElementById('registerName').readOnly = true;
+            document.getElementById('registerPhone').readOnly = true;
+            otpSection.classList.remove('hidden');
+            otpInput.value = '';
+            document.getElementById('registerChangePhoneBtn').classList.remove('hidden');
+            btn.textContent = t('verify_otp_btn');
+            btn.classList.remove('bg-primary');
+            btn.classList.add('bg-green-600');
+            startOtpTimer(remainingSeconds);
+        }
+
+
+        function resetMobileRegisterFlow() {
+            clearInterval(otpTimerInterval);
+            registerMobileStep = 'phone';
+            document.getElementById('registerName').readOnly = false;
+            document.getElementById('registerPhone').readOnly = false;
+            document.getElementById('otpVerificationContainer').classList.add('hidden');
+            document.getElementById('registerChangePhoneBtn').classList.add('hidden');
+            document.getElementById('registerPhoneVerified').classList.add('hidden');
+            ['registerEmailWrap', 'registerPasswordWrap', 'registerGoogleWrap'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            const btn = document.getElementById('registerBtn');
+            btn.textContent = t('send_otp_btn');
+            btn.classList.remove('bg-green-600');
+            btn.classList.add('bg-primary');
+        }
+
+        function performMobileRegistration() {
+            const name = document.getElementById('registerName').value.trim();
+            const phone = document.getElementById('registerPhone').value.trim();
+
+            // ধাপ ১: নাম ও মোবাইল যাচাই করে OTP পাঠানো
+            if (registerMobileStep === 'phone') {
+                if (!name || !phone) return Swal.fire('Error', t('fill_all'), 'error');
+                if (!/^01\d{9}$/.test(phone)) return Swal.fire('Error', t('invalid_phone'), 'error');
+
+                Swal.fire({ title: t('sending'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                google.script.run
+                    .withSuccessHandler(res => {
+                        Swal.close();
+                        if (res.remainingSeconds !== undefined) {
+                            Swal.fire({
+                                icon: 'info', title: 'Please wait',
+                                text: `You requested an OTP recently. Please wait ${res.remainingSeconds} seconds before trying again.`,
+                                confirmButtonColor: appData.settings.themecolor || '#2563eb'
+                            });
+                            showMobileOtpStep(res.remainingSeconds);
+                            showMobileRegistrationFields();
+                            return;
+                        }
+                        if (res.success) {
+                            showMobileOtpStep();
+                            showMobileRegistrationFields();
+                            Swal.fire({ icon: 'success', title: t('otp_sent_msg'), text: t('check_phone_sms'), timer: 1800, showConfirmButton: false });
+                        } else {
+                            Swal.fire('Error', res.error || 'Could not send OTP.', 'error');
+                        }
+                    })
+                    .withFailureHandler(handleAppError)
+                    .sendRegistrationOtp(phone);
+                return;
+            }
+
+            // ধাপ ২: OTP, পাসওয়ার্ড ও প্রয়োজনীয় তথ্য একসাথে পাঠানো হবে।
+            // সার্ভার একই execution-এ OTP যাচাই করে account তৈরি করবে; কোনো verifyToken নেই।
+            const otp = document.getElementById('registerOtp').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const pass = document.getElementById('registerPassword').value;
+            const confirm = document.getElementById('registerConfirmPassword').value;
+
+            if (!otp || !/^\d{6}$/.test(otp)) return Swal.fire('Warning', 'Please enter a valid 6-digit OTP.', 'warning');
+            if (!pass) return Swal.fire('Error', t('fill_all'), 'error');
+            if (email && !isValidEmail(email)) return Swal.fire('Error', t('invalid_email_format'), 'error');
+            if (pass.length < 6) return Swal.fire('Error', t('pass_weak'), 'error');
+            if (pass !== confirm) return Swal.fire('Error', t('pass_mismatch'), 'error');
+
+            const userData = {
+                fullname: name,
+                email: email,
+                mobilenumber: phone,
+                password: pass,
+                language: appData.language
+            };
+
+            const registerBtn = document.getElementById('registerBtn');
+            if (registerBtn) registerBtn.disabled = true;
+            Swal.fire({ title: t('creating'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            google.script.run
+                .withSuccessHandler(res => {
+                    Swal.close();
+                    if (registerBtn) registerBtn.disabled = false;
+                    if (res && res.success) {
+                        clearInterval(otpTimerInterval);
+                        Swal.fire('Success', 'Registration Successful! Please Login.', 'success').then(() => {
+                            navigateTo('/login');
+                        });
+                    } else {
+                        const error = (res && res.error) || 'Registration failed. Please try again.';
+                        if (/expired|too many incorrect|invalid request/i.test(error)) {
+                            resetMobileRegisterFlow();
+                        }
+                        Swal.fire('Error', error, 'error');
+                    }
+                })
+                .withFailureHandler(error => {
+                    if (registerBtn) registerBtn.disabled = false;
+                    handleAppError(error);
+                })
+                .verifyAndRegister(phone, otp, userData);
+        }
+
+        function showMobileRegistrationFields() {
+            // Email is optional; password fields are shown alongside OTP. Google sign-in remains
+            // hidden here so it cannot bypass the phone OTP step in the mobile-registration flow.
+            ['registerEmailWrap', 'registerPasswordWrap'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('hidden');
+            });
+            const btn = document.getElementById('registerBtn');
+            if (btn) {
+                btn.textContent = t('create_acc_btn');
+                btn.classList.remove('bg-green-600');
+                btn.classList.add('bg-primary');
+            }
+        }
+
         function performRegistration() {
+            // মোবাইল (SMS) মোডে OTP পাঠানো ও এক-কল রেজিস্ট্রেশন; ইমেইল-মোডের আগের ফ্লো অপরিবর্তিত
+            if ((appData.settings.otpmethod || 'email').toLowerCase() === 'mobile') return performMobileRegistration();
             const name = document.getElementById('registerName').value.trim();
             const email = document.getElementById('registerEmail').value.trim();
             const phone = document.getElementById('registerPhone').value.trim();
             const pass = document.getElementById('registerPassword').value;
             const confirm = document.getElementById('registerConfirmPassword').value;
-            
-            if (!name || !email || !phone || !pass) return Swal.fire('Error', t('fill_all'), 'error');
-            
-            if (!isValidEmail(email)) return Swal.fire('Error', t('invalid_email_format'), 'error');
+            // OTP কোন মাধ্যমে পাঠানো হবে তা settings-এর otpmethod ঠিক করে দেয়
+            const otpMethod = (appData.settings.otpmethod || 'email').toLowerCase();
+
+            if (!name || !phone || !pass) return Swal.fire('Error', t('fill_all'), 'error');
+            if (otpMethod === 'email' && !email) return Swal.fire('Error', t('fill_all'), 'error');
+
+            if (otpMethod === 'email' && !isValidEmail(email)) return Swal.fire('Error', t('invalid_email_format'), 'error');
             
             if (!phone.match(/^01\d{9}$/)) return Swal.fire('Error', t('invalid_phone'), 'error');
+
+            // OTP যে আইডেন্টিফায়ারে পাঠানো হবে
+            const otpIdentifier = (otpMethod === 'mobile') ? phone : email;
             
             if (pass.length < 6) return Swal.fire('Error', t('pass_weak'), 'error');
             if (pass !== confirm) return Swal.fire('Error', t('pass_mismatch'), 'error');
@@ -3498,13 +3818,13 @@ function createOrderCard(order) {
                             registerBtn.classList.remove('bg-primary');
                             registerBtn.classList.add('bg-green-600'); 
                             startOtpTimer();
-                            Swal.fire({ icon: 'success', title: t('otp_sent_msg'), text: t('check_inbox'), timer: 2000, showConfirmButton: false });
+                            Swal.fire({ icon: 'success', title: t('otp_sent_msg'), text: otpSentHintText(), timer: 2000, showConfirmButton: false });
                         } else {
                             Swal.fire('Error', res.error, 'error');
                         }
                     })
                     .withFailureHandler(handleAppError)
-                    .sendRegistrationOtp(email);
+                    .sendRegistrationOtp(otpIdentifier);
                     
             } else {
                 const otp = otpInput.value.trim();
@@ -3526,15 +3846,18 @@ function createOrderCard(order) {
                         }
                     })
                     .withFailureHandler(handleAppError)
-                    .verifyAndRegister(email, otp, userData);
+                    .verifyAndRegister(otpIdentifier, otp, userData);
             }
         }
 
         function handleResendOtp() {
             if (!otpResendEnabled) return;
             
+            const otpMethod = (appData.settings.otpmethod || 'email').toLowerCase();
             const email = document.getElementById('registerEmail').value.trim();
-            if(!email) return Swal.fire('Error', 'Email missing', 'error');
+            const phone = document.getElementById('registerPhone').value.trim();
+            const otpIdentifier = (otpMethod === 'mobile') ? phone : email;
+            if(!otpIdentifier) return Swal.fire('Error', otpMethod === 'mobile' ? 'Mobile number missing' : 'Email missing', 'error');
 
             const resendBtn = document.getElementById('resendOtpBtn');
             resendBtn.disabled = true;
@@ -3551,7 +3874,7 @@ function createOrderCard(order) {
                         });
                         startOtpTimer(res.remainingSeconds);
                     } else if(res.success) {
-                        Swal.fire({ icon: 'success', title: 'OTP Sent', text: 'Check your inbox', timer: 1500, showConfirmButton: false });
+                        Swal.fire({ icon: 'success', title: t('otp_sent_msg'), text: otpSentHintText(), timer: 1500, showConfirmButton: false });
                         startOtpTimer();
                     } else {
                         Swal.fire('Error', res.error, 'error');
@@ -3559,7 +3882,7 @@ function createOrderCard(order) {
                     }
                 })
                 .withFailureHandler(handleAppError)
-                .sendRegistrationOtp(email);
+                .sendRegistrationOtp(otpIdentifier);
         }
 // ==========================================
 // INITIALIZATION (PAGE LOAD)
@@ -7148,7 +7471,18 @@ async function placeOrder() {
                 document.getElementById('accountNotLoggedIn').classList.add('hidden');
                 document.getElementById('accountLoggedIn').classList.remove('hidden');
                 document.getElementById('userFullName').textContent = appData.user.fullname;
-                document.getElementById('userEmail').textContent = appData.user.email;
+                // ইমেইল থাকলে আগের মতো দেখাবে; না থাকলে "Add your email" (Continue with Google) বাটন
+                const accEmailEl = document.getElementById('userEmail');
+                const accAddEmailWrap = document.getElementById('addEmailWrap');
+                if (appData.user.email) {
+                    accEmailEl.textContent = appData.user.email;
+                    accEmailEl.classList.remove('hidden');
+                    if (accAddEmailWrap) accAddEmailWrap.classList.add('hidden');
+                } else {
+                    accEmailEl.textContent = '';
+                    accEmailEl.classList.add('hidden');
+                    if (accAddEmailWrap) { accAddEmailWrap.classList.remove('hidden'); initAddEmailGoogleButton(); }
+                }
                 document.getElementById('userPhone').textContent = appData.user.mobilenumber;
                 document.getElementById('currentLanguage').textContent = appData.language === 'bn' ? 'বাংলা' : 'English';
                 
@@ -7369,14 +7703,16 @@ function silentPointsRefresh() {
         let forgotOtpResendEnabled = false;
 
         function handleForgotPassword() {
-            const email = document.getElementById('forgotEmail').value.trim();
+            const otpMethod = (appData.settings.otpmethod || 'email').toLowerCase();
+            const email = document.getElementById('forgotEmail').value.trim(); // mobile-মোডে এটা আসলে ফোন নাম্বার ধরে রাখে
             const otp = document.getElementById('forgotOtp').value.trim();
             const newPass = document.getElementById('newPassword').value;
             const btn = document.getElementById('forgotBtn');
             
             if (!otp) {
-                if(!email) return Swal.fire('Error', 'Email required', 'error');
-                if (!isValidEmail(email)) return Swal.fire('Error', t('invalid_email_format'), 'error');
+                if(!email) return Swal.fire('Error', otpMethod === 'mobile' ? 'Mobile number required' : 'Email required', 'error');
+                if (otpMethod === 'email' && !isValidEmail(email)) return Swal.fire('Error', t('invalid_email_format'), 'error');
+                if (otpMethod === 'mobile' && !email.replace(/\D/g, '').match(/^01\d{9}$/)) return Swal.fire('Error', t('invalid_phone'), 'error');
                 
                 const originalText = btn.textContent;
                 btn.textContent = t('sending');
@@ -7401,7 +7737,7 @@ function silentPointsRefresh() {
                         }
 
                         if(res.success) { 
-                            Swal.fire({ icon: 'success', title: t('otp_sent_msg'), text: t('check_inbox'), timer: 2000, showConfirmButton: false });
+                            Swal.fire({ icon: 'success', title: t('otp_sent_msg'), text: otpSentHintText(), timer: 2000, showConfirmButton: false });
                             document.getElementById('otpSection').classList.remove('hidden'); 
                             btn.textContent = t('reset_pass');
                             startForgotOtpTimer();
@@ -7472,8 +7808,9 @@ function silentPointsRefresh() {
 
         function handleResendForgotOtp() {
             if (!forgotOtpResendEnabled) return;
-            const email = document.getElementById('forgotEmail').value.trim();
-            if(!email) return Swal.fire('Error', 'Email missing', 'error');
+            const otpMethod = (appData.settings.otpmethod || 'email').toLowerCase();
+            const email = document.getElementById('forgotEmail').value.trim(); // mobile-মোডে এটা ফোন নাম্বার ধরে রাখে
+            if(!email) return Swal.fire('Error', otpMethod === 'mobile' ? 'Mobile number missing' : 'Email missing', 'error');
 
             const resendBtn = document.getElementById('forgotResendOtpBtn');
             resendBtn.disabled = true;
@@ -7490,7 +7827,7 @@ function silentPointsRefresh() {
                         });
                         startForgotOtpTimer(res.remainingSeconds);
                     } else if(res.success) {
-                        Swal.fire({ icon: 'success', title: 'OTP Sent', text: 'Check your inbox', timer: 1500, showConfirmButton: false });
+                        Swal.fire({ icon: 'success', title: t('otp_sent_msg'), text: otpSentHintText(), timer: 1500, showConfirmButton: false });
                         startForgotOtpTimer();
                     } else {
                         Swal.fire('Error', res.error, 'error');
@@ -7502,18 +7839,22 @@ function silentPointsRefresh() {
         }
 // ✅ নতুন
 function logout() { 
-    const userEmail = appData.user ? appData.user.email : null;
+    // ⚠️ FIX: ইমেইলের বদলে userId - সেশন এখন userId দিয়ে সেভ থাকে, তাই
+    // লগআউটের সময়ও userId দিয়েই সার্ভার থেকে সেশন মোছা উচিত। আগে ইমেইল
+    // দিয়ে মোছার চেষ্টা হতো যা কিছুই মুছত না (ভুল key), ফলে পুরনো সেশন
+    // PropertiesService-এ জমে থাকত।
+    const userId = appData.user ? appData.user.userid : null;
     allOrdersCache = [];
     appData.user = null; 
     appData.sessionToken = null;
     localStorage.removeItem('user'); 
     localStorage.removeItem('sessionToken'); 
     
-    if (userEmail) {
+    if (userId) {
         google.script.run
             .withSuccessHandler(() => console.log("Logged out"))
             .withFailureHandler(() => console.log("Logout failed"))
-            .performLogout(userEmail);
+            .performLogout(userId);
     }
     
     navigateTo('/home'); 
