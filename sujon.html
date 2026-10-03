@@ -2648,12 +2648,12 @@ function getInvoiceHtml(result, customerInfo, logoUrl) {
         ${invDiscount>0?`<div style="text-align:right;font-size:12px;margin-top:8px">মূল্য: ৳${invSubTotal.toFixed(2)} &nbsp; ছাড়: <span style="color:#dc2626">-৳${invDiscount.toFixed(2)}</span></div>`:''}
         <div style="text-align:right;font-weight:bold;margin-top:4px;font-size:14px">সর্বমোট: ৳${invNetTotal.toFixed(2)}</div>
 <div style="margin-top:6px;font-size:12px;text-align:right">
-পেয়েছেন: <b>৳${received.toFixed(2)}</b><br>
+নগদ: <b>৳${received.toFixed(2)}</b><br>
 বাকি: <b style="color:${due?'#dc2626':'#111'}">৳${due.toFixed(2)}</b><br>
 স্ট্যাটাস: <b>${payment}</b>
 </div>
         ${historyHtml}
-        <p style="text-align:center;font-size:11px;color:#999;margin-top:16px">ধন্যবাদ! আবার আসবেন।</p>
+        <p style="text-align:center;font-size:11px;color:#999;margin-top:16px">Thank you for choosing us! We hope to see you again soon on our Web App: safaboxbd.web.app</p>
     </div>`;
 }
 let __invoiceLibPromise=null;
