@@ -24,7 +24,7 @@
         .img-thumb { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; border: 1px solid #e5e7eb; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans antialiased overflow-hidden h-screen flex flex-col">
+<body class="bg-gray-50 text-gray-800 font-sans antialiased overflow-hidden flex flex-col" style="height:100vh;height:100dvh">
 
     <div id="loginScreen" class="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
         <div class="bg-white p-8 rounded-xl shadow-2xl w-96 max-w-[90%]">
@@ -178,6 +178,10 @@
     </div>
 
 <script>
+// মোবাইলে ব্রাউজার যদি পেজ উপরে সরিয়ে দেয়, ট্যাব বার যেন অ্যাড্রেস বারের নিচে লুকিয়ে না থাকে
+window.addEventListener('scroll', () => {
+    if (window.scrollY > 0 || document.documentElement.scrollTop > 0) window.scrollTo(0, 0);
+}, { passive: true });
 let adminSecret = sessionStorage.getItem('adminSecret') || '';
 let localData = { products:[], orders:[], settings:{}, categories:[], users:[], banners:[], locations:[], socialmedia:[], policies:[], reviews:[], popups:[], coupons:[], offlineorders:[] };
 let currentEditSheet = '', currentEditKey = '';
