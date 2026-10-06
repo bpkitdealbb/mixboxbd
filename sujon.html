@@ -47,6 +47,7 @@
                 <button onclick="switchTab('orders')" id="nav-orders" class="nav-tab"><i class="fas fa-shopping-bag mr-1"></i>Orders</button>
                 <button onclick="switchTab('pos')" id="nav-pos" class="nav-tab"><i class="fas fa-cash-register mr-1"></i>অফলাইন বিক্রি</button>
                 <button onclick="switchTab('products')" id="nav-products" class="nav-tab"><i class="fas fa-box mr-1"></i>Products</button>
+                <button onclick="switchTab('inventory')" id="nav-inventory" class="nav-tab"><i class="fas fa-warehouse mr-1"></i>Inventory</button>
                 <button onclick="switchTab('settings')" id="nav-settings" class="nav-tab"><i class="fas fa-cog mr-1"></i>Settings</button>
                 <button onclick="switchTab('users')" id="nav-users" class="nav-tab"><i class="fas fa-users mr-1"></i>Users</button>
                 <button onclick="switchTab('categories')" id="nav-categories" class="nav-tab"><i class="fas fa-layer-group mr-1"></i>Categories</button>
@@ -978,7 +979,7 @@ const SHEET_CONFIGS = {
     banners: { title:'Banners', keyCol:0, fields:[
         {label:'Banner Title*', id:'f0', type:'text'},
         {label:'Image URL*', id:'f1', type:'url', upload:true},
-        {label:'Link To Category', id:'f2', type:'text', help:'ক্লিক করলে যে ক্যাটাগরিতে যাবে'},
+        {label:'Link To Category', id:'f2', type:'single-select', source:'category', clearable:true, help:'ক্লিক করলে যে ক্যাটাগরিতে যাবে (লিস্ট থেকে বাছাই করুন)'},
         {label:'Order Sequence*', id:'f3', type:'number', help:'ক্রম (1, 2, 3...)'},
         {label:'Redirect URL', id:'f4', type:'url', help:'বাইরের লিংকে নিতে চাইলে'}
     ]},
@@ -1008,7 +1009,7 @@ const SHEET_CONFIGS = {
         {label:'Popup Message', id:'f0', type:'text'},
         {label:'Popup Image', id:'f1', type:'url', upload:true},
         {label:'Target Type*', id:'f2', type:'select', options:['all','product','category','brand'], help:'সবার কাছে দেখাতে all'},
-        {label:'Target Value', id:'f3', type:'text', help:'all হলে ফাঁকা রাখুন। নির্দিষ্ট আইডি/নাম দিন'},
+        {label:'Target Value', id:'f3', type:'single-select', source:'target', dependsOn:'f2', help:'Target Type বদলালে এখানে নিজে থেকেই প্রোডাক্ট / ক্যাটাগরি / ব্র্যান্ডের লিস্ট আসবে, সেখান থেকে বাছাই করুন। all হলে কিছু বাছাই লাগবে না।'},
         {label:'Status*', id:'f4', type:'select', options:['active','inactive']}
     ]}
 };
@@ -1034,7 +1035,7 @@ function fetchData(){if(!adminSecret)return;Swal.fire({title:'Syncing...',allowO
 
 function clearAllCache(){Swal.fire({title:'সার্ভার ক্যাশ ক্লিয়ার করবেন?',text:'ওয়েবসাইটে নতুন ডাটা আনতে ক্যাশ ক্লিয়ার করুন',icon:'warning',showCancelButton:true,confirmButtonText:'হ্যাঁ, ক্লিয়ার করুন'}).then(r=>{if(r.isConfirmed){google.script.run.withSuccessHandler(r=>{if(r.success)Swal.fire({title:'✅ ক্যাশ ক্লিয়ার হয়েছে!',icon:'success',timer:1500,showConfirmButton:false});else Swal.fire('Error',r.error,'error');}).withFailureHandler(e=>Swal.fire('Error',e.toString(),'error')).apiClearAllCache(adminSecret);}});}
 
-function switchTab(t){document.querySelectorAll('.nav-tab').forEach(e=>e.classList.remove('active'));document.getElementById(`nav-${t}`)?.classList.add('active');const c=document.getElementById('contentArea');if(t==='dashboard')renderDashboard(c);else if(t==='orders')renderOrders(c);else if(t==='products')renderProducts(c);else if(t==='pos')renderPOS(c);else if(SHEET_CONFIGS[t])renderGenericSheet(c,t);}
+function switchTab(t){document.querySelectorAll('.nav-tab').forEach(e=>e.classList.remove('active'));document.getElementById(`nav-${t}`)?.classList.add('active');const c=document.getElementById('contentArea');if(t==='dashboard')renderDashboard(c);else if(t==='orders')renderOrders(c);else if(t==='products')renderProducts(c);else if(t==='inventory')renderInventory(c);else if(t==='pos')renderPOS(c);else if(SHEET_CONFIGS[t])renderGenericSheet(c,t);}
 
 // ==========================================
 // ADVANCED PROFESSIONAL DASHBOARD
@@ -1048,6 +1049,7 @@ function renderDashboard(c) {
     
     let totalInventoryCost = 0;
     products.forEach(p => {
+        if (invIsExcluded(p)) return; // ইনভেন্টরির বাইরে মার্ক করা পণ্য ইনভেন্টরি ভ্যালুতে ধরা হবে না
         if (Array.isArray(p.variants) && p.variants.length > 0) {
             p.variants.forEach(v => {
                 let cost = parseProductCost(p.costprice, v.name);
@@ -1179,6 +1181,7 @@ function renderDashboard(c) {
     const productSalesMap = {};
     
     products.forEach(p => {
+        const pExcluded = invIsExcluded(p);
         if (p.variants && p.variants.length > 0) {
             p.variants.forEach(v => {
                 const key = `${String(p.id).trim()}__${v.name}`;
@@ -1188,7 +1191,8 @@ function renderDashboard(c) {
                     id: String(p.id).trim(), variant: v.name, totalQty: 0, totalRevenue: 0, totalCost: 0, 
                     currentStock: vStock,
                     costPrice: vCost,
-                    inventoryValue: vCost * vStock,
+                    inventoryValue: pExcluded ? 0 : vCost * vStock,
+                    excluded: pExcluded,
                     name: p.name, image: p.imagemain, stockStatus: p.stockstatus || 'In Stock'
                 };
             });
@@ -1200,7 +1204,8 @@ function renderDashboard(c) {
                 id: String(p.id).trim(), variant: 'নেই', totalQty: 0, totalRevenue: 0, totalCost: 0, 
                 currentStock: dStock,
                 costPrice: dCost,
-                inventoryValue: dCost * dStock,
+                inventoryValue: pExcluded ? 0 : dCost * dStock,
+                excluded: pExcluded,
                 name: p.name, image: p.imagemain, stockStatus: p.stockstatus || 'In Stock'
             };
         }
@@ -1302,13 +1307,13 @@ function renderDashboard(c) {
                 <td class="p-2.5 text-center">
                     <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${p.variant !== 'নেই' ? 'bg-blue-50 text-blue-700' : 'text-gray-400'}">${p.variant}</span>
                 </td>
-                <td class="p-2.5 text-center text-xs font-bold ${stockBg} rounded-lg">${p.currentStock} টি</td>
+                <td class="p-2.5 text-center text-xs font-bold ${stockBg} rounded-lg">${p.currentStock} টি${p.currentStock === 0 ? '<div class="text-[9px] font-bold text-red-600 mt-0.5">স্টক শেষ</div>' : ''}${p.excluded ? '<div class="text-[9px] font-semibold text-gray-500 mt-0.5">ইনভেন্টরির বাইরে • ইউজার দেখছে</div>' : ''}</td>
                 <td class="p-2.5 text-center">
                     <span class="text-sm font-black text-gray-800">${p.totalQty} টি</span>
                     ${zeroSalesBadge}
                 </td>
                 <td class="p-2.5 text-right text-xs text-gray-600">${costDisplay}</td>
-                <td class="p-2.5 text-right text-xs font-bold text-purple-700">৳${(p.inventoryValue||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+                <td class="p-2.5 text-right text-xs font-bold ${p.excluded ? 'text-gray-400' : 'text-purple-700'}">${p.excluded ? '—' : '৳' + (p.inventoryValue||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
                 <td class="p-2.5 text-right text-sm font-bold text-green-700">৳${p.totalRevenue.toLocaleString()}</td>
                 <td class="p-2.5 text-right text-sm font-bold ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}">৳${totalProfit.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
             </tr>
@@ -1437,6 +1442,264 @@ function setInventorySort(sort) {
     inventorySort = sort;
     renderDashboard(document.getElementById('contentArea'));
 }
+// ==========================================
+// INVENTORY (ক্যাটাগরি → সাব-ক্যাটাগরি → প্রোডাক্ট বাছাই)
+// যেসব প্রোডাক্ট নিজের কাছে মজুত থাকে না (অর্ডার এলে দোকান থেকে কিনে ডেলিভারি হয়),
+// সেগুলো এখানে "ইনভেন্টরির বাইরে" মার্ক করা যায়। মার্ক করা অবস্থা localStorage-এ সেভ থাকে।
+// ==========================================
+const INV_RULES_KEY = 'sb_inventory_rules_v1';
+let invRules = invLoadRules();      // { 'c::nuts': 'ex', 's::nuts>badam': 'in', 'p::101': 'ex' }
+let invView = 'all';                // 'all' | 'in' | 'ex'
+let invSearch = '';
+const invOpen = new Set();          // খোলা ক্যাটাগরি/সাব-ক্যাটাগরির key
+
+function invLoadRules() {
+    try {
+        const r = JSON.parse(localStorage.getItem(INV_RULES_KEY) || '{}');
+        return (r && typeof r === 'object' && !Array.isArray(r)) ? r : {};
+    } catch (e) { return {}; }
+}
+function invSaveRules() {
+    try { localStorage.setItem(INV_RULES_KEY, JSON.stringify(invRules)); } catch (e) { console.error('Inventory save error:', e); }
+}
+function invSplitCategory(cat) {
+    const parts = String(cat || '').split('>').map(s => s.trim()).filter(Boolean);
+    return { main: parts[0] || 'অন্যান্য', sub: parts.length > 1 ? parts.slice(1).join(' > ') : '' };
+}
+function invKeys(p) {
+    const c = invSplitCategory(p.category);
+    const mainKey = 'c::' + c.main.toLowerCase();
+    const subKey = c.sub ? 's::' + c.main.toLowerCase() + '>' + c.sub.toLowerCase() : '';
+    return { main: c.main, sub: c.sub, mainKey, subKey, prodKey: 'p::' + String(p.id).trim() };
+}
+// নিকটতম নিয়ম জেতে: প্রোডাক্ট → সাব-ক্যাটাগরি → ক্যাটাগরি। কোনো নিয়ম না থাকলে ইনভেন্টরিতে গণ্য।
+function invIsExcluded(p) {
+    const k = invKeys(p);
+    let r = invRules[k.prodKey];
+    if (!r && k.subKey) r = invRules[k.subKey];
+    if (!r) r = invRules[k.mainKey];
+    return r === 'ex';
+}
+function invProductTotals(p) {
+    let stock = 0, value = 0;
+    if (Array.isArray(p.variants) && p.variants.length > 0) {
+        p.variants.forEach(v => {
+            let cost = parseProductCost(p.costprice, v.name);
+            if (cost === 0) cost = parseFloat(p.costprice) || 0;
+            const s = parseInt(v.stock) || 0;
+            stock += s; value += cost * s;
+        });
+    } else {
+        const s = parseInt(p.totalstock) || 0;
+        stock = s; value = (parseFloat(p.costprice) || 0) * s;
+    }
+    return { stock, value };
+}
+function invBuildTree() {
+    const tree = {};
+    (localData.products || []).forEach(p => {
+        const k = invKeys(p);
+        if (!tree[k.mainKey]) tree[k.mainKey] = { key: k.mainKey, name: k.main, direct: [], subs: {} };
+        const node = tree[k.mainKey];
+        if (k.subKey) {
+            if (!node.subs[k.subKey]) node.subs[k.subKey] = { key: k.subKey, name: k.sub, products: [] };
+            node.subs[k.subKey].products.push(p);
+        } else node.direct.push(p);
+    });
+    return Object.values(tree).sort((a, b) => a.name.localeCompare(b.name));
+}
+function invNodeProducts(node) {
+    let list = (node.direct || []).slice();
+    Object.values(node.subs || {}).forEach(s => { list = list.concat(s.products); });
+    if (node.products) list = list.concat(node.products);
+    return list;
+}
+// ক্যাটাগরি/সাব-ক্যাটাগরির চেকবক্সে ক্লিক: সব গণ্য থাকলে সব বাদ, নাহলে সব গণ্য। নিচের স্তরের আলাদা নিয়ম মুছে যায়।
+function invToggleNode(key) {
+    const tree = invBuildTree();
+    let target = null;
+    tree.forEach(m => {
+        if (m.key === key) target = m;
+        Object.values(m.subs).forEach(s => { if (s.key === key) target = s; });
+    });
+    if (!target) return;
+    const prods = invNodeProducts(target);
+    const allIn = prods.length > 0 && prods.every(p => !invIsExcluded(p));
+    prods.forEach(p => { delete invRules[invKeys(p).prodKey]; });
+    if (target.subs) Object.keys(target.subs).forEach(sk => { delete invRules[sk]; });
+    invRules[key] = allIn ? 'ex' : 'in';
+    invSaveRules();
+    invRerender();
+}
+function invToggleProduct(id) {
+    const p = (localData.products || []).find(x => String(x.id).trim() === String(id).trim());
+    if (!p) return;
+    invRules[invKeys(p).prodKey] = invIsExcluded(p) ? 'in' : 'ex';
+    invSaveRules();
+    invRerender();
+}
+function invSetAll(mode) {
+    if (mode === 'in') {
+        invRules = {};
+    } else {
+        invRules = {};
+        invBuildTree().forEach(m => { invRules[m.key] = 'ex'; });
+    }
+    invSaveRules();
+    invRerender();
+}
+function invSetView(v) { invView = v; invRerender(); }
+function invOnSearch(v) { invSearch = String(v || '').trim().toLowerCase(); invRerender(true); }
+function invTrackOpen(el) { if (invSearch || invView !== 'all') return; if (el.open) invOpen.add(el.dataset.key); else invOpen.delete(el.dataset.key); }
+function invRerender(keepSearchFocus) {
+    const c = document.getElementById('contentArea');
+    if (!c) return;
+    const scroller = document.getElementById('invScroll');
+    const top = scroller ? scroller.scrollTop : 0;
+    renderInventory(c);
+    const s2 = document.getElementById('invScroll');
+    if (s2) s2.scrollTop = top;
+    if (keepSearchFocus) {
+        const inp = document.getElementById('invSearchInput');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    }
+}
+
+function renderInventory(c) {
+    const products = localData.products || [];
+    const tree = invBuildTree();
+    const fmt = (n) => Math.round(n).toLocaleString();
+    const e = escapeCategoryHTML;
+
+    let incCount = 0, excCount = 0, excZero = 0, incStock = 0, incValue = 0;
+    products.forEach(p => {
+        if (invIsExcluded(p)) { excCount++; if (invProductTotals(p).stock <= 0) excZero++; return; }
+        incCount++;
+        const t = invProductTotals(p);
+        incStock += t.stock; incValue += t.value;
+    });
+
+    const q = invSearch;
+    const passView = (p) => {
+        const ex = invIsExcluded(p);
+        if (invView === 'in' && ex) return false;
+        if (invView === 'ex' && !ex) return false;
+        if (q && !(String(p.name || '').toLowerCase().includes(q) || String(p.id).toLowerCase().includes(q))) return false;
+        return true;
+    };
+
+    const checkbox = (state, onclick, key) => {
+        // state: 'all' | 'none' | 'some'
+        return `<input type="checkbox" class="w-4 h-4 cursor-pointer accent-blue-600 shrink-0" ${state === 'all' ? 'checked' : ''} ${state === 'some' ? 'data-indet="1"' : ''} data-key="${e(key)}" onclick="event.stopPropagation(); ${onclick}">`;
+    };
+    const stateOf = (prods) => {
+        if (!prods.length) return 'none';
+        const n = prods.filter(p => !invIsExcluded(p)).length;
+        return n === prods.length ? 'all' : (n === 0 ? 'none' : 'some');
+    };
+    const sumOf = (prods) => prods.reduce((a, p) => { if (invIsExcluded(p)) return a; const t = invProductTotals(p); a.stock += t.stock; a.value += t.value; return a; }, { stock: 0, value: 0 });
+
+    const productRow = (p) => {
+        const ex = invIsExcluded(p);
+        const t = invProductTotals(p);
+        const vCount = Array.isArray(p.variants) ? p.variants.length : 0;
+        return `<div class="flex items-center gap-3 px-3 py-2 border-t border-gray-100 ${ex ? 'bg-gray-50' : 'hover:bg-blue-50/40'}">
+            <input type="checkbox" class="w-4 h-4 cursor-pointer accent-blue-600 shrink-0" ${ex ? '' : 'checked'} data-id="${e(String(p.id).trim())}" onclick="invToggleProduct(this.dataset.id)">
+            <img src="${e(p.imagemain || 'https://via.placeholder.com/40')}" class="w-8 h-8 rounded object-cover border border-gray-200 shrink-0" onerror="this.src='https://via.placeholder.com/40'">
+            <div class="min-w-0 flex-1">
+                <p class="text-xs font-bold text-gray-800 truncate">${e(p.name)}${ex ? ' <span class="bg-gray-200 text-gray-600 text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-1">ইনভেন্টরির বাইরে</span>' : ''}</p>
+                <p class="text-[10px] text-gray-400 font-mono">ID: ${e(p.id)}${vCount ? ' • ' + vCount + 'টি ভ্যারিয়েন্ট' : ''}</p>
+            </div>
+            <div class="text-right shrink-0">
+                <p class="text-xs font-bold ${t.stock === 0 ? 'text-red-600' : (t.stock <= 5 ? 'text-yellow-600' : 'text-gray-800')}">${t.stock} টি${t.stock === 0 ? ' • স্টক শেষ' : ''}</p>
+                <p class="text-[10px] ${ex ? 'text-gray-400' : 'text-purple-700 font-bold'}">${ex ? 'ইউজার দেখছে • ভ্যালুতে ধরা হয় না' : '৳' + fmt(t.value)}</p>
+            </div>
+        </div>`;
+    };
+
+    let html = '';
+    tree.forEach(m => {
+        const mainProds = invNodeProducts(m);
+        const visibleDirect = m.direct.filter(passView);
+        const subs = Object.values(m.subs).sort((a, b) => a.name.localeCompare(b.name));
+        const visibleSubs = subs.map(s => ({ s, list: s.products.filter(passView) })).filter(x => x.list.length > 0);
+        if (!visibleDirect.length && !visibleSubs.length) return;
+
+        const mSum = sumOf(mainProds);
+        const forceOpen = !!q || invView !== 'all';
+        const mainOpen = forceOpen || invOpen.has(m.key);
+
+        let inner = visibleDirect.map(productRow).join('');
+        visibleSubs.forEach(({ s, list }) => {
+            const sSum = sumOf(s.products);
+            const sOpen = forceOpen || invOpen.has(s.key);
+            inner += `<details class="border-t border-gray-100" data-key="${e(s.key)}" ${sOpen ? 'open' : ''} ontoggle="invTrackOpen(this)">
+                <summary class="flex items-center gap-3 pl-8 pr-3 py-2 bg-gray-50/70 cursor-pointer select-none">
+                    ${checkbox(stateOf(s.products), 'invToggleNode(this.dataset.key)', s.key)}
+                    <i class="fas fa-folder-open text-amber-500 text-xs"></i>
+                    <span class="text-xs font-bold text-gray-700 flex-1 truncate">${e(formatCategoryDisplayName(s.name))}</span>
+                    <span class="text-[10px] text-gray-400">${s.products.length}টি পণ্য</span>
+                    <span class="text-[10px] font-bold text-gray-700 w-16 text-right">${sSum.stock} টি</span>
+                    <span class="text-[10px] font-bold text-purple-700 w-20 text-right">৳${fmt(sSum.value)}</span>
+                </summary>
+                <div class="pl-8">${list.map(productRow).join('')}</div>
+            </details>`;
+        });
+
+        html += `<details class="bg-white rounded-xl shadow-sm border overflow-hidden mb-3" data-key="${e(m.key)}" ${mainOpen ? 'open' : ''} ontoggle="invTrackOpen(this)">
+            <summary class="flex items-center gap-3 px-3 py-3 cursor-pointer select-none bg-white">
+                ${checkbox(stateOf(mainProds), 'invToggleNode(this.dataset.key)', m.key)}
+                <i class="fas fa-layer-group text-blue-500 text-sm"></i>
+                <span class="text-sm font-black text-gray-800 flex-1 truncate">${e(formatCategoryDisplayName(m.name))}</span>
+                <span class="text-[10px] text-gray-400">${mainProds.length}টি পণ্য</span>
+                <span class="text-xs font-bold text-gray-700 w-16 text-right">${mSum.stock} টি</span>
+                <span class="text-xs font-bold text-purple-700 w-24 text-right">৳${fmt(mSum.value)}</span>
+            </summary>
+            <div>${inner}</div>
+        </details>`;
+    });
+    if (!html) html = `<div class="p-10 text-center text-sm text-gray-400 bg-white rounded-xl border">${products.length ? 'কোনো পণ্য পাওয়া যায়নি' : 'কোনো পণ্য নেই'}</div>`;
+
+    const viewBtn = (k, label) => `<button onclick="invSetView('${k}')" class="px-3 py-1 text-[10px] font-bold rounded-md transition ${invView === k ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}">${label}</button>`;
+
+    c.innerHTML = `
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+            <div class="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center"><i class="fas fa-warehouse"></i></div>
+                <div><p class="text-[10px] text-gray-500 font-bold uppercase">ইনভেন্টরি ভ্যালু</p><p class="text-xl font-black text-gray-800">৳${fmt(incValue)}</p><p class="text-[10px] text-gray-400">(ক্রয়মূল্য, বাদ দেওয়া ছাড়া)</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fas fa-boxes-stacked"></i></div>
+                <div><p class="text-[10px] text-gray-500 font-bold uppercase">মোট স্টক</p><p class="text-xl font-black text-gray-800">${incStock.toLocaleString()} টি</p></div>
+            </div>
+            <div class="bg-green-50 border border-green-200 p-4 rounded-xl text-center">
+                <p class="text-2xl font-black text-green-700">${incCount}</p>
+                <p class="text-xs font-bold text-green-600 mt-1">ইনভেন্টরিতে গণ্য পণ্য</p>
+            </div>
+            <div class="bg-gray-50 border border-gray-200 p-4 rounded-xl text-center">
+                <p class="text-2xl font-black text-gray-600">${excCount}</p>
+                <p class="text-xs font-bold text-gray-500 mt-1">ইনভেন্টরির বাইরে (মার্ক করা)</p>
+                ${excZero ? `<p class="text-[10px] font-bold text-red-600 mt-1">${excZero}টির স্টক শেষ</p>` : ''}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-3 mb-4 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+            <div class="text-[11px] text-gray-500 leading-relaxed">
+                <i class="fas fa-circle-info text-blue-500 mr-1"></i>টিক চিহ্ন = ইনভেন্টরিতে গণ্য। টিক তুলে দিলে সেটি ইনভেন্টরির বাইরে মার্ক হবে (ক্যাটাগরি, সাব-ক্যাটাগরি বা নির্দিষ্ট পণ্য)। এই মার্ক এই ব্রাউজারে সেভ থাকে।
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+                <input type="text" id="invSearchInput" value="${e(invSearch)}" oninput="invOnSearch(this.value)" placeholder="পণ্যের নাম / ID খুঁজুন..." class="border rounded-lg px-3 py-1.5 text-xs w-48 outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="flex bg-gray-200 p-0.5 rounded-lg">${viewBtn('all', 'সব')}${viewBtn('in', 'গণ্য')}${viewBtn('ex', 'বাইরে')}</div>
+                <button onclick="invSetAll('in')" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-green-600 text-white hover:bg-green-700">সব গণ্য করুন</button>
+                <button onclick="invSetAll('ex')" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-gray-600 text-white hover:bg-gray-700">সব বাদ দিন</button>
+            </div>
+        </div>
+
+        <div id="invScroll" style="max-height: calc(100vh - 330px); overflow-y: auto;" class="pr-1">${html}</div>
+    `;
+    c.querySelectorAll('input[data-indet="1"]').forEach(i => { i.indeterminate = true; });
+}
+
 // ==========================================
 // GENERIC SHEET RENDERER
 // ==========================================
@@ -1801,6 +2064,149 @@ function onCategoryMultiselectChange(fieldIdx, checkboxEl) {
 }
 
 
+// ==========================================
+// NEW: লিস্ট থেকে একটা বাছাই (searchable single-select) — Banner "Link To Category" ও Popup "Target Value"
+// ==========================================
+const GS_FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 40 40%27%3E%3Crect width=%2740%27 height=%2740%27 fill=%27%23e5e7eb%27/%3E%3C/svg%3E';
+function gsThumb(url) {
+    return `<img src="${escapeCategoryHTML(url || GS_FALLBACK_IMG)}" class="w-7 h-7 rounded object-cover border border-gray-200 shrink-0" onerror="this.onerror=null;this.src='${GS_FALLBACK_IMG}'">`;
+}
+function gsCategoryRows(brandOnly) {
+    // ক্যাটাগরি শীটে "Is Top" কলামে brand লেখা সারিগুলো ব্র্যান্ড, বাকিগুলো ক্যাটাগরি/সাব-ক্যাটাগরি
+    return (localData.categories || [])
+        .filter(r => (String(r[2] || '').trim().toLowerCase() === 'brand') === !!brandOnly)
+        .map(r => ({ name: String(r[0] || '').trim(), img: String(r[1] || '').trim() }))
+        .filter(x => x.name);
+}
+function gsMode(i) {
+    const config = SHEET_CONFIGS[currentEditSheet];
+    const f = config.fields[i];
+    if (f.source !== 'target') return f.source;
+    const di = config.fields.findIndex(x => x.id === f.dependsOn);
+    const el = document.getElementById(`gen_f${di}`);
+    return el ? String(el.value || 'all').trim().toLowerCase() : 'all';
+}
+function gsItems(i) {
+    const mode = gsMode(i);
+    if (mode === 'category') return gsCategoryRows(false).map(x => ({ value: x.name, label: x.name, img: x.img }));
+    if (mode === 'brand') return gsCategoryRows(true).map(x => ({ value: x.name, label: x.name, img: x.img }));
+    if (mode === 'product') return (localData.products || []).map(p => {
+        const id = String(p.id).trim();
+        return { value: id, label: `${p.name || ''} (ID: ${id})`, alt: String(p.name || '').trim(), img: String(p.imagemain || '').trim() };
+    });
+    return [];
+}
+function gsPickerHTML(i, val, f) {
+    return `
+        <div id="gen_f${i}_picker" class="relative">
+            <button type="button" id="gen_f${i}_gsbtn" onclick="gsToggle(${i})"
+                class="w-full min-h-[44px] border rounded-lg p-2 text-left bg-white flex items-center justify-between gap-2">
+                <span id="gen_f${i}_gslabel" class="text-sm text-gray-500 truncate"></span>
+                <i class="fas fa-chevron-down text-gray-400 text-xs shrink-0"></i>
+            </button>
+            <div id="gen_f${i}_dropdown" class="hidden absolute left-0 right-0 top-full mt-1 z-[90] bg-white border rounded-lg shadow-xl overflow-hidden">
+                <div class="p-2 border-b bg-gray-50">
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                        <input type="text" id="gen_f${i}_gssearch" autocomplete="off" placeholder="সার্চ করুন..."
+                            class="w-full border rounded-lg py-2 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            oninput="gsRender(${i}, this.value)" onclick="event.stopPropagation()">
+                    </div>
+                </div>
+                <div id="gen_f${i}_gsopts" class="max-h-56 overflow-y-auto p-1"></div>
+            </div>
+            <input type="hidden" id="gen_f${i}" value="${escapeCategoryHTML(val)}">
+        </div>`;
+}
+function gsUpdateLabel(i) {
+    const hidden = document.getElementById(`gen_f${i}`);
+    const label = document.getElementById(`gen_f${i}_gslabel`);
+    const btn = document.getElementById(`gen_f${i}_gsbtn`);
+    if (!hidden || !label || !btn) return;
+    const mode = gsMode(i);
+    const cur = String(hidden.value || '').trim();
+    const placeholders = { category: 'ক্যাটাগরি বাছাই করুন', brand: 'ব্র্যান্ড বাছাই করুন', product: 'প্রোডাক্ট বাছাই করুন' };
+
+    if (mode === 'all') {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        label.className = 'text-sm text-gray-500 truncate';
+        label.textContent = 'সবার জন্য দেখানো হবে — কিছু বাছাই লাগবে না';
+        return;
+    }
+    btn.disabled = false;
+    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+    if (!cur) {
+        label.className = 'text-sm text-gray-500 truncate';
+        label.textContent = placeholders[mode] || 'বাছাই করুন';
+        return;
+    }
+    const hit = gsItems(i).find(it => it.value === cur || (it.alt && it.alt === cur));
+    if (hit) {
+        label.className = 'text-sm text-gray-800 font-semibold truncate flex items-center gap-2';
+        label.innerHTML = gsThumb(hit.img) + `<span class="truncate">${escapeCategoryHTML(hit.label)}</span>`;
+    } else {
+        label.className = 'text-sm text-amber-700 font-semibold truncate';
+        label.textContent = `${cur} (লিস্টে নেই)`;
+    }
+}
+function gsRender(i, query) {
+    const wrap = document.getElementById(`gen_f${i}_gsopts`);
+    const hidden = document.getElementById(`gen_f${i}`);
+    if (!wrap || !hidden) return;
+    const f = SHEET_CONFIGS[currentEditSheet].fields[i];
+    const cur = String(hidden.value || '').trim();
+    const q = String(query || '').trim().toLowerCase();
+    const items = gsItems(i).filter(it => !q || it.label.toLowerCase().includes(q));
+
+    let html = '';
+    if (f.clearable) {
+        html += `<button type="button" class="w-full text-left px-3 py-2 rounded text-xs text-gray-500 hover:bg-gray-50" data-v="" onclick="gsPick(${i}, this.dataset.v)">
+            <span class="inline-block w-3.5 mr-2"></span>— কোনোটি না —</button>`;
+    }
+    if (!items.length) {
+        html += `<div class="p-3 text-xs text-gray-400 text-center">কিছু পাওয়া যায়নি</div>`;
+    } else {
+        html += items.map(it => {
+            const sel = it.value === cur || (it.alt && it.alt === cur);
+            return `<button type="button" class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-blue-50 flex items-center gap-2 ${sel ? 'bg-blue-50 text-blue-700 font-bold' : ''}"
+                data-v="${escapeCategoryHTML(it.value)}" onclick="gsPick(${i}, this.dataset.v)">
+                ${sel ? '<i class="fas fa-check text-blue-600 w-3.5 shrink-0"></i>' : '<span class="inline-block w-3.5 shrink-0"></span>'}${gsThumb(it.img)}<span class="truncate">${escapeCategoryHTML(it.label)}</span>
+            </button>`;
+        }).join('');
+    }
+    wrap.innerHTML = html;
+}
+function gsToggle(i) {
+    const btn = document.getElementById(`gen_f${i}_gsbtn`);
+    const dd = document.getElementById(`gen_f${i}_dropdown`);
+    if (!btn || !dd || btn.disabled) return;
+    document.querySelectorAll('[id^="gen_f"][id$="_dropdown"]').forEach(el => { if (el !== dd) el.classList.add('hidden'); });
+    dd.classList.toggle('hidden');
+    if (!dd.classList.contains('hidden')) {
+        const search = document.getElementById(`gen_f${i}_gssearch`);
+        if (search) search.value = '';
+        gsRender(i, '');
+        if (search) setTimeout(() => search.focus(), 0);
+    }
+}
+function gsPick(i, v) {
+    const hidden = document.getElementById(`gen_f${i}`);
+    if (hidden) hidden.value = v;
+    const dd = document.getElementById(`gen_f${i}_dropdown`);
+    if (dd) dd.classList.add('hidden');
+    gsUpdateLabel(i);
+}
+// Target Type বদলালে আগের বাছাই মুছে নতুন ধরনের লিস্ট দেখানো হবে
+function gsOnDependChange(i) {
+    const hidden = document.getElementById(`gen_f${i}`);
+    if (hidden) hidden.value = '';
+    const dd = document.getElementById(`gen_f${i}_dropdown`);
+    if (dd) dd.classList.add('hidden');
+    gsUpdateLabel(i);
+}
+
 function openGenericModal(key, idx=null) {
     const config=SHEET_CONFIGS[key]; let rawData=localData[key]||[];
     if(key==='settings'&&!Array.isArray(rawData)) rawData=Object.entries(rawData).map(([k,v])=>[k,v]);
@@ -1819,6 +2225,7 @@ function openGenericModal(key, idx=null) {
         if(f.type==='textarea') input=`<textarea id="gen_f${i}" ${ro} class="w-full border rounded-lg p-2.5 text-sm">${val}</textarea>`;
         else if(f.type==='select') input=`<select id="gen_f${i}" ${ro} class="w-full border rounded-lg p-2.5 text-sm">${f.options.map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>`;
         else if(f.type==='category-multiselect') input=categoryMultiselectHTML(i, val, f);
+        else if(f.type==='single-select') input=gsPickerHTML(i, val, f);
         else input=`<input type="${f.type||'text'}" id="gen_f${i}" value="${val}" ${ro} class="w-full border rounded-lg p-2.5 text-sm">`;
         
         return `<div class="${f.colSpan?'col-span-'+f.colSpan:''}"><label class="font-bold block mb-1 text-xs text-gray-700">${f.label}</label>${input}${f.help?`<p class="text-[10px] text-blue-500 mt-1 leading-relaxed">${f.help}</p>`:''}</div>`;
@@ -1833,6 +2240,17 @@ function openGenericModal(key, idx=null) {
             renderCategoryMultiselectOptions(i, '');
             updateCategoryMultiselectSummary(i);
             if(f.lockUntilField) refreshCategoryMultiselectLock(i, config);
+        }
+    });
+    // NEW: লিস্ট থেকে বাছাইয়ের (single-select) ফিল্ডগুলোর লেবেল সেট + Target Type বদলালে লিস্ট বদলানোর সংযোগ
+    config.fields.forEach((f,i)=>{
+        if(f.type==='single-select'){
+            gsUpdateLabel(i);
+            if(f.dependsOn){
+                const di=config.fields.findIndex(x=>x.id===f.dependsOn);
+                const dEl=document.getElementById(`gen_f${di}`);
+                if(dEl) dEl.addEventListener('change',()=>gsOnDependChange(i));
+            }
         }
     });
     document.getElementById('genericModal').classList.remove('hidden');document.getElementById('genericModal').classList.add('flex');
@@ -1864,6 +2282,15 @@ function saveGenericData() {
 
     // NEW: কুপনের Applicable Category একদম ফাঁকা রেখে সেভ করতে গেলে সতর্ক করা —
     // ফাঁকা থাকলে কুপনটা আসলে কোনো প্রোডাক্টেই কাজ করবে না
+    // NEW: Popup — Target Type 'all' হলে ভ্যালু ফাঁকা; অন্যথায় লিস্ট থেকে কিছু বাছাই করতে হবে
+    if (currentEditSheet==='popups') {
+        const tType=String(dataArray[2]||'').trim().toLowerCase();
+        if (tType==='all') dataArray[3]='';
+        else if (!String(dataArray[3]||'').trim()) {
+            const what = tType==='product' ? 'একটা প্রোডাক্ট' : (tType==='brand' ? 'একটা ব্র্যান্ড' : 'একটা ক্যাটাগরি');
+            return Swal.fire('Target Value খালি', `Target Type "${tType}" দেওয়া আছে, তাই লিস্ট থেকে ${what} বাছাই করুন (অথবা সবার জন্য দেখাতে Target Type "all" দিন)।`, 'warning');
+        }
+    }
     const applicableIdx = config.fields.findIndex(f=>f.id==='f9' && f.type==='category-multiselect');
     if (currentEditSheet==='coupons' && applicableIdx>-1 && !String(dataArray[applicableIdx]||'').trim()) {
         return Swal.fire({
