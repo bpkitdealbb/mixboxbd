@@ -1279,6 +1279,15 @@ function renderDashboard(c) {
     });
 
     const sortedProducts = Object.values(productSalesMap).sort((a, b) => {
+        if (inventorySort === 'pct') {
+            // লাভ % অনুযায়ী সাজানো: বিক্রি নেই এমন পণ্য (আয় ০) সবার শেষে যাবে
+            const pa = a.totalRevenue > 0 ? (a.totalRevenue - a.totalCost) / a.totalRevenue : null;
+            const pb = b.totalRevenue > 0 ? (b.totalRevenue - b.totalCost) / b.totalRevenue : null;
+            if (pa === null && pb === null) return 0;
+            if (pa === null) return 1;
+            if (pb === null) return -1;
+            return pb - pa;
+        }
         return inventorySort === 'most' ? (b.totalQty - a.totalQty) : (a.totalQty - b.totalQty);
     });
 
@@ -1296,6 +1305,10 @@ function renderDashboard(c) {
         const zeroSalesBadge = p.totalQty === 0 ? '<span class="bg-red-100 text-red-600 text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-2">বিক্রি নেই</span>' : '';
         const costDisplay = p.costPrice > 0 ? `৳${p.costPrice}` : '<span class="text-gray-400">N/A</span>';
         const totalProfit = p.totalRevenue - p.totalCost;
+        const profitPct = p.totalRevenue > 0 ? (totalProfit / p.totalRevenue) * 100 : null;
+        const profitPctHtml = profitPct === null
+            ? '<span class="text-gray-400">—</span>'
+            : `<span class="${profitPct >= 0 ? 'text-emerald-700' : 'text-red-600'}">${profitPct.toFixed(1)}%</span>`;
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
                 <td class="p-2.5 text-center text-xs font-bold text-gray-400">${i + 1}</td>
@@ -1320,6 +1333,7 @@ function renderDashboard(c) {
                 <td class="p-2.5 text-right text-xs font-bold ${p.excluded ? 'text-gray-400' : 'text-purple-700'}">${p.excluded ? '—' : '৳' + (p.inventoryValue||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
                 <td class="p-2.5 text-right text-sm font-bold text-green-700">৳${p.totalRevenue.toLocaleString()}</td>
                 <td class="p-2.5 text-right text-sm font-bold ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}">৳${totalProfit.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+                <td class="p-2.5 text-right text-sm font-bold">${profitPctHtml}</td>
             </tr>
         `;
     }).join('');
@@ -1407,6 +1421,7 @@ function renderDashboard(c) {
                     <div class="flex bg-blue-100 p-0.5 rounded-lg">
                         <button onclick="setInventorySort('most')" class="px-3 py-1 text-[10px] font-bold rounded-md transition ${inventorySort === 'most' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-200'}">সর্বোচ্চ বিক্রি</button>
                         <button onclick="setInventorySort('least')" class="px-3 py-1 text-[10px] font-bold rounded-md transition ${inventorySort === 'least' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-200'}">সর্বনিম্ন বিক্রি</button>
+                        <button onclick="setInventorySort('pct')" class="px-3 py-1 text-[10px] font-bold rounded-md transition ${inventorySort === 'pct' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 hover:bg-blue-200'}">সর্বোচ্চ লাভ %</button>
                     </div>
                 </div>
             </div>
@@ -1423,11 +1438,12 @@ function renderDashboard(c) {
                             <th class="p-2.5 font-bold text-right">ইনভেন্টরি ভ্যালু</th>
                             <th class="p-2.5 font-bold text-right">মোট আয়</th>
                             <th class="p-2.5 font-bold text-right">প্রফিট</th>
+                            <th class="p-2.5 font-bold text-right">লাভ %</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${sortedProducts.length > 0 ? tableRows : `
-                            <tr><td colspan="9" class="p-8 text-center text-sm text-gray-400">${dashboardFilter === 'all' ? 'কোনো পণ্য নেই' : 'এই সময়ে কোনো বিক্রি হয়নি'}</td></tr>
+                            <tr><td colspan="10" class="p-8 text-center text-sm text-gray-400">${dashboardFilter === 'all' ? 'কোনো পণ্য নেই' : 'এই সময়ে কোনো বিক্রি হয়নি'}</td></tr>
                         `}
                     </tbody>
                 </table>
