@@ -1338,6 +1338,22 @@ function renderDashboard(c) {
         `;
     }).join('');
 
+    // সামগ্রিক লাভ % = নেট প্রফিট ÷ মোট আয় (ডেলিভার্ড + এক্সচেঞ্জ + অফলাইনে পেমেন্ট পাওয়া বিক্রি)
+    // নেট প্রফিটে কুরিয়ার/এক্সট্রা খরচ ও রিটার্ন লস বাদ থাকে, তাই এটা পণ্য-ভিত্তিক লাভ %-এর চেয়ে কম হতে পারে
+    const exchangeRevenue = exchangeOrders.reduce((sum, o) => sum + (parseFloat(o[9]) || 0), 0);
+    const offlinePaidRevenue = filteredOfflineOrders.reduce((sum, o) => {
+        return String(o[7] || 'Paid').toLowerCase() === 'paid' ? sum + ((parseFloat(o[5]) || 0) - (parseFloat(o[13]) || 0)) : sum;
+    }, 0);
+    const overallRevenueBase = totalRevenue + exchangeRevenue + offlinePaidRevenue;
+    const overallProfitPct = overallRevenueBase > 0 ? (totalProfit / overallRevenueBase) * 100 : null;
+    const overallProfitPctText = overallProfitPct === null ? '—' : overallProfitPct.toFixed(1) + '%';
+
+    // পণ্য টেবিলের সর্বমোট (টেবিলে যা দেখা যাচ্ছে তার যোগফল)
+    const tblQty = sortedProducts.reduce((s, p) => s + p.totalQty, 0);
+    const tblRevenue = sortedProducts.reduce((s, p) => s + p.totalRevenue, 0);
+    const tblProfit = sortedProducts.reduce((s, p) => s + (p.totalRevenue - p.totalCost), 0);
+    const tblPct = tblRevenue > 0 ? (tblProfit / tblRevenue) * 100 : null;
+
     const totalOrders = filteredOrders.length;
     const successRate = totalOrders > 0 ? ((deliveredOrders.length / totalOrders) * 100).toFixed(1) : 0;
 
@@ -1357,7 +1373,7 @@ function renderDashboard(c) {
             </div>
             <div class="bg-white p-5 rounded-xl shadow-sm border flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl ${totalProfit >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'} flex items-center justify-center text-lg"><i class="fas fa-${totalProfit >= 0 ? 'trending-up' : 'trending-down'}"></i></div>
-                <div><p class="text-xs text-gray-500 font-bold uppercase">নেট প্রফিট</p><p class="text-2xl font-black ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}">৳${totalProfit.toFixed(0)}</p><p class="text-[10px] text-gray-400">অনলাইন + অফলাইন, রিটার্ন/এক্সচেঞ্জ লস বাদ</p></div>
+                <div><p class="text-xs text-gray-500 font-bold uppercase">নেট প্রফিট</p><p class="text-2xl font-black ${totalProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}">৳${totalProfit.toFixed(0)}</p><p class="text-[10px] text-gray-400">অনলাইন + অফলাইন, রিটার্ন/এক্সচেঞ্জ লস বাদ</p><p class="text-[11px] font-black mt-0.5 ${totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}" title="নেট প্রফিট ÷ মোট আয় (৳${overallRevenueBase.toLocaleString(undefined,{maximumFractionDigits:0})})">সামগ্রিক লাভ: ${overallProfitPctText}</p></div>
             </div>
         </div>
 
@@ -1446,6 +1462,18 @@ function renderDashboard(c) {
                             <tr><td colspan="10" class="p-8 text-center text-sm text-gray-400">${dashboardFilter === 'all' ? 'কোনো পণ্য নেই' : 'এই সময়ে কোনো বিক্রি হয়নি'}</td></tr>
                         `}
                     </tbody>
+                    ${sortedProducts.length > 0 ? `
+                    <tfoot class="sticky bottom-0 bg-gray-100 border-t-2 border-gray-300">
+                        <tr class="text-xs font-black text-gray-700">
+                            <td colspan="4" class="p-2.5 text-right">সর্বমোট (সব পণ্য):</td>
+                            <td class="p-2.5 text-center">${tblQty} টি</td>
+                            <td class="p-2.5"></td>
+                            <td class="p-2.5"></td>
+                            <td class="p-2.5 text-right text-green-700">৳${tblRevenue.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+                            <td class="p-2.5 text-right ${tblProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}">৳${tblProfit.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+                            <td class="p-2.5 text-right ${tblPct !== null && tblPct < 0 ? 'text-red-600' : 'text-emerald-700'}">${tblPct === null ? '—' : tblPct.toFixed(1) + '%'}</td>
+                        </tr>
+                    </tfoot>` : ''}
                 </table>
             </div>
         </div>
