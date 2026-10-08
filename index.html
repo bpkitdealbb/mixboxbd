@@ -96,7 +96,7 @@ gtag('config', 'G-N74T65FH7X');
 }
 </script>
 
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#006a4e">
 <script>
 if ('serviceWorker' in navigator) {
@@ -114,7 +114,7 @@ navigator.serviceWorker.addEventListener('controllerchange', () => {
 });
 
 window.addEventListener('load', () => {
-  navigator.serviceWorker.register('./sw.js')
+  navigator.serviceWorker.register('/sw.js')
     .then(reg => {
         console.log('Service Worker Registered!', reg);
         reg.update();
@@ -1944,7 +1944,7 @@ function seoBreadcrumbSchema(items) {
 function seoProductSchema(p) {
     const price = getDisplayPricing(p).price;
 const reviews = (appData.reviews || []).filter(r => r.productid == p.id && r.status === 'active');
-    const currentUrl = window.location.origin + '/product?id=' + p.id;
+    const currentUrl = window.location.origin + productPath(p);
     
     const schema = {
         "@context": "https://schema.org",
@@ -2552,7 +2552,7 @@ function loadInitialData() {
     } 
 
     // ৩. লাইভ ডাটা লোডিং (Strict Validation সহ)
-    fetchWithRetry('./data.json', 3, 1000)
+    fetchWithRetry('/data.json', 3, 1000)
         .then(res => {
             // 💡 সমাধান: ডাটা পাওয়ার পরপরই ভ্যালিডেশন চেক করা।
             // যদি success: false হয় অথবা প্রয়োজনীয় প্রোডাক্ট/সেটিং না থাকে, তবে জোরপূর্বক এরর থ্রো করবে।
@@ -2835,8 +2835,23 @@ function setupEventListeners() {
     }
 }
 
+function normalizeLegacyRoute(route) {
+    const m = route.match(/^\/(product|category|brand)\?(.*)$/);
+    if (!m) return route;
+    const qp = new URLSearchParams(m[2]);
+    if (m[1] === 'product' && qp.get('id')) {
+        const p = findProductByParam(qp.get('id'));
+        return p ? productPath(p) : '/product/' + encodeURIComponent(qp.get('id'));
+    }
+    if ((m[1] === 'category' || m[1] === 'brand') && qp.get('name')) {
+        return categoryPath(resolveCategoryParam(qp.get('name')), m[1]);
+    }
+    return route;
+}
+
 function navigateTo(route) {
     if (!route.startsWith('/')) route = '/' + route;
+    route = normalizeLegacyRoute(route);
 
     if (route === '/home' && window.location.pathname !== '/home' && window.location.pathname !== '/') {
         appData.forceHomeReset = true;
@@ -2897,8 +2912,19 @@ function loadRoute(fullPath) {
         window.scrollTo(0, 0);
     }
     instantScrollFix();
-            const [route, queryString] = (fullPath.startsWith('/') ? fullPath.substring(1) : fullPath).split('?');
+            const [pathPart, queryString] = (fullPath.startsWith('/') ? fullPath.substring(1) : fullPath).split('?');
             const params = new URLSearchParams(queryString);
+            const _segs = pathPart.split('/');
+            const route = _segs[0];
+            const pathParam = _segs.length > 1 ? _segs.slice(1).join('/') : '';
+            // legacy ?id= / ?name= links -> clean URL (no reload)
+            if (route === 'product' && !pathParam && params.get('id')) {
+                const _lp = findProductByParam(params.get('id'));
+                if (_lp) { try { history.replaceState(history.state, '', productPath(_lp)); } catch (e) {} }
+            } else if ((route === 'category' || route === 'brand') && !pathParam && params.get('name')) {
+                const _ln = resolveCategoryParam(params.get('name'));
+                try { history.replaceState(history.state, '', categoryPath(_ln, route)); } catch (e) {}
+            }
             const content = document.getElementById('content');
             
             updateNavActive(route);
@@ -2934,9 +2960,9 @@ function loadRoute(fullPath) {
                 case 'categories': loadCategoriesPage(); break;
                 case 'category':
 case 'brand':
-  loadCategoryProducts(params.get('name')); 
+  loadCategoryProducts(resolveCategoryParam(pathParam || params.get('name'))); 
   break;
-                case 'product': loadProductDetails(params.get('id')); break;
+                case 'product': loadProductDetails(pathParam || params.get('id')); break;
                 case 'cart': loadCartPage(); break;
                 case 'checkout': loadCheckoutPage(); break;
                 case 'account': loadAccountPage(); break;
@@ -3240,6 +3266,58 @@ function simpleHash(str) {
     return hash;
 }
 // ফ্রন্টএন্ডের যেকোনো জায়গায় বসিয়ে দিন (যেমন isCategoryMatch এর উপরে)
+
+// ==========================================
+// CLEAN URL / SLUG HELPERS
+// ==========================================
+function slugifyText(input) {
+  if (input === undefined || input === null) return '';
+  return String(input).toLowerCase().trim()
+    .replace(/\s*>\s*/g, '-')
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+}
+function productPath(p) {
+  if (!p) return '/home';
+  const sl = p.slug ? slugifyText(p.slug) : '';
+  return '/product/' + encodeURIComponent(sl || p.id);
+}
+function findProductByParam(param) {
+  if (param === undefined || param === null || param === '') return null;
+  let key = String(param);
+  try { key = decodeURIComponent(key); } catch (e) {}
+  const lk = key.toLowerCase();
+  const list = appData.products || [];
+  return list.find(x => x.slug && slugifyText(x.slug) === lk)
+      || list.find(x => String(x.id) === key)
+      || null;
+}
+function getCategorySlugMap() {
+  const map = {};
+  (appData.categories || []).forEach(c => {
+    const full = (c.categoryname || '').trim();
+    if (!full) return;
+    const parts = full.split(/\s*>\s*/);
+    for (let i = 1; i <= parts.length; i++) {
+      const nm = parts.slice(0, i).join(' > ');
+      const sl = slugifyText(nm);
+      if (sl && !map[sl]) map[sl] = nm;
+    }
+  });
+  return map;
+}
+function categoryPath(name, kind) {
+  const sl = slugifyText(name);
+  return '/' + (kind === 'brand' ? 'brand' : 'category') + '/' + encodeURIComponent(sl || name);
+}
+function resolveCategoryParam(param) {
+  if (!param) return '';
+  let key = String(param);
+  try { key = decodeURIComponent(key); } catch (e) {}
+  const map = getCategorySlugMap();
+  const sl = slugifyText(key);
+  return map[sl] || key; // not a known slug -> treat as legacy plain name
+}
 function normalizeCategoryPath(input) {
   if (typeof input !== 'string' || !input.trim()) return '';
   let str = input.toLowerCase().trim();
@@ -6160,7 +6238,7 @@ function loadCategoryProducts(rawName) {
     updatePageMeta({
         title: displayName + ' - ' + SEO_SITE_NAME,
         description: displayName + ' - সাশ্রয়ী মূল্যে সেরা পণ্যসমূহ পান ' + SEO_SITE_NAME + '-এ',
-        url: SEO_BASE_URL + '/category?name=' + encodeURIComponent(rawName),
+        url: SEO_BASE_URL + categoryPath(rawName),
         image: rootCatObj ? rootCatObj.categoryimageurl : undefined,
 // ✅ ঠিক করা কোড
 schema: {
@@ -6305,7 +6383,7 @@ function loadProductDetails(id) {
     // OPTIMIZED LOGIC: LOCAL DATA FINDING (NO SERVER CALL)
     // ==========================================
     // সার্ভারে না গিয়ে appData থেকেই প্রোডাক্ট খুঁজে বের করা হচ্ছে
-    let p = appData.products.find(product => product.id == id);
+    let p = findProductByParam(id);
     
     // ==========================================
     // আপডেটেড: হালকা ডিকশনারি থেকে শুধু দরকারি ডাটা মার্জ করা হচ্ছে
@@ -6315,7 +6393,7 @@ function loadProductDetails(id) {
         if (_detailsStr && p) {
             // এখানে পুরো সাইটের ডাটা নয়, শুধু ছবি ও ডেসক্রিপশনের ছোট ডিকশনারি পার্স হচ্ছে
             const detailsObj = JSON.parse(_detailsStr);
-            const specificDetails = detailsObj[id]; 
+            const specificDetails = detailsObj[p.id]; 
             if (specificDetails) {
                 p = {...p, ...specificDetails};
             }
@@ -6463,7 +6541,7 @@ if (variants.length > 0) {
     updatePageMeta({
         title: p.name + ' - ' + SEO_SITE_NAME,
         description: stripHtml(p.description || p.name).substring(0, 160),
-        url: SEO_BASE_URL + '/product?id=' + p.id,
+        url: SEO_BASE_URL + productPath(p),
         image: p.imagemain,
         ogType: 'product',
 // ✅ ঠিক করা কোড
@@ -6471,8 +6549,8 @@ schema: {
     'ld-product': seoProductSchema(p),
     'ld-breadcrumb': seoBreadcrumbSchema([
         { name: 'Home', url: SEO_BASE_URL + '/' },
-        { name: toCategoryTitleCase(p.category.split(' > ')[0]), url: SEO_BASE_URL + '/category?name=' + encodeURIComponent(p.category.split(' > ')[0]) },
-        { name: p.name, url: window.location.origin + '/product?id=' + p.id }  // ✅ URL যোগ হয়েছে
+        { name: toCategoryTitleCase(p.category.split(' > ')[0]), url: SEO_BASE_URL + categoryPath(resolveCategoryParam(p.category.split(' > ')[0])) },
+        { name: p.name, url: window.location.origin + productPath(p) }  // ✅ URL যোগ হয়েছে
     ])
 }
     });
