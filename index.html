@@ -7043,7 +7043,7 @@ function createRecCard(product, prefix) {
     const isSelected = appData.cart.some(item => item.id == product.id && item.selected !== false);
     
     return `
-        <div class="rec-new-card" onclick="navigateTo('/product?id=${product.id}')" style="cursor: pointer;">
+        <div class="rec-new-card" onclick="navigateTo(productPath(product))" style="cursor: pointer;">
             <img src="${product.imagemain}" class="rec-new-img" loading="lazy" alt="${product.name}" onerror="this.src='https://via.placeholder.com/54?text=Img'">
             <div class="rec-new-info">
                 <div class="rec-new-name">${product.name}</div>
