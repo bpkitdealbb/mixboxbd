@@ -3384,13 +3384,13 @@ function createOrderCard(order) {
             itemsHtml += `
                 <div class="flex items-start gap-3 border-b border-gray-100 pb-3 last:border-0">
                     <img src="${itemImage}" 
-                         onclick="event.stopPropagation(); navigateTo(productPath(item))" 
+                         onclick="event.stopPropagation(); navigateTo('${productPath(item)}')" 
                          class="w-14 h-14 rounded-lg object-cover border border-gray-200 bg-gray-50 shrink-0 cursor-pointer hover:opacity-90 hover:scale-105 transition-transform duration-200"
                          loading="lazy" title="View Product Details">
                     
                     <div class="flex-1 flex flex-col justify-between min-w-0">
                         <div class="flex justify-between items-start">
-                            <span onclick="event.stopPropagation(); navigateTo(productPath(item))" 
+                            <span onclick="event.stopPropagation(); navigateTo('${productPath(item)}')" 
                                   class="font-medium text-sm text-gray-800 leading-tight block cursor-pointer hover:text-primary hover:underline transition-colors">
                    ${escapeHTML(itemName)}${escapeHTML(variantText)}
                             </span>
@@ -4330,7 +4330,7 @@ function loadAllProductsSection(pageNum, shouldScrollToTop = true) {
             html += `
                 <div class="col-span-2 w-full my-2">
                     <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
-                         onclick="event.stopPropagation(); navigateTo(categoryPath(group.category))">
+                         onclick="event.stopPropagation(); navigateTo('${categoryPath(group.category)}')">
                         ${mediaTag}
                     </div>
                 </div>
@@ -5199,7 +5199,7 @@ function updateCartPageUI() {
         const savings = (originalPrice > currentPrice) ? (originalPrice - currentPrice) : 0;
 
         return `
-            <div onclick="navigateTo(productPath(item))" 
+            <div onclick="navigateTo('${productPath(item)}')" 
                  class="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex gap-3 items-center relative group cursor-pointer hover:shadow-md transition-shadow overflow-hidden ${isOOS ? 'opacity-60' : ''}">
                 
                 <!-- ১. চেকবক্স (সবসময় সচল থাকবে) -->
@@ -5877,7 +5877,7 @@ function loadTopCategories() {
     container.innerHTML = cats.map(c => {
         const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
         return `
-<div onclick="navigateTo(categoryPath(displayName))" class="text-center cursor-pointer group" style="width:calc((100% - 2.25rem) / 4);">
+<div onclick="navigateTo('${categoryPath(displayName)}')" class="text-center cursor-pointer group" style="width:calc((100% - 2.25rem) / 4);">
     <div class="aspect-square rounded-xl overflow-hidden border border-gray-100 group-hover:border-primary/30 transition">
         <img src="${c.categoryimageurl}" class="w-full h-full object-cover transform group-hover:scale-110 transition" loading="lazy">
     </div>
@@ -6065,7 +6065,7 @@ function loadFeaturedProducts() {
         html += `
             <div class="col-span-2 w-full my-2">
                 <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
-                     onclick="event.stopPropagation(); navigateTo(categoryPath(banner.categoryname))">
+                     onclick="event.stopPropagation(); navigateTo('${categoryPath(banner.categoryname)}')">
                     ${mediaTag}
                 </div>
             </div>
@@ -6154,7 +6154,7 @@ function loadFeaturedProducts() {
 }
 
             return `
-                <div onclick="navigateTo(productPath(p))" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden group cursor-pointer ${isOutOfStock ? 'opacity-70' : ''}">
+                <div onclick="navigateTo('${productPath(p)}')" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden group cursor-pointer ${isOutOfStock ? 'opacity-70' : ''}">
                     <div class="relative aspect-square bg-gray-100">
                         <img src="${p.imagemain}" class="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy">
                         ${discount && !isOutOfStock ? `<span class="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">${discount}% OFF</span>` : ''}
@@ -6201,7 +6201,7 @@ function loadFeaturedProducts() {
             container.innerHTML = cats.map(c => {
                 const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
                 return `
-                <div onclick="navigateTo(categoryPath(displayName))" class="text-center cursor-pointer">
+                <div onclick="navigateTo('${categoryPath(displayName)}')" class="text-center cursor-pointer">
                     <div class="aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm border">
                         <img src="${c.categoryimageurl}" class="w-full h-full object-cover" loading="lazy">
                     </div>
@@ -6269,7 +6269,7 @@ schema: {
             let bcHtml = '';
             bcHtml += `<button onclick="navigateTo('/categories')" class="hover:text-gray-800">${rootLabel}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
-            bcHtml += `<button onclick="navigateTo(categoryPath(mainCat))" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
+            bcHtml += `<button onclick="navigateTo('${categoryPath(mainCat)}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
             bcHtml += `<span class="text-gray-800">${toCategoryTitleCase(subCat)}</span>`;
             bcContainer.innerHTML = bcHtml;
@@ -6311,7 +6311,7 @@ schema: {
             const subCats = appData.categories.filter(c => c.categoryname.startsWith(name + ' > '));
             
             document.getElementById('subCategoriesList').innerHTML = subCats.map(c => `
-                <div onclick="navigateTo(categoryPath(c.categoryname))" class="text-center cursor-pointer">
+                <div onclick="navigateTo('${categoryPath(c.categoryname)}')" class="text-center cursor-pointer">
                     <div class="aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm border">
                         <img src="${c.categoryimageurl}" class="w-full h-full object-cover" loading="lazy">
                     </div>
@@ -7043,7 +7043,7 @@ function createRecCard(product, prefix) {
     const isSelected = appData.cart.some(item => item.id == product.id && item.selected !== false);
     
     return `
-        <div class="rec-new-card" onclick="navigateTo(productPath(product))" style="cursor: pointer;">
+        <div class="rec-new-card" onclick="navigateTo('${productPath(product)}')" style="cursor: pointer;">
             <img src="${product.imagemain}" class="rec-new-img" loading="lazy" alt="${product.name}" onerror="this.src='https://via.placeholder.com/54?text=Img'">
             <div class="rec-new-info">
                 <div class="rec-new-name">${product.name}</div>
@@ -7278,7 +7278,7 @@ function updateCheckoutSummary() {
                 return `
                     <div class="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
                         
-                        <div onclick="event.stopPropagation(); navigateTo(productPath(i))" 
+                        <div onclick="event.stopPropagation(); navigateTo('${productPath(i)}')" 
                              class="w-12 h-12 shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer hover:ring-2 hover:ring-primary/40 hover:scale-105 transition-all duration-200">
                             <img src="${itemImage}" 
                                  class="w-full h-full object-cover" 
@@ -7290,7 +7290,7 @@ function updateCheckoutSummary() {
                         <div class="flex-1 min-w-0">
                             <div class="flex items-start justify-between gap-2">
                                 <div class="min-w-0 flex-1">
-                                    <p onclick="event.stopPropagation(); navigateTo(productPath(i))" 
+                                    <p onclick="event.stopPropagation(); navigateTo('${productPath(i)}')" 
                                        class="text-xs font-medium text-gray-800 leading-tight line-clamp-2 cursor-pointer hover:text-primary hover:underline transition-colors duration-200">${escapeHTML(i.name)}</p>
                                     <div class="flex items-center mt-0.5">
                                         ${variantText}
@@ -8157,7 +8157,7 @@ function searchProducts(query) {
     if (results.length > 0) {
         container.classList.remove('hidden');
         container.innerHTML = results.map(p => `
-            <div onclick="closeSearchBar(); navigateTo(productPath(p));" 
+            <div onclick="closeSearchBar(); navigateTo('${productPath(p)}');" 
                  class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 transition-colors group">
                 <div class="relative w-12 h-12 shrink-0">
                     <img src="${p.imagemain}" 
