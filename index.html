@@ -2959,8 +2959,10 @@ function loadRoute(fullPath) {
                 case 'home': loadHomePage(); break;
                 case 'categories': loadCategoriesPage(); break;
                 case 'category':
+  loadCategoryProducts(resolveCategoryParam(pathParam || params.get('name')), false);
+  break;
 case 'brand':
-  loadCategoryProducts(resolveCategoryParam(pathParam || params.get('name'))); 
+  loadCategoryProducts(resolveCategoryParam(pathParam || params.get('name')), true);
   break;
                 case 'product': loadProductDetails(pathParam || params.get('id')); break;
                 case 'cart': loadCartPage(); break;
@@ -3384,13 +3386,13 @@ function createOrderCard(order) {
             itemsHtml += `
                 <div class="flex items-start gap-3 border-b border-gray-100 pb-3 last:border-0">
                     <img src="${itemImage}" 
-                         onclick="event.stopPropagation(); navigateTo('/product?id=${item.id}')" 
+                         onclick="event.stopPropagation(); navigateTo('${productPath(item)}')" 
                          class="w-14 h-14 rounded-lg object-cover border border-gray-200 bg-gray-50 shrink-0 cursor-pointer hover:opacity-90 hover:scale-105 transition-transform duration-200"
                          loading="lazy" title="View Product Details">
                     
                     <div class="flex-1 flex flex-col justify-between min-w-0">
                         <div class="flex justify-between items-start">
-                            <span onclick="event.stopPropagation(); navigateTo('/product?id=${item.id}')" 
+                            <span onclick="event.stopPropagation(); navigateTo('${productPath(item)}')" 
                                   class="font-medium text-sm text-gray-800 leading-tight block cursor-pointer hover:text-primary hover:underline transition-colors">
                    ${escapeHTML(itemName)}${escapeHTML(variantText)}
                             </span>
@@ -4330,7 +4332,7 @@ function loadAllProductsSection(pageNum, shouldScrollToTop = true) {
             html += `
                 <div class="col-span-2 w-full my-2">
                     <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
-                         onclick="event.stopPropagation(); navigateTo('/category?name=${encodeURIComponent(group.category)}')">
+                         onclick="event.stopPropagation(); navigateTo('${categoryPath(group.category)}')">
                         ${mediaTag}
                     </div>
                 </div>
@@ -5199,7 +5201,7 @@ function updateCartPageUI() {
         const savings = (originalPrice > currentPrice) ? (originalPrice - currentPrice) : 0;
 
         return `
-            <div onclick="navigateTo('/product?id=${item.id}')" 
+            <div onclick="navigateTo('${productPath(item)}')" 
                  class="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex gap-3 items-center relative group cursor-pointer hover:shadow-md transition-shadow overflow-hidden ${isOOS ? 'opacity-60' : ''}">
                 
                 <!-- ১. চেকবক্স (সবসময় সচল থাকবে) -->
@@ -5422,7 +5424,7 @@ function quickAdd(id) {
         // ১. যদি প্রোডাক্টের ভ্যারিয়েন্ট থাকে:
         // তবে সরাসরি কার্টে না নিয়ে, প্রোডাক্ট ডিটেইলস পেজে নিয়ে যাওয়া হবে
         // যাতে ইউজার কালার বা সাইজ সিলেক্ট করতে পারে।
-        navigateTo(`/product?id=${p.id}`);
+        navigateTo(productPath(p));
         
         // অপশনাল: ইউজারকে জানানোর জন্য একটি ছোট টোস্ট মেসেজ (চাইলে ব্যবহার করতে পারেন)
         /*
@@ -5854,7 +5856,7 @@ function stopSlider() {
                 // If cat matches a Main Category exactly, go to Sub-Cat list
                 // If cat matches a Sub-Category exactly, go to Products
                 // Simplest approach: Pass as is, let loadCategoryProducts handle it
-                navigateTo(`/category?name=${encodeURIComponent(cat)}`);
+                navigateTo(categoryPath(cat));
             }
             else if (url) window.open(url, '_blank');
         }
@@ -5877,7 +5879,7 @@ function loadTopCategories() {
     container.innerHTML = cats.map(c => {
         const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
         return `
-<div onclick="navigateTo('/category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer group" style="width:calc((100% - 2.25rem) / 4);">
+<div onclick="navigateTo('${categoryPath(displayName)}')" class="text-center cursor-pointer group" style="width:calc((100% - 2.25rem) / 4);">
     <div class="aspect-square rounded-xl overflow-hidden border border-gray-100 group-hover:border-primary/30 transition">
         <img src="${c.categoryimageurl}" class="w-full h-full object-cover transform group-hover:scale-110 transition" loading="lazy">
     </div>
@@ -5922,7 +5924,7 @@ function loadOurBrandSection() {
         // ডাইনামিক রাউট (brand নাকি category)
         slide.onclick = () => {  
             const routeType = c.istop === 'brand' ? 'brand' : 'category';
-            navigateTo(`/${routeType}?name=${encodeURIComponent(displayName)}`);  
+            navigateTo(categoryPath(displayName, routeType));  
         };  
 
 slide.innerHTML = `  
@@ -6065,7 +6067,7 @@ function loadFeaturedProducts() {
         html += `
             <div class="col-span-2 w-full my-2">
                 <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
-                     onclick="event.stopPropagation(); navigateTo('/category?name=${encodeURIComponent(banner.categoryname)}')">
+                     onclick="event.stopPropagation(); navigateTo('${categoryPath(banner.categoryname)}')">
                     ${mediaTag}
                 </div>
             </div>
@@ -6154,7 +6156,7 @@ function loadFeaturedProducts() {
 }
 
             return `
-                <div onclick="navigateTo('/product?id=${p.id}')" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden group cursor-pointer ${isOutOfStock ? 'opacity-70' : ''}">
+                <div onclick="navigateTo('${productPath(p)}')" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden group cursor-pointer ${isOutOfStock ? 'opacity-70' : ''}">
                     <div class="relative aspect-square bg-gray-100">
                         <img src="${p.imagemain}" class="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy">
                         ${discount && !isOutOfStock ? `<span class="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">${discount}% OFF</span>` : ''}
@@ -6201,7 +6203,7 @@ function loadFeaturedProducts() {
             container.innerHTML = cats.map(c => {
                 const displayName = toCategoryTitleCase(c.categoryname.split(' > ')[0]);
                 return `
-                <div onclick="navigateTo('/category?name=${encodeURIComponent(displayName)}')" class="text-center cursor-pointer">
+                <div onclick="navigateTo('${categoryPath(displayName)}')" class="text-center cursor-pointer">
                     <div class="aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm border">
                         <img src="${c.categoryimageurl}" class="w-full h-full object-cover" loading="lazy">
                     </div>
@@ -6210,7 +6212,7 @@ function loadFeaturedProducts() {
                 `;
             }).join('');
         }
-function loadCategoryProducts(rawName) {
+function loadCategoryProducts(rawName, forceBrandRoute = false) {
     const content = document.getElementById('content');
     content.innerHTML = ''; 
     
@@ -6231,14 +6233,15 @@ function loadCategoryProducts(rawName) {
 
     const rootCatName = name.includes(' > ') ? name.split(' > ')[0] : name;
     
-    const rootCatObj = appData.categories.find(c => c.categoryname === rootCatName);
-    const isBrand = rootCatObj && rootCatObj.istop === 'brand';
+    const rootCatObj = appData.categories.find(c => normalizeCategoryPath(c.categoryname || '') === rootCatName);
+    // ব্র্যান্ড আলাদা product field-এ নেই; backend-এ istop='brand' category-র মাধ্যমেই ব্র্যান্ড চিহ্নিত।
+    const isBrand = forceBrandRoute || !!(rootCatObj && String(rootCatObj.istop || '').trim().toLowerCase() === 'brand');
     const rootLabel = isBrand ? t('our_brands') : t('categories');
     // DYNAMIC SEO: Category Meta
     updatePageMeta({
         title: displayName + ' - ' + SEO_SITE_NAME,
         description: displayName + ' - সাশ্রয়ী মূল্যে সেরা পণ্যসমূহ পান ' + SEO_SITE_NAME + '-এ',
-        url: SEO_BASE_URL + categoryPath(rawName),
+        url: SEO_BASE_URL + categoryPath(rawName, forceBrandRoute ? 'brand' : 'category'),
         image: rootCatObj ? rootCatObj.categoryimageurl : undefined,
 // ✅ ঠিক করা কোড
 schema: {
@@ -6249,7 +6252,8 @@ schema: {
     ])
 }
     });
-    const isSubCategory = name.includes(' > ');
+    // /brand/... রুটে subcategory layout নয়, সংশ্লিষ্ট brand-category-র product list দেখাতে হবে।
+    const isSubCategory = !forceBrandRoute && name.includes(' > ');
 
     if (isSubCategory) {
         content.innerHTML = ''; 
@@ -6269,7 +6273,7 @@ schema: {
             let bcHtml = '';
             bcHtml += `<button onclick="navigateTo('/categories')" class="hover:text-gray-800">${rootLabel}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
-            bcHtml += `<button onclick="navigateTo('/category?name=${encodeURIComponent(mainCat)}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
+            bcHtml += `<button onclick="navigateTo('${categoryPath(mainCat)}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
             bcHtml += `<span class="text-gray-800">${toCategoryTitleCase(subCat)}</span>`;
             bcContainer.innerHTML = bcHtml;
@@ -6287,7 +6291,7 @@ schema: {
         document.getElementById('content').insertAdjacentHTML('beforeend', getFooterHTML());
 
     } else {
-        const hasSubCategories = appData.categories.some(c => c.categoryname.startsWith(name + ' > '));
+        const hasSubCategories = !forceBrandRoute && appData.categories.some(c => normalizeCategoryPath(c.categoryname || '').startsWith(name + ' > '));
 
         if (hasSubCategories) {
             content.innerHTML = ''; 
@@ -6311,7 +6315,7 @@ schema: {
             const subCats = appData.categories.filter(c => c.categoryname.startsWith(name + ' > '));
             
             document.getElementById('subCategoriesList').innerHTML = subCats.map(c => `
-                <div onclick="navigateTo('/category?name=${encodeURIComponent(c.categoryname)}')" class="text-center cursor-pointer">
+                <div onclick="navigateTo('${categoryPath(c.categoryname)}')" class="text-center cursor-pointer">
                     <div class="aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm border">
                         <img src="${c.categoryimageurl}" class="w-full h-full object-cover" loading="lazy">
                     </div>
@@ -6330,7 +6334,11 @@ schema: {
             loadTemplate('categoryProductsTemplate');
             document.getElementById('categoryTitle').textContent = displayName;
             
-            const filteredProducts = appData.products.filter(p => p.category.startsWith(name));
+            const filteredProducts = (appData.products || []).filter(p => {
+                const productCategory = normalizeCategoryPath(String((p && p.category) || ''));
+                // Exact match বা 'brand > subcategory' boundary match; 'brandx' যেন 'brand'-এর মধ্যে না পড়ে।
+                return productCategory === name || productCategory.startsWith(name + ' > ');
+            });
 
             const bcContainer = document.getElementById('breadcrumb-container');
             if(bcContainer) {
@@ -7043,7 +7051,7 @@ function createRecCard(product, prefix) {
     const isSelected = appData.cart.some(item => item.id == product.id && item.selected !== false);
     
     return `
-        <div class="rec-new-card" onclick="navigateTo('/product?id=${product.id}')" style="cursor: pointer;">
+        <div class="rec-new-card" onclick="navigateTo('${productPath(product)}')" style="cursor: pointer;">
             <img src="${product.imagemain}" class="rec-new-img" loading="lazy" alt="${product.name}" onerror="this.src='https://via.placeholder.com/54?text=Img'">
             <div class="rec-new-info">
                 <div class="rec-new-name">${product.name}</div>
@@ -7071,7 +7079,7 @@ function addRecToCart(productId) {
     // SAFETY GUARD: ভ্যারিয়েন্ট প্রোডাক্ট এখানে সরাসরি Add করা যাবে না, কারণ এখানে
     // ভ্যারিয়েন্ট সিলেক্ট করার UI নেই — প্রোডাক্ট পেজে গিয়ে সিলেক্ট করতে হবে
     if (product.variants && product.variants.length > 0) {
-        navigateTo('/product?id=' + product.id);
+        navigateTo(productPath(product));
         return;
     }
     
@@ -7278,7 +7286,7 @@ function updateCheckoutSummary() {
                 return `
                     <div class="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
                         
-                        <div onclick="event.stopPropagation(); navigateTo('/product?id=${i.id}')" 
+                        <div onclick="event.stopPropagation(); navigateTo('${productPath(i)}')" 
                              class="w-12 h-12 shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer hover:ring-2 hover:ring-primary/40 hover:scale-105 transition-all duration-200">
                             <img src="${itemImage}" 
                                  class="w-full h-full object-cover" 
@@ -7290,7 +7298,7 @@ function updateCheckoutSummary() {
                         <div class="flex-1 min-w-0">
                             <div class="flex items-start justify-between gap-2">
                                 <div class="min-w-0 flex-1">
-                                    <p onclick="event.stopPropagation(); navigateTo('/product?id=${i.id}')" 
+                                    <p onclick="event.stopPropagation(); navigateTo('${productPath(i)}')" 
                                        class="text-xs font-medium text-gray-800 leading-tight line-clamp-2 cursor-pointer hover:text-primary hover:underline transition-colors duration-200">${escapeHTML(i.name)}</p>
                                     <div class="flex items-center mt-0.5">
                                         ${variantText}
@@ -8157,7 +8165,7 @@ function searchProducts(query) {
     if (results.length > 0) {
         container.classList.remove('hidden');
         container.innerHTML = results.map(p => `
-            <div onclick="closeSearchBar(); navigateTo('/product?id=${p.id}');" 
+            <div onclick="closeSearchBar(); navigateTo('${productPath(p)}');" 
                  class="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0 transition-colors group">
                 <div class="relative w-12 h-12 shrink-0">
                     <img src="${p.imagemain}" 
@@ -8629,9 +8637,12 @@ function showPolicy(name) {
 
             let targetUrl = '';
             if (popup.targettype === 'product') {
-                targetUrl = `/product?id=${popup.targetvalue}`;
+                const popupProduct = findProductByParam(popup.targetvalue);
+                targetUrl = popupProduct ? productPath(popupProduct) : '/product/' + encodeURIComponent(popup.targetvalue);
             } else if (popup.targettype === 'category') {
-                targetUrl = `/category?name=${encodeURIComponent(popup.targetvalue)}`;
+                targetUrl = categoryPath(popup.targetvalue, 'category');
+            } else if (popup.targettype === 'brand') {
+                targetUrl = categoryPath(popup.targetvalue, 'brand');
             } else if (popup.targettype === 'url') {
                 window.open(popup.targetvalue, '_blank');
                 closePopup();
