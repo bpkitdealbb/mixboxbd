@@ -102,6 +102,7 @@
                     </div>
                     <div><label class="font-bold block mb-1">ID*</label><input type="text" id="p_id" class="w-full border rounded-lg p-2.5" required disabled></div>
                     <div><label class="font-bold block mb-1">Name*</label><input type="text" id="p_name" class="w-full border rounded-lg p-2.5" required disabled></div>
+                    <div><label class="font-bold block mb-1">Slug (URL) <span class="font-normal text-gray-400 text-xs">- যেমন: sundorbon-honey</span></label><input type="text" id="p_slug" class="w-full border rounded-lg p-2.5" placeholder="খালি রাখলে নাম থেকে অটো হবে" oninput="this.dataset.manual='1'" disabled></div>
                     <div class="relative">
                         <label class="font-bold block mb-1">Category*</label>
                         <div id="p_category_picker" class="relative">
@@ -3498,7 +3499,7 @@ function deleteOfflineOrder(orderId){
 // ==========================================
 // NEW: ভ্যারিয়েন্ট স্ট্রাকচার্ড ফর্ম + "ভ্যারিয়েন্ট আছে কিনা" লক সিস্টেম
 // ==========================================
-const VARIANT_LOCK_FIELD_IDS = ['p_id','p_name','p_category','p_price','p_discount','p_costprice','p_stock','p_stockstatus','p_extra_delivery','p_image','p_image2','p_image3','p_image4','p_image5','p_video','p_desc'];
+const VARIANT_LOCK_FIELD_IDS = ['p_id','p_name','p_slug','p_category','p_price','p_discount','p_costprice','p_stock','p_stockstatus','p_extra_delivery','p_image','p_image2','p_image3','p_image4','p_image5','p_video','p_desc'];
 
 function lockEntireProductModal() {
     VARIANT_LOCK_FIELD_IDS.forEach(fid => { const el = document.getElementById(fid); if (el) el.disabled = true; });
@@ -3781,6 +3782,7 @@ function syncLocalFeaturedIds(productId, isFeatured){
     localData.settings.featuredproductids=ids.join(',');
 }
 
+function slugifyAdmin(t){return String(t||'').toLowerCase().trim().replace(/\s*>\s*/g,'-').replace(/[^\p{L}\p{M}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'');}
 function openProductModal(id=null){
     document.getElementById('productForm').reset();document.getElementById('p_stockstatus').value='In Stock';
     document.getElementById('productModalTitle').innerText=id?"Edit Product":"Add Product";
@@ -3793,7 +3795,7 @@ function openProductModal(id=null){
     // NEW: প্রতিবার মডেল খোলার সময় ক্যাটাগরি ড্রপডাউন লাইভ ক্যাটাগরি লিস্ট দিয়ে সাজানো হচ্ছে
     populateCategoryDropdown('');
     // BUG FIX: String() দিয়ে টাইপ ম্যাচিং ঠিক করা হয়েছে (Number vs String সমস্যা সমাধান)
-    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;populateCategoryDropdown(p.category);document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';document.getElementById('p_featured').checked=getFeaturedIdList().indexOf(String(p.id).trim())!==-1;
+    if(id){const p=localData.products.find(x=>String(x.id)===String(id));if(p){document.getElementById('p_id').value=p.id;document.getElementById('p_id').readOnly=true;document.getElementById('p_name').value=p.name;document.getElementById('p_slug').value=p.slug||'';document.getElementById('p_slug').dataset.manual=p.slug?'1':'';populateCategoryDropdown(p.category);document.getElementById('p_price').value=p.price;document.getElementById('p_discount').value=p.discountprice||'';document.getElementById('p_costprice').value=p.costprice||'';document.getElementById('p_stock').value=p.totalstock;document.getElementById('p_stockstatus').value=p.stockstatus||'In Stock';document.getElementById('p_extra_delivery').value=p.extradeliverycharge||'';document.getElementById('p_image').value=p.imagemain||'';document.getElementById('p_image2').value=p.image2||'';document.getElementById('p_image3').value=p.image3||'';document.getElementById('p_image4').value=p.image4||'';document.getElementById('p_image5').value=p.image5||'';document.getElementById('p_video').value=p.videourl||'';document.getElementById('p_desc').value=p.description||'';document.getElementById('p_featured').checked=getFeaturedIdList().indexOf(String(p.id).trim())!==-1;
         // NEW: ভ্যারিয়েন্ট থাকলে প্রতিটার জন্য একটা স্ট্রাকচার্ড রো বসানো (regularprice ও costprice সহ — আগের বাগ যেটা এডিট করলে ডিসকাউন্ট মুছে দিত, সেটাও এখানেই ঠিক হয়ে গেল)
         const hasVariant = Array.isArray(p.variants) && p.variants.length>0;
         modalOriginallyHadVariants = hasVariant;
@@ -3858,7 +3860,13 @@ function parseVariantsLocal(variantsStr, mainPrice){
 }
 
 function doSaveProduct(hasVariant){
-    const d={id:document.getElementById('p_id').value.trim(),name:document.getElementById('p_name').value.trim(),category:document.getElementById('p_category').value.trim(),price:parseFloat(document.getElementById('p_price').value)||0,discountprice:parseFloat(document.getElementById('p_discount').value)||0,totalstock:parseInt(document.getElementById('p_stock').value)||0,stockstatus:document.getElementById('p_stockstatus').value,costprice:document.getElementById('p_costprice').value.trim(),extradeliverycharge:parseFloat(document.getElementById('p_extra_delivery').value)||0,imagemain:document.getElementById('p_image').value.trim(),image2:document.getElementById('p_image2').value.trim(),image3:document.getElementById('p_image3').value.trim(),image4:document.getElementById('p_image4').value.trim(),image5:document.getElementById('p_image5').value.trim(),videourl:document.getElementById('p_video').value.trim(),description:document.getElementById('p_desc').value.trim(),variants:document.getElementById('p_variants').value.trim(),featured:document.getElementById('p_featured').checked};
+    const _slugEl=document.getElementById('p_slug');
+    let _slug=slugifyAdmin(_slugEl.value)||slugifyAdmin(document.getElementById('p_name').value);
+    if(!_slug)_slug=slugifyAdmin(document.getElementById('p_id').value);
+    const _dup=(localData.products||[]).find(x=>x.slug&&slugifyAdmin(x.slug)===_slug&&String(x.id)!==document.getElementById('p_id').value.trim());
+    if(_dup){Swal.fire({icon:'error',title:'Slug ডুপ্লিকেট',text:'এই Slug অন্য প্রোডাক্টে (ID: '+_dup.id+') ব্যবহার হয়েছে, অন্য একটি দিন'});return;}
+    _slugEl.value=_slug;
+    const d={id:document.getElementById('p_id').value.trim(),slug:_slug,name:document.getElementById('p_name').value.trim(),category:document.getElementById('p_category').value.trim(),price:parseFloat(document.getElementById('p_price').value)||0,discountprice:parseFloat(document.getElementById('p_discount').value)||0,totalstock:parseInt(document.getElementById('p_stock').value)||0,stockstatus:document.getElementById('p_stockstatus').value,costprice:document.getElementById('p_costprice').value.trim(),extradeliverycharge:parseFloat(document.getElementById('p_extra_delivery').value)||0,imagemain:document.getElementById('p_image').value.trim(),image2:document.getElementById('p_image2').value.trim(),image3:document.getElementById('p_image3').value.trim(),image4:document.getElementById('p_image4').value.trim(),image5:document.getElementById('p_image5').value.trim(),videourl:document.getElementById('p_video').value.trim(),description:document.getElementById('p_desc').value.trim(),variants:document.getElementById('p_variants').value.trim(),featured:document.getElementById('p_featured').checked};
     if(!d.id||!d.name)return Swal.fire('Warning','ID, Name required','warning');
     // ভ্যারিয়েন্ট প্রোডাক্টের ক্ষেত্রে বেস Price লাগে না (প্রতিটা ভ্যারিয়েন্টের নিজস্ব দাম আছে),
     // তাই শুধু non-variant প্রোডাক্টের জন্যই Price আবশ্যক রাখা হলো
