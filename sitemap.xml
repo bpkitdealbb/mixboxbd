@@ -43,13 +43,19 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://safaboxbd.web.app/category/an-nahl-care</loc>
+    <loc>https://safaboxbd.web.app/category/an-nahl-healthy-life-food</loc>
     <lastmod>2026-10-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://safaboxbd.web.app/category/an-nahl-nuts-seeds</loc>
+    <lastmod>2026-10-12</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://safaboxbd.web.app/category/an-nahl-dry-foods</loc>
     <lastmod>2026-10-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -145,7 +151,7 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://safaboxbd.web.app/product/121</loc>
+    <loc>https://safaboxbd.web.app/product/moringa-leaf-powder</loc>
     <lastmod>2026-10-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -157,13 +163,13 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://safaboxbd.web.app/product/123</loc>
+    <loc>https://safaboxbd.web.app/product/golden-raisins</loc>
     <lastmod>2026-10-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://safaboxbd.web.app/product/124</loc>
+    <loc>https://safaboxbd.web.app/product/himalayan-pink-salt</loc>
     <lastmod>2026-10-12</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
