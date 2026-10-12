@@ -5897,7 +5897,17 @@ function loadOurBrandSection() {
     if (!container || !section) return;  
 
     // শুধুমাত্র ব্র্যান্ড ক্যাটাগরি  
-    const brandCats = appData.categories.filter(c => c.istop === 'brand');  
+    const _brandSeen = new Set();
+    const brandCats = appData.categories
+        .filter(c => c.istop === 'brand')
+        .slice()
+        .sort((a, b) => (String(a.categoryname).includes(' > ') ? 1 : 0) - (String(b.categoryname).includes(' > ') ? 1 : 0))
+        .filter(c => {
+            const main = normalizeCategoryPath(c.categoryname || '').split(' > ')[0];
+            if (!main || _brandSeen.has(main)) return false;
+            _brandSeen.add(main);
+            return true;
+        });  
 
     // ব্র্যান্ড না থাকলে সেকশন লুকানো হবে  
     if (brandCats.length === 0) {  
@@ -6063,11 +6073,16 @@ function loadFeaturedProducts() {
             mediaTag = `<img src="${banner.inlinebanner}" class="w-full h-auto object-cover" loading="lazy" onerror="this.parentElement.parentElement.style.display='none';" alt="${banner.categoryname}">`;
         }
 
+        // ব্র্যান্ডের (বা তার সাব-ক্যাটাগরির) ব্যানার হলে /brand/ রুটে নিয়ে যাবে
+        const _bRoot = normalizeCategoryPath(banner.categoryname || '').split(' > ')[0];
+        const _bRootObj = appData.categories.find(c => normalizeCategoryPath(c.categoryname || '') === _bRoot);
+        const bannerKind = (_bRootObj && String(_bRootObj.istop || '').trim().toLowerCase() === 'brand') ? 'brand' : 'category';
+
         // ব্যানার HTML তৈরি
         html += `
             <div class="col-span-2 w-full my-2">
                 <div class="w-full rounded-xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
-                     onclick="event.stopPropagation(); navigateTo('${categoryPath(banner.categoryname)}')">
+                     onclick="event.stopPropagation(); navigateTo('${categoryPath(banner.categoryname, bannerKind)}')">
                     ${mediaTag}
                 </div>
             </div>
@@ -6253,7 +6268,7 @@ schema: {
 }
     });
     // /brand/... রুটে subcategory layout নয়, সংশ্লিষ্ট brand-category-র product list দেখাতে হবে।
-    const isSubCategory = !forceBrandRoute && name.includes(' > ');
+    const isSubCategory = name.includes(' > ');
 
     if (isSubCategory) {
         content.innerHTML = ''; 
@@ -6273,7 +6288,7 @@ schema: {
             let bcHtml = '';
             bcHtml += `<button onclick="navigateTo('/categories')" class="hover:text-gray-800">${rootLabel}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
-            bcHtml += `<button onclick="navigateTo('${categoryPath(mainCat)}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
+            bcHtml += `<button onclick="navigateTo('${categoryPath(mainCat, isBrand ? 'brand' : 'category')}')" class="hover:text-gray-800">${toCategoryTitleCase(mainCat)}</button>`;
             bcHtml += `<span class="mx-1 text-gray-400">/</span>`;
             bcHtml += `<span class="text-gray-800">${toCategoryTitleCase(subCat)}</span>`;
             bcContainer.innerHTML = bcHtml;
@@ -6291,7 +6306,7 @@ schema: {
         document.getElementById('content').insertAdjacentHTML('beforeend', getFooterHTML());
 
     } else {
-        const hasSubCategories = !forceBrandRoute && appData.categories.some(c => normalizeCategoryPath(c.categoryname || '').startsWith(name + ' > '));
+        const hasSubCategories = appData.categories.some(c => normalizeCategoryPath(c.categoryname || '').startsWith(name + ' > '));
 
         if (hasSubCategories) {
             content.innerHTML = ''; 
@@ -6312,14 +6327,14 @@ schema: {
             
             document.getElementById('content').appendChild(subCatContainer);
 
-            const subCats = appData.categories.filter(c => c.categoryname.startsWith(name + ' > '));
+            const subCats = appData.categories.filter(c => normalizeCategoryPath(c.categoryname || '').startsWith(name + ' > '));
             
             document.getElementById('subCategoriesList').innerHTML = subCats.map(c => `
-                <div onclick="navigateTo('${categoryPath(c.categoryname)}')" class="text-center cursor-pointer">
+                <div onclick="navigateTo('${categoryPath(c.categoryname, isBrand ? 'brand' : 'category')}')" class="text-center cursor-pointer">
                     <div class="aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm border">
                         <img src="${c.categoryimageurl}" class="w-full h-full object-cover" loading="lazy">
                     </div>
-                    <p class="text-xs font-bold text-gray-700 truncate">${toCategoryTitleCase(c.categoryname.split(' > ')[1])}</p>
+                    <p class="text-xs font-bold text-gray-700 truncate">${toCategoryTitleCase(normalizeCategoryPath(c.categoryname).split(' > ')[1])}</p>
                 </div>
             `).join('');
 
