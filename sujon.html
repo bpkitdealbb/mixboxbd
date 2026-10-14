@@ -3292,10 +3292,101 @@ async function shareInvoiceWhatsApp(html, orderId, phone){
     }
 }
 
+// Cleanter Bridge: 58mm thermal receipt printing
+async function printInvoiceViaCleanter(invoiceHtml, orderId) {
+    const bridgeUrl = 'http://localhost:9100/print';
+    let holder;
+    try {
+        // Render invoice off-screen so browser can calculate readable text lines.
+        holder = document.createElement('div');
+        holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:360px;background:#fff;color:#000;font:12px Arial,sans-serif;';
+        holder.innerHTML = invoiceHtml;
+        document.body.appendChild(holder);
+
+        const invoice = holder.querySelector('#invoicePrintArea') || holder;
+        const textOf = el => (el?.innerText || el?.textContent || '').replace(/\u00a0/g, ' ').trim();
+        const content = [];
+        const logo = invoice.querySelector('img');
+        const title = logo ? 'SAFABOXBD' : 'SAFABOXBD';
+        content.push({type:'text', text:title, align:'center', bold:true, size:'large'});
+        content.push({type:'text', text:'INVOICE / RECEIPT', align:'center'});
+        content.push({type:'divider'});
+
+        // Keep the original invoice's order/customer details and totals, while
+        // skipping the HTML product grid which does not translate well to ESC/POS.
+        const paragraphs = Array.from(invoice.querySelectorAll('p'));
+        paragraphs.forEach(p => {
+            const t = textOf(p);
+            if (t && !t.includes('Thank you for choosing us') && !t.includes('We hope to see you again')) {
+                content.push({type:'text', text:t});
+            }
+        });
+
+        content.push({type:'divider'});
+        content.push({type:'text', text:'PRODUCTS', bold:true});
+
+        // Find product rows by their four-column flex layout (offline invoices).
+        const rows = Array.from(invoice.querySelectorAll('div')).filter(el =>
+            el.children.length === 4 && el.style && el.style.borderBottom &&
+            !String(el.style.borderBottom).includes('2px')
+        );
+        if (rows.length) {
+            rows.forEach(row => {
+                const cells = Array.from(row.children);
+                const name = textOf(cells[0]);
+                const qty = textOf(cells[1]);
+                const total = textOf(cells[3]);
+                if (name) {
+                    content.push({type:'text', text:name});
+                    content.push({type:'row', left:'Qty: ' + (qty || '1'), right:total || ''});
+                }
+            });
+        } else {
+            // Online invoice markup can differ; use its text lines as a safe fallback.
+            const lines = textOf(invoice).split(/\n+/).map(x => x.trim()).filter(Boolean);
+            lines.forEach(line => {
+                if (!/SAFABOXBD|INVOICE \/ RECEIPT|Thank you for choosing us|We hope to see you again|safaboxbd\.web\.app/i.test(line)) {
+                    content.push({type:'text', text:line});
+                }
+            });
+        }
+
+        content.push({type:'divider'});
+        // Add important invoice text/totals from the rendered invoice. Duplicates
+        // are avoided; PDF and WhatsApp continue using the original HTML unchanged.
+        const allText = textOf(invoice);
+        const totalLines = allText.split(/\n+/).map(x=>x.trim()).filter(Boolean)
+            .filter(x => /সর্বমোট|নগদ:|বাকি:|স্ট্যাটাস:|Delivery|Discount|Total|Paid|Due|Subtotal/i.test(x));
+        const seen = new Set();
+        totalLines.forEach(line => {
+            if (!seen.has(line)) { seen.add(line); content.push({type:'text', text:line, bold:/সর্বমোট|Total/i.test(line)}); }
+        });
+
+        content.push({type:'divider'});
+        content.push({type:'text', text:'Thank you for choosing us!', align:'center', bold:true});
+        content.push({type:'text', text:'safaboxbd.web.app', align:'center'});
+        content.push({type:'feed', lines:3});
+
+        const response = await fetch(bridgeUrl, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({cut:true, content})
+        });
+        const result = await response.json().catch(()=>({}));
+        if (!response.ok) throw new Error(result.error || result.message || 'Cleanter bridge প্রিন্ট গ্রহণ করেনি।');
+        Swal.fire({icon:'success', title:'প্রিন্ট পাঠানো হয়েছে', text:'অর্ডার ' + orderId + ' প্রিন্টারে পাঠানো হয়েছে।', timer:1800, showConfirmButton:false});
+    } catch (err) {
+        console.error('Cleanter print error:', err);
+        Swal.fire({icon:'error', title:'প্রিন্ট করা যায়নি', html:'Cleanter অ্যাপ চালু আছে কি না, Bluetooth প্রিন্টার সংযুক্ত কি না এবং Paper Width 58mm সেট করা আছে কি না পরীক্ষা করুন।<br><br><small>' + String(err.message || err) + '</small>', confirmButtonText:'ঠিক আছে'});
+    } finally {
+        if (holder && holder.parentNode) holder.parentNode.removeChild(holder);
+    }
+}
+
 function showInvoiceActions(html, orderId){
     const phoneMatch=html.match(/<b>ফোন:<\/b>\s*([^<]+)/), phone=phoneMatch?phoneMatch[1].trim():'';
     Swal.fire({title:`ইনভয়েস - ${orderId}`,html:`${html}<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button type="button" id="invoicePrintBtn" class="swal2-confirm swal2-styled" style="background:#2563eb"><i class="fas fa-print"></i> প্রিন্ট</button><button type="button" id="invoicePdfBtn" class="swal2-confirm swal2-styled" style="background:#16a34a"><i class="fas fa-file-pdf"></i> PDF ডাউনলোড</button><button type="button" id="invoiceWaBtn" class="swal2-confirm swal2-styled" style="background:#25D366"><i class="fab fa-whatsapp"></i> WhatsApp চ্যাট + PDF</button></div>`,showConfirmButton:false,showCancelButton:true,cancelButtonText:'বন্ধ করুন',width:430,didOpen:()=>{
-        document.getElementById('invoicePrintBtn').onclick=()=>{const w=window.open('','_blank');if(!w){Swal.fire('Popup blocked','প্রিন্টের জন্য popup অনুমতি দিন।','warning');return;}w.document.write(`<html><head><meta charset="UTF-8"><title>Invoice ${orderId}</title></head><body>${html}</body></html>`);w.document.close();w.focus();setTimeout(()=>w.print(),300);};
+        document.getElementById('invoicePrintBtn').onclick=()=>printInvoiceViaCleanter(html,orderId);
         document.getElementById('invoicePdfBtn').onclick=()=>downloadInvoicePdf(html,orderId);
         document.getElementById('invoiceWaBtn').onclick=()=>shareInvoiceWhatsApp(html,orderId,phone);
     }});
