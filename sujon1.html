@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SafaBoxBD - Admin Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -3294,23 +3295,181 @@ async function shareInvoiceWhatsApp(html, orderId, phone){
 
 
 // ==========================================
-// RawBT-তে সরাসরি প্রিন্ট (মিল টোকেন সাইটের হুবহু একই পদ্ধতি)
-// ইনভয়েস → ছবি → ESC/POS বাইট → intent:base64 → RawBT। ব্রাউজারের প্রিন্ট ডায়ালগ (window.print) ব্যবহার হয় না,
-// তাই "RawBT app is free for personal use..." ওয়াটারমার্ক আসে না।
+// RawBT-তে সরাসরি প্রিন্ট — মিল টোকেন সাইটের হুবহু একই পদ্ধতি
+// ইনভয়েসের লেখা → টেক্সট ব্লক → canvas (Hind Siliguri ফন্ট) → ESC/POS বাইট → intent:base64 → RawBT
+// ব্রাউজারের প্রিন্ট ডায়ালগ (window.print) ব্যবহার হয় না, তাই "RawBT app is free..." ওয়াটারমার্ক আসে না।
 // ==========================================
-const BLE_DOTS = 384; // 58mm কাগজ = 384 ডট
+const TOKEN_DOTS = 384; // 58mm কাগজ = 384 ডট (48mm)
 
-function canvasToEscPos(src) {
-    const W = BLE_DOTS;
-    const H = Math.max(1, Math.round(src.height * (W / src.width)));
+async function invEnsureFonts() {
+    try {
+        await Promise.all([
+            document.fonts.load('700 28px "Hind Siliguri"'),
+            document.fonts.load('600 24px "Hind Siliguri"'),
+            document.fonts.load('500 22px "Hind Siliguri"')
+        ]);
+    } catch (e) { /* ignore */ }
+}
+
+// ---------- ইনভয়েস HTML → টেক্সট ব্লক ----------
+function invNormText(t) { return String(t == null ? '' : t).replace(/[ \t\r\f\v]+/g, ' ').replace(/ *\n */g, '\n').trim(); }
+function invTextOf(el) {
+    const c = el.cloneNode(true);
+    c.querySelectorAll('br').forEach(b => b.replaceWith('\n'));
+    return invNormText(c.textContent);
+}
+// দামের ঘরে কাটা-দাম + নতুন-দাম থাকলে শেষ লাইন (প্রকৃত দাম) নেয়
+function invLastLine(el) { const t = invTextOf(el).split('\n').map(x => x.trim()).filter(Boolean); return t.length ? t[t.length - 1] : ''; }
+function invStyleOf(el) { return String(el.getAttribute('style') || '').replace(/\s+/g, '').toLowerCase(); }
+function invAlignOf(el, fallback) {
+    const st = invStyleOf(el);
+    if (st.includes('text-align:center')) return 'center';
+    if (st.includes('text-align:right')) return 'right';
+    if (st.includes('text-align:left')) return 'left';
+    return fallback || 'left';
+}
+function invPushText(blocks, text, align, opts) {
+    String(text).split('\n').map(x => x.trim()).filter(Boolean).forEach(line => {
+        blocks.push(Object.assign({ text: line, size: 22, weight: 500, align: align || 'left', gap: 2 }, opts || {}));
+    });
+}
+function invPushItem(blocks, name, qty, price, total) {
+    invPushText(blocks, name, 'left', { weight: 600 });
+    blocks.push({ text: qty + ' × ' + price + ' = ' + total, size: 22, weight: 600, align: 'right', gap: 3 });
+}
+
+function invWalk(el, blocks) {
+    Array.from(el.children).forEach(ch => {
+        const tag = ch.tagName;
+        if (tag === 'IMG' || tag === 'STYLE' || tag === 'SCRIPT') return;
+        const st = invStyleOf(ch);
+
+        if (tag === 'TABLE') {
+            ch.querySelectorAll('tr').forEach(tr => {
+                const cells = Array.from(tr.children);
+                if (!cells.length) return;
+                if (cells.every(c => c.tagName === 'TH')) { blocks.push({ type: 'rule' }); return; }
+                const t = cells.map(c => invLastLine(c));
+                if (cells.length === 4) invPushItem(blocks, t[0], t[1], t[2], t[3]);
+                else if (cells.length === 5) {
+                    invPushText(blocks, t[0] + '  ' + invTextOf(cells[1]).replace(/\n/g, ' '), 'left', { weight: 600 });
+                    blocks.push({ text: 'মোট ' + t[2] + ' | প্রদত্ত ' + t[3] + ' | বাকি ' + t[4], size: 21, weight: 600, align: 'right', gap: 3 });
+                } else if (cells.length === 2) blocks.push({ type: 'row', left: t[0], right: t[1], size: 22, weight: 500, gap: 2 });
+                else invPushText(blocks, t.join(' | '), 'left');
+            });
+            return;
+        }
+
+        if (st.includes('display:flex')) {
+            const cells = Array.from(ch.children);
+            if (st.includes('border-bottom:2px') && cells.length >= 4) { blocks.push({ type: 'rule' }); return; } // কলামের হেডার সারি
+            if (cells.length >= 4) { invPushItem(blocks, invTextOf(cells[0]), invTextOf(cells[1]), invLastLine(cells[2]), invLastLine(cells[3])); return; }
+            if (cells.length === 2) { blocks.push({ type: 'row', left: invTextOf(cells[0]), right: invTextOf(cells[1]), size: 22, weight: 600, gap: 2 }); return; }
+        }
+
+        const hasBlockChild = Array.from(ch.children).some(x => ['DIV', 'P', 'TABLE'].includes(x.tagName));
+        if (st.includes('border-top') || st.includes('border-bottom:2px')) blocks.push({ type: 'rule' });
+        if (hasBlockChild) { invWalk(ch, blocks); return; }
+        const text = invTextOf(ch);
+        if (!text) return;
+        const align = invAlignOf(ch, 'left');
+        const big = /font-size:1[4-9]px|font-size:2\d/.test(st);
+        invPushText(blocks, text, align, big ? { size: 26, weight: 700 } : {});
+    });
+}
+
+function invHtmlToBlocks(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const root = doc.getElementById('invoicePrintArea') || doc.body;
+    const blocks = [
+        { text: 'SafaBoxBD', size: 28, weight: 700 },
+        { text: 'safaboxbd.web.app', size: 20, weight: 500 },
+        { type: 'rule' }
+    ];
+    invWalk(root, blocks);
+    blocks.push({ type: 'rule' });
+    return blocks;
+}
+
+// ---------- ব্লক → canvas (মিল টোকেনের tokenRenderCanvas-এর মতো) ----------
+function invWrap(ctx, text, maxW) {
+    const out = [];
+    String(text).split('\n').forEach(para => {
+        const words = para.split(/\s+/).filter(Boolean);
+        let line = '';
+        words.forEach(w => {
+            const test = line ? line + ' ' + w : w;
+            if (ctx.measureText(test).width <= maxW) { line = test; return; }
+            if (line) out.push(line);
+            if (ctx.measureText(w).width > maxW) {
+                let part = '';
+                Array.from(w).forEach(ch => {
+                    if (ctx.measureText(part + ch).width > maxW) { out.push(part); part = ch; } else { part += ch; }
+                });
+                line = part;
+            } else { line = w; }
+        });
+        if (line) out.push(line);
+        if (!words.length) out.push('');
+    });
+    return out;
+}
+
+function invRenderCanvas(blocks) {
+    const W = TOKEN_DOTS, PAD = 8;
     const cv = document.createElement('canvas');
+    const ctx = cv.getContext('2d');
+    const items = [];
+    let y = 6;
+    blocks.forEach(b => {
+        if (b.type === 'rule') { items.push({ type: 'rule', y: y + 4 }); y += 14; return; }
+        const font = (b.weight || 500) + ' ' + b.size + 'px "Hind Siliguri", sans-serif';
+        ctx.font = font;
+        const lh = Math.round(b.size * 1.5);
+        if (b.type === 'row') {
+            const lw = ctx.measureText(b.left).width, rw = ctx.measureText(b.right).width;
+            if (lw + rw + 12 <= W - PAD * 2) {
+                items.push({ type: 'row', left: b.left, right: b.right, font, y }); y += lh;
+            } else {
+                invWrap(ctx, b.left, W - PAD * 2).forEach(t => { items.push({ type: 'text', text: t, font, align: 'left', y }); y += lh; });
+                items.push({ type: 'text', text: b.right, font, align: 'right', y }); y += lh;
+            }
+            y += (b.gap || 0);
+            return;
+        }
+        invWrap(ctx, b.text, W - PAD * 2).forEach(t => {
+            items.push({ type: 'text', text: t, font, align: b.align || 'center', y });
+            y += lh;
+        });
+        y += (b.gap || 0);
+    });
+    const H = y + 12;
     cv.width = W; cv.height = H;
-    const ctx = cv.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(src, 0, 0, W, H);
-    const px = ctx.getImageData(0, 0, W, H).data;
-    const bpr = W / 8, parts = [new Uint8Array([0x1B, 0x40])], BAND = 128;
+    ctx.fillStyle = '#000000'; ctx.textBaseline = 'top';
+    items.forEach(it => {
+        if (it.type === 'rule') { ctx.fillRect(PAD, it.y, W - PAD * 2, 2); return; }
+        ctx.font = it.font;
+        if (it.type === 'row') {
+            ctx.textAlign = 'left'; ctx.fillText(it.left, PAD, it.y);
+            ctx.textAlign = 'right'; ctx.fillText(it.right, W - PAD, it.y);
+            return;
+        }
+        if (it.align === 'left') { ctx.textAlign = 'left'; ctx.fillText(it.text, PAD, it.y); }
+        else if (it.align === 'right') { ctx.textAlign = 'right'; ctx.fillText(it.text, W - PAD, it.y); }
+        else { ctx.textAlign = 'center'; ctx.fillText(it.text, W / 2, it.y); }
+    });
+    return cv;
+}
+
+// ---------- canvas → ESC/POS (মিল টোকেনের tokenCanvasToEscPos হুবহু) ----------
+function invCanvasToEscPos(cv) {
+    const W = cv.width, H = cv.height;
+    const px = cv.getContext('2d').getImageData(0, 0, W, H).data;
+    const bpr = W / 8;
+    const parts = [];
+    parts.push(new Uint8Array([0x1B, 0x40]));          // initialize
+    const BAND = 128;
     for (let y0 = 0; y0 < H; y0 += BAND) {
         const h = Math.min(BAND, H - y0);
         const data = new Uint8Array(bpr * h);
@@ -3318,20 +3477,21 @@ function canvasToEscPos(src) {
             for (let x = 0; x < W; x++) {
                 const i = ((y0 + yy) * W + x) * 4;
                 const lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-                if (lum < 185) data[yy * bpr + (x >> 3)] |= (0x80 >> (x & 7));
+                if (lum < 175) data[yy * bpr + (x >> 3)] |= (0x80 >> (x & 7));
             }
         }
         parts.push(new Uint8Array([0x1D, 0x76, 0x30, 0x00, bpr & 255, (bpr >> 8) & 255, h & 255, (h >> 8) & 255]));
         parts.push(data);
     }
-    parts.push(new Uint8Array([0x1B, 0x64, 0x05])); // ৫ লাইন ফিড
-    let total = 0; parts.forEach(p => total += p.length);
+    parts.push(new Uint8Array([0x1B, 0x64, 0x05]));    // feed 5 lines
+    let total = 0; parts.forEach(p => { total += p.length; });
     const out = new Uint8Array(total); let off = 0;
     parts.forEach(p => { out.set(p, off); off += p.length; });
     return out;
 }
 
-function bytesToBase64(bytes) {
+// ---------- RawBT (মিল টোকেনের tokenSendRawBT হুবহু) ----------
+function invBytesToBase64(bytes) {
     let bin = ''; const CH = 0x8000;
     for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
     return btoa(bin);
@@ -3341,10 +3501,10 @@ async function printInvoiceRawBT(html, orderId) {
     const status = document.getElementById('invoiceBleStatus');
     try {
         if (status) { status.style.color = '#6b7280'; status.textContent = 'ইনভয়েস তৈরি হচ্ছে...'; }
-        const canvas = await invoiceToCanvas(html);
-        const bytes = canvasToEscPos(canvas);
+        await invEnsureFonts();
+        const bytes = invCanvasToEscPos(invRenderCanvas(invHtmlToBlocks(html)));
         if (status) status.textContent = 'RawBT-তে পাঠানো হচ্ছে...';
-        window.location.href = 'intent:base64,' + bytesToBase64(bytes) + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
+        window.location.href = 'intent:base64,' + invBytesToBase64(bytes) + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
         await new Promise(r => setTimeout(r, 1800));
         if (status) { status.textContent = '✔ প্রিন্ট পাঠানো হয়েছে'; status.style.color = '#16a34a'; }
     } catch (err) {
