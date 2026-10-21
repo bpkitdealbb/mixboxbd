@@ -3294,77 +3294,12 @@ async function shareInvoiceWhatsApp(html, orderId, phone){
 
 
 // ==========================================
-// সরাসরি ব্লুটুথ (BLE) প্রিন্ট — RawBT অ্যাপ ছাড়া, তাই "RawBT app is free..." ওয়াটারমার্ক আসে না
-// (মিল টোকেন সাইটের একই পদ্ধতি: ইনভয়েস → ছবি → ESC/POS → BLE)
+// RawBT-তে সরাসরি প্রিন্ট (মিল টোকেন সাইটের হুবহু একই পদ্ধতি)
+// ইনভয়েস → ছবি → ESC/POS বাইট → intent:base64 → RawBT। ব্রাউজারের প্রিন্ট ডায়ালগ (window.print) ব্যবহার হয় না,
+// তাই "RawBT app is free for personal use..." ওয়াটারমার্ক আসে না।
 // ==========================================
 const BLE_DOTS = 384; // 58mm কাগজ = 384 ডট
-const BLE_PRINT_SERVICES = [
-    '000018f0-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-    '49535343-fe7d-4ae5-8fa9-9fafd205e455','0000ff00-0000-1000-8000-00805f9b34fb',
-    '0000ff80-0000-1000-8000-00805f9b34fb','0000fff0-0000-1000-8000-00805f9b34fb',
-    '0000ffe0-0000-1000-8000-00805f9b34fb','0000ffe5-0000-1000-8000-00805f9b34fb',
-    '0000fee7-0000-1000-8000-00805f9b34fb','0000ae30-0000-1000-8000-00805f9b34fb',
-    'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'
-];
-let blePrinter = { device: null, characteristic: null, chunk: 100 };
-const bleSleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function bleEnsureChannel() {
-    const dev = blePrinter.device;
-    if (!dev) throw new Error('প্রিন্টার কানেক্ট করা নেই');
-    if (dev.gatt.connected && blePrinter.characteristic) return blePrinter.characteristic;
-    let lastErr = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-            const server = await dev.gatt.connect();
-            const services = await server.getPrimaryServices();
-            let found = null;
-            for (let i = 0; i < services.length && !found; i++) {
-                const chars = await services[i].getCharacteristics();
-                for (let j = 0; j < chars.length; j++) {
-                    const pr = chars[j].properties;
-                    if (pr.write || pr.writeWithoutResponse) { found = chars[j]; break; }
-                }
-            }
-            if (!found) throw new Error('লেখার উপযোগী চ্যানেল পাওয়া যায়নি (প্রিন্টার সম্ভবত BLE নয়)');
-            blePrinter.characteristic = found;
-            return found;
-        } catch (e) { lastErr = e; await bleSleep(400); }
-    }
-    throw new Error('প্রিন্টারের সাথে সংযোগ হয়নি' + (lastErr && lastErr.message ? ' (' + lastErr.message + ')' : ''));
-}
-
-// অবশ্যই বাটন ক্লিকের সাথে সাথে ডাকতে হবে (ব্রাউজারের নিয়ম)
-async function bleConnectPrinter(forcePick) {
-    if (!navigator.bluetooth) throw new Error('এই ব্রাউজারে Web Bluetooth নেই। Android-এর Chrome ব্যবহার করুন।');
-    if (!forcePick && blePrinter.device) { await bleEnsureChannel(); return; }
-    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_PRINT_SERVICES });
-    device.addEventListener('gattserverdisconnected', () => { blePrinter.characteristic = null; });
-    blePrinter.device = device;
-    blePrinter.characteristic = null;
-    await bleEnsureChannel();
-}
-
-async function bleSendBytes(bytes) {
-    const ch = await bleEnsureChannel();
-    let size = blePrinter.chunk || 100;
-    const noResp = !ch.properties.write && ch.properties.writeWithoutResponse;
-    let i = 0;
-    while (i < bytes.length) {
-        const chunk = bytes.slice(i, i + size);
-        try {
-            if (ch.properties.writeWithoutResponse && noResp) { await ch.writeValueWithoutResponse(chunk); await bleSleep(12); }
-            else { await ch.writeValueWithResponse(chunk); }
-            i += chunk.length;
-        } catch (e) {
-            if (size > 20) { size = Math.max(20, Math.floor(size / 2)); blePrinter.chunk = size; continue; }
-            throw e;
-        }
-    }
-    await bleSleep(300);
-}
-
-// ইনভয়েসের ছবি (canvas) → ESC/POS রাস্টার (GS v 0)
 function canvasToEscPos(src) {
     const W = BLE_DOTS;
     const H = Math.max(1, Math.round(src.height * (W / src.width)));
@@ -3396,41 +3331,34 @@ function canvasToEscPos(src) {
     return out;
 }
 
-async function printInvoiceBLE(html, orderId) {
+function bytesToBase64(bytes) {
+    let bin = ''; const CH = 0x8000;
+    for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    return btoa(bin);
+}
+
+async function printInvoiceRawBT(html, orderId) {
+    const status = document.getElementById('invoiceBleStatus');
     try {
-        // ১) আগে কানেক্ট (ক্লিকের অনুমতি থাকতে থাকতেই)
-        await bleConnectPrinter(false);
-        const status = document.getElementById('invoiceBleStatus');
-        if (status) status.textContent = 'ইনভয়েস তৈরি হচ্ছে...';
-        // ২) ইনভয়েস → ছবি → ESC/POS
+        if (status) { status.style.color = '#6b7280'; status.textContent = 'ইনভয়েস তৈরি হচ্ছে...'; }
         const canvas = await invoiceToCanvas(html);
         const bytes = canvasToEscPos(canvas);
-        if (status) status.textContent = 'প্রিন্ট হচ্ছে...';
-        // ৩) ব্লুটুথে পাঠানো
-        await bleSendBytes(bytes);
+        if (status) status.textContent = 'RawBT-তে পাঠানো হচ্ছে...';
+        window.location.href = 'intent:base64,' + bytesToBase64(bytes) + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
+        await new Promise(r => setTimeout(r, 1800));
         if (status) { status.textContent = '✔ প্রিন্ট পাঠানো হয়েছে'; status.style.color = '#16a34a'; }
     } catch (err) {
-        if (err && err.name === 'NotFoundError') return; // ইউজার ডিভাইস বাছাই বাতিল করেছে
         console.error(err);
-        const status = document.getElementById('invoiceBleStatus');
-        if (status) { status.textContent = ''; }
-        Swal.fire({icon:'error', title:'BLE প্রিন্ট হয়নি',
-            html:'<div style="text-align:left;font-size:13px">'+String(err && err.message ? err.message : err)+
-            '<hr style="margin:8px 0">প্রিন্টার অন আছে কিনা দেখুন। তালিকায় না এলে বা "লেখার চ্যানেল পাওয়া যায়নি" দেখালে প্রিন্টারটি Classic Bluetooth — তখন BLE কাজ করবে না।</div>'});
+        if (status) status.textContent = '';
+        Swal.fire('প্রিন্ট হয়নি', String(err && err.message ? err.message : err), 'error');
     }
-}
-async function changeBlePrinter(html, orderId) {
-    try { blePrinter = { device: null, characteristic: null, chunk: blePrinter.chunk }; await bleConnectPrinter(true); }
-    catch (e) { if (!(e && e.name === 'NotFoundError')) Swal.fire('Error', String(e.message || e), 'error'); return; }
-    printInvoiceBLE(html, orderId);
 }
 
 function showInvoiceActions(html, orderId){
     const phoneMatch=html.match(/<b>ফোন:<\/b>\s*([^<]+)/), phone=phoneMatch?phoneMatch[1].trim():'';
-    Swal.fire({title:`ইনভয়েস - ${orderId}`,html:`${html}<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button type="button" id="invoicePrintBtn" class="swal2-confirm swal2-styled" style="background:#2563eb"><i class="fas fa-print"></i> প্রিন্ট</button><button type="button" id="invoiceBleBtn" class="swal2-confirm swal2-styled" style="background:#9333ea"><i class="fas fa-bluetooth-b"></i> BLE প্রিন্ট (RawBT ছাড়া)</button><button type="button" id="invoicePdfBtn" class="swal2-confirm swal2-styled" style="background:#16a34a"><i class="fas fa-file-pdf"></i> PDF ডাউনলোড</button><button type="button" id="invoiceWaBtn" class="swal2-confirm swal2-styled" style="background:#25D366"><i class="fab fa-whatsapp"></i> WhatsApp চ্যাট + PDF</button></div><div id="invoiceBleStatus" style="text-align:center;font-size:12px;color:#6b7280;margin-top:8px;min-height:16px"></div>`,showConfirmButton:false,showCancelButton:true,cancelButtonText:'বন্ধ করুন',width:430,didOpen:()=>{
+    Swal.fire({title:`ইনভয়েস - ${orderId}`,html:`${html}<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button type="button" id="invoicePrintBtn" class="swal2-confirm swal2-styled" style="background:#2563eb"><i class="fas fa-print"></i> প্রিন্ট</button><button type="button" id="invoiceBleBtn" class="swal2-confirm swal2-styled" style="background:#9333ea"><i class="fas fa-receipt"></i> প্রিন্ট (ওয়াটারমার্ক ছাড়া)</button><button type="button" id="invoicePdfBtn" class="swal2-confirm swal2-styled" style="background:#16a34a"><i class="fas fa-file-pdf"></i> PDF ডাউনলোড</button><button type="button" id="invoiceWaBtn" class="swal2-confirm swal2-styled" style="background:#25D366"><i class="fab fa-whatsapp"></i> WhatsApp চ্যাট + PDF</button></div><div id="invoiceBleStatus" style="text-align:center;font-size:12px;color:#6b7280;margin-top:8px;min-height:16px"></div>`,showConfirmButton:false,showCancelButton:true,cancelButtonText:'বন্ধ করুন',width:430,didOpen:()=>{
         document.getElementById('invoicePrintBtn').onclick=()=>{const w=window.open('','_blank');if(!w){Swal.fire('Popup blocked','প্রিন্টের জন্য popup অনুমতি দিন।','warning');return;}w.document.write(`<html><head><meta charset="UTF-8"><title>Invoice ${orderId}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>@page{size:58mm auto;margin:0}html,body{margin:0;padding:0;width:58mm;background:#fff}#invoicePrintArea{width:48mm!important;max-width:48mm!important;margin:0 auto!important;padding:2mm 0!important;font-size:10px!important;box-sizing:border-box;word-break:break-word}#invoicePrintArea table{width:100%!important;font-size:9px!important}#invoicePrintArea th,#invoicePrintArea td{padding:2px 1px!important}#invoicePrintArea img{max-width:40mm!important;max-height:40px!important}#invoicePrintArea{padding:0!important;font-size:10px!important}#invoicePrintArea table{table-layout:fixed!important;width:100%!important;font-size:9px!important}#invoicePrintArea th{white-space:nowrap!important;font-size:8px!important;word-break:keep-all!important}#invoicePrintArea th:nth-child(1){width:32%!important}#invoicePrintArea th:nth-child(2){width:25%!important}#invoicePrintArea th:nth-child(3){width:19%!important}#invoicePrintArea th:nth-child(4){width:24%!important}#invoicePrintArea td{word-break:break-word}#invoicePrintArea th,#invoicePrintArea td{padding:1px!important}#invoicePrintArea img{max-width:40mm!important;max-height:40px!important}#invoicePrintArea div[style*="flex:"]{padding-left:2px!important;padding-right:2px!important}#invoicePrintArea div[style*="flex:2.2"]{flex:1.8!important}#invoicePrintArea div[style*="flex:0.6"]{flex:1.2!important;white-space:nowrap!important}#invoicePrintArea div[style*="border-bottom:2px"]{font-size:10px!important}</style></head><body>${html}</body></html>`);w.document.close();w.focus();setTimeout(()=>w.print(),300);};
-        document.getElementById('invoiceBleBtn').onclick=()=>printInvoiceBLE(html,orderId);
-        document.getElementById('invoiceBleBtn').oncontextmenu=e=>{e.preventDefault();changeBlePrinter(html,orderId);};
+        document.getElementById('invoiceBleBtn').onclick=()=>printInvoiceRawBT(html,orderId);
         document.getElementById('invoicePdfBtn').onclick=()=>downloadInvoicePdf(html,orderId);
         document.getElementById('invoiceWaBtn').onclick=()=>shareInvoiceWhatsApp(html,orderId,phone);
     }});
