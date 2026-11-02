@@ -1,5 +1,5 @@
-// প্রতিবার আপডেটে ভার্সন বাড়াবেন (v4 থেকে v5 করে দিন)
-const CACHE_NAME = 'SafaBoxbd-v3'; 
+// প্রতিবার আপডেটে ভার্সন বাড়াবেন (v4 থেকে v5 করে দিন)
+const CACHE_NAME = 'SafaBoxbd-v4'; 
 
 self.addEventListener('install', (e) => {
   self.skipWaiting(); 
@@ -21,7 +21,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.url.includes('script.google.com') || e.request.url.includes('action=')) {
+  if (e.request.url.includes('script.google.com') || e.request.url.startsWith('https://shafabox-api.safaboxbd.workers.dev/') || e.request.url.includes('action=')) {
     e.respondWith(
       fetch(e.request).catch(() => new Response('Offline', { status: 503 }))
     );
